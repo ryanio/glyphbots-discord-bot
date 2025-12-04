@@ -4,6 +4,7 @@ import { Client, Events, GatewayIntentBits } from "discord.js";
 import { initLoreChannel } from "./channels/lore";
 import { logger } from "./lib/logger";
 import {
+  type ChannelType,
   DEFAULT_STATE_DIR,
   type LastPostInfo,
   resolveLastPostInfo,
@@ -37,7 +38,7 @@ const printBanner = (): void => {
 /**
  * Format the source of last post info
  */
-const formatLastPostSource = (source: LastPostInfo["source"]): string => {
+const _formatLastPostSource = (source: LastPostInfo["source"]): string => {
   switch (source) {
     case "state_file":
       return "state file";
@@ -48,12 +49,44 @@ const formatLastPostSource = (source: LastPostInfo["source"]): string => {
   }
 };
 
+/** Channel display config */
+const CHANNEL_DISPLAY: Record<ChannelType, { emoji: string; label: string }> = {
+  lore: { emoji: "📖", label: "Lore" },
+  arena: { emoji: "⚔️", label: "Arena" },
+  playground: { emoji: "🎮", label: "Playground" },
+};
+
+/**
+ * Format channel state for display
+ */
+const formatChannelState = (
+  channel: ChannelType,
+  info: LastPostInfo | null
+): void => {
+  const { emoji, label } = CHANNEL_DISPLAY[channel];
+
+  if (info) {
+    const ts = info.timestamp;
+    logger.info(
+      `│  ${emoji}  ${label}: ${formatReadableDate(ts)} (${formatUnixTimeAgo(ts)})`
+    );
+    if (info.title) {
+      logger.info(`│      └─ ${info.title}`);
+    }
+  } else {
+    logger.info(`│  ${emoji}  ${label}: No posts yet`);
+  }
+};
+
 /**
  * Print basic configuration (before Discord connection)
  */
 const printConfig = async (config: Config): Promise<void> => {
-  // Load last post info from state
-  const lastPostInfo = await resolveLastPostInfo();
+  // Load last post info for active channels
+  const loreInfo = await resolveLastPostInfo("lore");
+  // Future channels:
+  // const arenaInfo = await resolveLastPostInfo("arena");
+  // const playgroundInfo = await resolveLastPostInfo("playground");
 
   logger.info("");
   logger.info("┌─ 📋 CONFIGURATION");
@@ -67,20 +100,11 @@ const printConfig = async (config: Config): Promise<void> => {
   logger.info(
     `│  📂  Directory: ${process.env.STATE_DIR ?? DEFAULT_STATE_DIR}`
   );
-  if (lastPostInfo) {
-    const ts = lastPostInfo.timestamp;
-    logger.info(
-      `│  🕐  Last Post: ${formatReadableDate(ts)} (${formatUnixTimeAgo(ts)})`
-    );
-    logger.info(
-      `│      └─ Source: ${formatLastPostSource(lastPostInfo.source)}`
-    );
-    if (lastPostInfo.title) {
-      logger.info(`│      └─ Title: ${lastPostInfo.title}`);
-    }
-  } else {
-    logger.info("│  🕐  Last Post: None (first run)");
-  }
+  logger.info("│");
+  formatChannelState("lore", loreInfo);
+  // Future channels:
+  // formatChannelState("arena", arenaInfo);
+  // formatChannelState("playground", playgroundInfo);
   logger.info("│");
 };
 
