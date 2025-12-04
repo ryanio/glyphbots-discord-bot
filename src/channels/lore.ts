@@ -139,9 +139,9 @@ const buildLoreContext = async (
  * Build a Discord embed for lore (image and metadata only, no narrative)
  */
 const buildLoreEmbed = (lore: GeneratedLore): EmbedBuilder => {
-  const { title, artifact, bot } = lore;
+  const { artifact, bot } = lore;
 
-  const embed = new EmbedBuilder().setColor(GLYPHBOTS_COLOR).setTitle(title);
+  const embed = new EmbedBuilder().setColor(GLYPHBOTS_COLOR);
 
   // Add artifact image if available
   if (artifact.imageUrl) {
