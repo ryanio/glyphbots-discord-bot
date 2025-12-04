@@ -101,6 +101,46 @@ export const formatTimeAgo = (date: Date | string): string => {
 };
 
 /**
+ * Formats a Unix timestamp as a relative time string (e.g., "2 hours ago")
+ */
+export const formatUnixTimeAgo = (timestamp: number): string => {
+  const now = Date.now();
+  const diffMs = now - timestamp * MS_PER_SECOND;
+  const diffSeconds = Math.floor(diffMs / MS_PER_SECOND);
+  const diffMinutes = Math.floor(diffSeconds / SECONDS_PER_MINUTE);
+  const diffHours = Math.floor(diffMinutes / SECONDS_PER_MINUTE);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffDays > 0) {
+    return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
+  }
+  if (diffHours > 0) {
+    return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
+  }
+  if (diffMinutes > 0) {
+    return `${diffMinutes} minute${diffMinutes === 1 ? "" : "s"} ago`;
+  }
+  if (diffSeconds > 0) {
+    return `${diffSeconds} second${diffSeconds === 1 ? "" : "s"} ago`;
+  }
+  return "just now";
+};
+
+/**
+ * Formats a Unix timestamp as a human-readable date (e.g., "Dec 4, 2025, 10:30 AM")
+ */
+export const formatReadableDate = (timestamp: number): string => {
+  const date = new Date(timestamp * MS_PER_SECOND);
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+};
+
+/**
  * Weighted random selection favoring lower indices (first items in list)
  * Uses exponential distribution to heavily favor early items
  *

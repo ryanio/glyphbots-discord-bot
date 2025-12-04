@@ -13,6 +13,7 @@ import {
 } from "../api/glyphbots";
 import { generateLoreNarrative } from "../api/openrouter";
 import { prefixedLogger } from "../lib/logger";
+import { recordLorePost } from "../lib/state";
 import type {
   Artifact,
   Config,
@@ -246,6 +247,14 @@ const postLoreEntry = async (channel: TextBasedChannel): Promise<boolean> => {
 
     await channel.send({ embeds: [embed] });
     log.info(`Posted lore for ${lore.bot.name}: ${lore.artifact.title}`);
+
+    // Record the post to state
+    await recordLorePost({
+      artifactId: lore.artifact.id,
+      botName: lore.bot.name,
+      title: lore.title,
+    });
+
     return true;
   } catch (error) {
     log.error(`Failed to send lore message: ${getErrorMessage(error)}`);

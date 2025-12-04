@@ -59,6 +59,7 @@ OPENROUTER_API_KEY=your_openrouter_api_key
 LORE_INTERVAL_MINUTES=30
 OPENROUTER_MODEL=anthropic/claude-sonnet-4
 GLYPHBOTS_API_URL=https://glyphbots.com
+STATE_DIR=.state
 LOG_LEVEL=info
 ```
 
@@ -96,6 +97,7 @@ https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=18432&
 | `LORE_INTERVAL_MINUTES` | Minutes between lore posts | `30` |
 | `OPENROUTER_MODEL` | AI model for story generation | `anthropic/claude-sonnet-4` |
 | `GLYPHBOTS_API_URL` | GlyphBots API base URL | `https://glyphbots.com` |
+| `STATE_DIR` | Directory for state persistence | `.state` |
 | `LOG_LEVEL` | Log verbosity | `info` |
 
 ### Supported AI Models
@@ -153,6 +155,7 @@ src/
 │   └── openrouter.ts     # OpenRouter AI client
 └── lib/
     ├── logger.ts         # Logging utilities
+    ├── state.ts          # State persistence
     ├── types.ts          # TypeScript type definitions
     └── utils.ts          # General utilities
 ```

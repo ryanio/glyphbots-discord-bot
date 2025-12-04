@@ -3,8 +3,13 @@ import "dotenv/config";
 import { Client, Events, GatewayIntentBits } from "discord.js";
 import { initLoreChannel } from "./channels/lore";
 import { logger } from "./lib/logger";
+import {
+  DEFAULT_STATE_DIR,
+  type LastPostInfo,
+  resolveLastPostInfo,
+} from "./lib/state";
 import type { Config } from "./lib/types";
-import { loadConfig } from "./lib/utils";
+import { formatReadableDate, formatUnixTimeAgo, loadConfig } from "./lib/utils";
 
 /**
  * Print startup banner
@@ -30,15 +35,52 @@ const printBanner = (): void => {
 };
 
 /**
+ * Format the source of last post info
+ */
+const formatLastPostSource = (source: LastPostInfo["source"]): string => {
+  switch (source) {
+    case "state_file":
+      return "state file";
+    case "new":
+      return "new (no previous posts)";
+    default:
+      return String(source);
+  }
+};
+
+/**
  * Print basic configuration (before Discord connection)
  */
-const printConfig = (config: Config): void => {
+const printConfig = async (config: Config): Promise<void> => {
+  // Load last post info from state
+  const lastPostInfo = await resolveLastPostInfo();
+
   logger.info("");
   logger.info("┌─ 📋 CONFIGURATION");
   logger.info("│");
   logger.info(`│  🔗  GlyphBots API: ${config.glyphbotsApiUrl}`);
   logger.info(`│  🤖  AI Model: ${config.openRouterModel}`);
   logger.info(`│  📝  Log Level: ${config.logLevel}`);
+  logger.info("│");
+  logger.info("├─ 📁 STATE");
+  logger.info("│");
+  logger.info(
+    `│  📂  Directory: ${process.env.STATE_DIR ?? DEFAULT_STATE_DIR}`
+  );
+  if (lastPostInfo) {
+    const ts = lastPostInfo.timestamp;
+    logger.info(
+      `│  🕐  Last Post: ${formatReadableDate(ts)} (${formatUnixTimeAgo(ts)})`
+    );
+    logger.info(
+      `│      └─ Source: ${formatLastPostSource(lastPostInfo.source)}`
+    );
+    if (lastPostInfo.title) {
+      logger.info(`│      └─ Title: ${lastPostInfo.title}`);
+    }
+  } else {
+    logger.info("│  🕐  Last Post: None (first run)");
+  }
   logger.info("│");
 };
 
@@ -79,7 +121,7 @@ async function main(): Promise<void> {
   // Load and validate configuration
   logger.info("Loading configuration...");
   const config = loadConfig();
-  printConfig(config);
+  await printConfig(config);
 
   // Create Discord client
   logger.info("Creating Discord client...");
