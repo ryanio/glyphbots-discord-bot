@@ -79,14 +79,25 @@ const formatChannelState = (
 };
 
 /**
- * Print basic configuration (before Discord connection)
+ * Print full configuration (after Discord connection so we can resolve channel names)
  */
-const printConfig = async (config: Config): Promise<void> => {
+const printConfig = async (client: Client, config: Config): Promise<void> => {
   // Load last post info for active channels
   const loreInfo = await resolveLastPostInfo("lore");
   // Future channels:
   // const arenaInfo = await resolveLastPostInfo("arena");
   // const playgroundInfo = await resolveLastPostInfo("playground");
+
+  // Fetch lore channel name
+  let loreChannelDisplay = config.loreChannelId;
+  try {
+    const channel = await client.channels.fetch(config.loreChannelId);
+    if (channel && "name" in channel && channel.name) {
+      loreChannelDisplay = `#${channel.name}`;
+    }
+  } catch {
+    // Fall back to ID if channel can't be fetched
+  }
 
   logger.info("");
   logger.info("┌─ 📋 CONFIGURATION");
@@ -106,30 +117,9 @@ const printConfig = async (config: Config): Promise<void> => {
   // formatChannelState("arena", arenaInfo);
   // formatChannelState("playground", playgroundInfo);
   logger.info("│");
-};
-
-/**
- * Print channel configuration (after Discord connection)
- */
-const printChannelConfig = async (
-  client: Client,
-  config: Config
-): Promise<void> => {
   logger.info("├─ 📖 LORE CHANNEL");
   logger.info("│");
-
-  // Fetch channel to get name
-  let channelDisplay = config.loreChannelId;
-  try {
-    const channel = await client.channels.fetch(config.loreChannelId);
-    if (channel && "name" in channel && channel.name) {
-      channelDisplay = `#${channel.name}`;
-    }
-  } catch {
-    // Fall back to ID if channel can't be fetched
-  }
-
-  logger.info(`│  📢  Channel: ${channelDisplay}`);
+  logger.info(`│  📢  Channel: ${loreChannelDisplay}`);
   logger.info(`│  ⏱️  Interval: ${config.loreIntervalMinutes} minutes`);
   logger.info("│");
   logger.info("└─");
@@ -143,20 +133,17 @@ async function main(): Promise<void> {
   printBanner();
 
   // Load and validate configuration
-  logger.info("Loading configuration...");
   const config = loadConfig();
-  await printConfig(config);
 
   // Create Discord client
-  logger.info("Creating Discord client...");
   const client = new Client({
     intents: [GatewayIntentBits.Guilds],
   });
 
   // Handle ready event
   client.on(Events.ClientReady, async () => {
-    // Print channel config now that we can resolve names
-    await printChannelConfig(client, config);
+    // Print all configuration together now that we can resolve channel names
+    await printConfig(client, config);
 
     logger.info("════════════════════════════════════════════════════════════");
     logger.info(`🤖 Logged in as ${client.user?.tag}`);
