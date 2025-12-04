@@ -8,17 +8,27 @@ const log = prefixedLogger("State");
 export const DEFAULT_STATE_DIR = ".state";
 
 /** State file name */
-const STATE_FILE_NAME = "lore-state.json";
+const STATE_FILE_NAME = "state-glyphbots-discord-bot.json";
+
+/** Channel types for state tracking */
+export type ChannelType = "lore" | "arena" | "playground";
 
 /** Source of the last post timestamp */
 export type LastPostSource = "state_file" | "new";
 
-/** Persisted state structure */
-export type PersistedState = {
+/** State for a single channel */
+export type ChannelState = {
   lastPostTimestamp: number | null;
   lastPostArtifactId: string | null;
   lastPostBotName: string | null;
   lastPostTitle: string | null;
+};
+
+/** Persisted state structure with keys for each channel */
+export type PersistedState = {
+  lore: ChannelState | null;
+  arena: ChannelState | null;
+  playground: ChannelState | null;
 };
 
 /** Last post info with source */
@@ -30,20 +40,32 @@ export type LastPostInfo = {
   source: LastPostSource;
 };
 
+/** Default empty channel state */
+const _emptyChannelState = (): ChannelState => ({
+  lastPostTimestamp: null,
+  lastPostArtifactId: null,
+  lastPostBotName: null,
+  lastPostTitle: null,
+});
+
+/** Default empty persisted state */
+const emptyPersistedState = (): PersistedState => ({
+  lore: null,
+  arena: null,
+  playground: null,
+});
+
 /**
- * Lore state store for tracking post history
+ * Bot state store for tracking post history across channels
  */
-class LoreStateStore {
+class BotStateStore {
   private readonly filePath: string;
   private readonly enablePersistence: boolean;
 
   private loaded = false;
   private dirty = false;
 
-  private lastPostTimestamp: number | null = null;
-  private lastPostArtifactId: string | null = null;
-  private lastPostBotName: string | null = null;
-  private lastPostTitle: string | null = null;
+  private readonly state: PersistedState = emptyPersistedState();
 
   constructor(options: { filePath: string; enablePersistence: boolean }) {
     this.filePath = options.filePath;
@@ -101,49 +123,52 @@ class LoreStateStore {
    * Apply parsed state to instance
    */
   private applyParsedState(parsed: Partial<PersistedState>): void {
-    if (parsed.lastPostTimestamp !== undefined) {
-      this.lastPostTimestamp = parsed.lastPostTimestamp;
+    if (parsed.lore !== undefined) {
+      this.state.lore = parsed.lore;
     }
-    if (parsed.lastPostArtifactId !== undefined) {
-      this.lastPostArtifactId = parsed.lastPostArtifactId;
+    if (parsed.arena !== undefined) {
+      this.state.arena = parsed.arena;
     }
-    if (parsed.lastPostBotName !== undefined) {
-      this.lastPostBotName = parsed.lastPostBotName;
-    }
-    if (parsed.lastPostTitle !== undefined) {
-      this.lastPostTitle = parsed.lastPostTitle;
+    if (parsed.playground !== undefined) {
+      this.state.playground = parsed.playground;
     }
   }
 
   /**
-   * Get the last post info
+   * Get the last post info for a channel
    */
-  getLastPostInfo(): LastPostInfo | null {
-    if (this.lastPostTimestamp === null) {
+  getLastPostInfo(channel: ChannelType): LastPostInfo | null {
+    const channelState = this.state[channel];
+    if (!channelState?.lastPostTimestamp) {
       return null;
     }
 
     return {
-      timestamp: this.lastPostTimestamp,
-      artifactId: this.lastPostArtifactId,
-      botName: this.lastPostBotName,
-      title: this.lastPostTitle,
+      timestamp: channelState.lastPostTimestamp,
+      artifactId: channelState.lastPostArtifactId,
+      botName: channelState.lastPostBotName,
+      title: channelState.lastPostTitle,
       source: "state_file",
     };
   }
 
   /**
-   * Record a new post
+   * Record a new post for a channel
    */
-  recordPost(info: {
-    artifactId: string;
-    botName: string;
-    title: string;
-  }): void {
-    this.lastPostTimestamp = Math.floor(Date.now() / 1000);
-    this.lastPostArtifactId = info.artifactId;
-    this.lastPostBotName = info.botName;
-    this.lastPostTitle = info.title;
+  recordPost(
+    channel: ChannelType,
+    info: {
+      artifactId: string;
+      botName: string;
+      title: string;
+    }
+  ): void {
+    this.state[channel] = {
+      lastPostTimestamp: Math.floor(Date.now() / 1000),
+      lastPostArtifactId: info.artifactId,
+      lastPostBotName: info.botName,
+      lastPostTitle: info.title,
+    };
     this.dirty = true;
   }
 
@@ -155,17 +180,14 @@ class LoreStateStore {
       return;
     }
 
-    const state: PersistedState = {
-      lastPostTimestamp: this.lastPostTimestamp,
-      lastPostArtifactId: this.lastPostArtifactId,
-      lastPostBotName: this.lastPostBotName,
-      lastPostTitle: this.lastPostTitle,
-    };
-
     try {
       const dir = dirname(this.filePath);
       await mkdir(dir, { recursive: true });
-      await writeFile(this.filePath, JSON.stringify(state, null, 2), "utf8");
+      await writeFile(
+        this.filePath,
+        JSON.stringify(this.state, null, 2),
+        "utf8"
+      );
       this.dirty = false;
       log.debug(`State saved to ${this.filePath}`);
     } catch (error) {
@@ -175,12 +197,12 @@ class LoreStateStore {
 }
 
 // Singleton store instance
-let storeInstance: LoreStateStore | null = null;
+let storeInstance: BotStateStore | null = null;
 
 /**
- * Get the default lore state store
+ * Get the bot state store
  */
-export const getLoreStateStore = (): LoreStateStore => {
+export const getBotStateStore = (): BotStateStore => {
   if (storeInstance) {
     return storeInstance;
   }
@@ -191,7 +213,7 @@ export const getLoreStateStore = (): LoreStateStore => {
 
   const enablePersistence = process.env.NODE_ENV !== "test";
 
-  storeInstance = new LoreStateStore({
+  storeInstance = new BotStateStore({
     filePath,
     enablePersistence,
   });
@@ -200,24 +222,42 @@ export const getLoreStateStore = (): LoreStateStore => {
 };
 
 /**
- * Resolve the last post info from state
+ * Resolve the last post info for a channel from state
  */
-export const resolveLastPostInfo = async (): Promise<LastPostInfo | null> => {
-  const store = getLoreStateStore();
+export const resolveLastPostInfo = async (
+  channel: ChannelType = "lore"
+): Promise<LastPostInfo | null> => {
+  const store = getBotStateStore();
   await store.load();
-  return store.getLastPostInfo();
+  return store.getLastPostInfo(channel);
 };
 
 /**
- * Record a lore post to state
+ * Record a post to state for a channel
  */
 export const recordLorePost = async (info: {
   artifactId: string;
   botName: string;
   title: string;
 }): Promise<void> => {
-  const store = getLoreStateStore();
-  store.recordPost(info);
+  const store = getBotStateStore();
+  store.recordPost("lore", info);
+  await store.flush();
+};
+
+/**
+ * Record a post to state for any channel
+ */
+export const recordChannelPost = async (
+  channel: ChannelType,
+  info: {
+    artifactId: string;
+    botName: string;
+    title: string;
+  }
+): Promise<void> => {
+  const store = getBotStateStore();
+  store.recordPost(channel, info);
   await store.flush();
 };
 
