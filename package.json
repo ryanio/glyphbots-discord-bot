@@ -1,0 +1,43 @@
+{
+  "name": "glyphbots-discord-bot",
+  "version": "1.0.0",
+  "description": "An AI-enabled Discord bot for the GlyphBots community featuring storytelling, arena battles, and playground interactions.",
+  "author": "Ryan Ghods <ryan@ryanio.com>",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "postinstall": "yarn build",
+    "build": "npx tsc -p tsconfig.build.json",
+    "start": "node dist/index.js",
+    "start:dev": "ts-node src/index.ts",
+    "test": "jest",
+    "test:ci": "jest --ci --coverage --watchAll=false --maxWorkers=50%",
+    "test:coverage": "jest --coverage --maxWorkers=50%",
+    "format": "ultracite fix --unsafe && npx tsc --noEmit -p tsconfig.build.json",
+    "lint": "ultracite lint && npx tsc --noEmit -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "@openrouter/sdk": "^0.2.9",
+    "discord.js": "^14.25.1",
+    "dotenv": "^17.2.3"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.3.6",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^18.0.0",
+    "jest": "^30.1.1",
+    "jest-mock-extended": "^4.0.0",
+    "lint-staged": "^16.1.5",
+    "ts-jest": "^29.4.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3",
+    "ultracite": "6.3.4"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx,json,jsonc,css,scss,md,mdx}": [
+      "yarn dlx ultracite format"
+    ]
+  }
+}
