@@ -136,30 +136,17 @@ const buildLoreContext = async (
 };
 
 /**
- * Build a Discord embed from generated lore
+ * Build a Discord embed for lore (image and metadata only, no narrative)
  */
 const buildLoreEmbed = (lore: GeneratedLore): EmbedBuilder => {
-  const { title, narrative, artifact, bot } = lore;
+  const { title, artifact, bot } = lore;
 
-  const embed = new EmbedBuilder()
-    .setColor(GLYPHBOTS_COLOR)
-    .setTitle(title)
-    .setDescription(narrative)
-    .setTimestamp(new Date());
+  const embed = new EmbedBuilder().setColor(GLYPHBOTS_COLOR).setTitle(title);
 
   // Add artifact image if available
   if (artifact.imageUrl) {
     embed.setImage(artifact.imageUrl);
   }
-
-  // Add bot link as URL
-  embed.setURL(getBotUrl(bot.tokenId));
-
-  // Add footer with artifact info
-  const artifactUrl = getArtifactUrl(artifact.id);
-  embed.setFooter({
-    text: `Artifact #${artifact.contractTokenId ?? "unminted"} • View on GlyphBots`,
-  });
 
   // Add fields for context
   const fields: Array<{ name: string; value: string; inline: boolean }> = [];
@@ -170,11 +157,20 @@ const buildLoreEmbed = (lore: GeneratedLore): EmbedBuilder => {
     inline: true,
   });
 
-  fields.push({
-    name: "Artifact",
-    value: `[${artifact.title}](${artifactUrl})`,
-    inline: true,
-  });
+  // Only add artifact link if it has a contract token ID
+  if (artifact.contractTokenId) {
+    fields.push({
+      name: "Artifact",
+      value: `[${artifact.title}](${getArtifactUrl(artifact.contractTokenId)})`,
+      inline: true,
+    });
+  } else {
+    fields.push({
+      name: "Artifact",
+      value: artifact.title,
+      inline: true,
+    });
+  }
 
   if (artifact.mintedAt) {
     const mintDate = new Date(artifact.mintedAt);
@@ -236,7 +232,7 @@ const postLoreEntry = async (channel: TextBasedChannel): Promise<boolean> => {
     return false;
   }
 
-  // Build and send embed
+  // Build embed (image and metadata)
   const embed = buildLoreEmbed(lore);
 
   try {
@@ -245,7 +241,11 @@ const postLoreEntry = async (channel: TextBasedChannel): Promise<boolean> => {
       return false;
     }
 
-    await channel.send({ embeds: [embed] });
+    // Send narrative as text content, embed has image and metadata
+    await channel.send({
+      content: lore.narrative,
+      embeds: [embed],
+    });
     log.info(`Posted lore for ${lore.bot.name}: ${lore.artifact.title}`);
 
     // Record the post to state

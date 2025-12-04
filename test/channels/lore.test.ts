@@ -239,7 +239,9 @@ describe("lore channel", () => {
       await initLoreChannel(mockClient, TEST_CONFIG);
 
       expect(mockGetBotUrl).toHaveBeenCalledWith(REAL_BOT.tokenId);
-      expect(mockGetArtifactUrl).toHaveBeenCalledWith(REAL_ARTIFACT.id);
+      expect(mockGetArtifactUrl).toHaveBeenCalledWith(
+        REAL_ARTIFACT.contractTokenId
+      );
     });
   });
 

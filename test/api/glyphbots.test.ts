@@ -229,8 +229,8 @@ describe("glyphbots API", () => {
     });
 
     it("should generate artifact URL", () => {
-      const url = getArtifactUrl("artifact-id");
-      expect(url).toContain("/artifact/artifact-id");
+      const url = getArtifactUrl(137);
+      expect(url).toContain("/artifact/137");
     });
   });
 });

@@ -189,5 +189,5 @@ export const getBotUrl = (tokenId: number): string =>
 /**
  * Get the URL to view an artifact on the GlyphBots website
  */
-export const getArtifactUrl = (artifactId: string): string =>
-  `${API_BASE_URL}/artifact/${artifactId}`;
+export const getArtifactUrl = (contractTokenId: number): string =>
+  `${API_BASE_URL}/artifact/${contractTokenId}`;
