@@ -30,7 +30,7 @@ const printBanner = (): void => {
 };
 
 /**
- * Print configuration summary
+ * Print basic configuration (before Discord connection)
  */
 const printConfig = (config: Config): void => {
   logger.info("");
@@ -40,9 +40,30 @@ const printConfig = (config: Config): void => {
   logger.info(`│  🤖  AI Model: ${config.openRouterModel}`);
   logger.info(`│  📝  Log Level: ${config.logLevel}`);
   logger.info("│");
+};
+
+/**
+ * Print channel configuration (after Discord connection)
+ */
+const printChannelConfig = async (
+  client: Client,
+  config: Config
+): Promise<void> => {
   logger.info("├─ 📖 LORE CHANNEL");
   logger.info("│");
-  logger.info(`│  📢  Channel ID: ${config.loreChannelId}`);
+
+  // Fetch channel to get name
+  let channelDisplay = config.loreChannelId;
+  try {
+    const channel = await client.channels.fetch(config.loreChannelId);
+    if (channel && "name" in channel && channel.name) {
+      channelDisplay = `#${channel.name}`;
+    }
+  } catch {
+    // Fall back to ID if channel can't be fetched
+  }
+
+  logger.info(`│  📢  Channel: ${channelDisplay}`);
   logger.info(`│  ⏱️   Interval: ${config.loreIntervalMinutes} minutes`);
   logger.info("│");
   logger.info("└─");
@@ -68,6 +89,9 @@ async function main(): Promise<void> {
 
   // Handle ready event
   client.on(Events.ClientReady, async () => {
+    // Print channel config now that we can resolve names
+    await printChannelConfig(client, config);
+
     logger.info("════════════════════════════════════════════════════════════");
     logger.info(`🤖 Logged in as ${client.user?.tag}`);
     logger.info("════════════════════════════════════════════════════════════");
