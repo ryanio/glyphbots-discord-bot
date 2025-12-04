@@ -7,8 +7,8 @@ import {
   getArtifactUrl,
   getBotUrl,
 } from "../../src/api/glyphbots";
-import { generateLoreNarrative } from "../../src/api/openrouter";
 import { initLoreChannel } from "../../src/channels/lore";
+import { generateLoreNarrative } from "../../src/lore/generate";
 import {
   createArtifact,
   createBot,
@@ -26,7 +26,7 @@ import {
 
 // Mock the API modules
 jest.mock("../../src/api/glyphbots");
-jest.mock("../../src/api/openrouter");
+jest.mock("../../src/lore/generate");
 
 const mockFetchRecentArtifacts = fetchRecentArtifacts as jest.MockedFunction<
   typeof fetchRecentArtifacts

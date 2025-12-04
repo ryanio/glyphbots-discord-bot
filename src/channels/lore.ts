@@ -11,7 +11,6 @@ import {
   getArtifactUrl,
   getBotUrl,
 } from "../api/glyphbots";
-import { generateLoreNarrative } from "../api/openrouter";
 import { prefixedLogger } from "../lib/logger";
 import { recordLorePost } from "../lib/state";
 import type {
@@ -26,6 +25,7 @@ import {
   SECONDS_PER_MINUTE,
   weightedRandomIndex,
 } from "../lib/utils";
+import { generateLoreNarrative } from "../lore/generate";
 
 const log = prefixedLogger("Lore");
 
