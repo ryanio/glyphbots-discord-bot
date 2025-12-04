@@ -21,6 +21,29 @@ jest.mock("@openrouter/sdk", () => ({
   })),
 }));
 
+/** Helper to extract text content from user message (handles multimodal format) */
+const extractUserTextContent = (call: unknown): string => {
+  const args = call as { messages: Array<{ role: string; content: unknown }> };
+  const userMsg = args.messages.find((m) => m.role === "user");
+  if (!userMsg) {
+    return "";
+  }
+  const content = userMsg.content;
+  if (typeof content === "string") {
+    return content;
+  }
+  if (Array.isArray(content)) {
+    return content
+      .filter(
+        (p): p is { type: "text"; text: string } =>
+          typeof p === "object" && p.type === "text"
+      )
+      .map((p) => p.text)
+      .join("");
+  }
+  return "";
+};
+
 describe("OpenRouter API", () => {
   const originalApiKey = process.env.OPENROUTER_API_KEY;
   const originalModel = process.env.OPENROUTER_MODEL;
@@ -100,16 +123,10 @@ describe("OpenRouter API", () => {
       const result = await generateLoreNarrative(context);
 
       expect(result).not.toBeNull();
-      expect(mockSend).toHaveBeenCalledWith(
-        expect.objectContaining({
-          messages: expect.arrayContaining([
-            expect.objectContaining({
-              role: "user",
-              content: expect.stringContaining("Background: Cosmic"),
-            }),
-          ]),
-        })
+      const textContent = extractUserTextContent(
+        mockSend.mock.calls.at(0)?.at(0)
       );
+      expect(textContent).toContain("Background: Cosmic");
     });
 
     it("should include abilities in prompt when present", async () => {
@@ -125,16 +142,10 @@ describe("OpenRouter API", () => {
 
       await generateLoreNarrative(context);
 
-      expect(mockSend).toHaveBeenCalledWith(
-        expect.objectContaining({
-          messages: expect.arrayContaining([
-            expect.objectContaining({
-              role: "user",
-              content: expect.stringContaining("Shadow Merge"),
-            }),
-          ]),
-        })
+      const textContent = extractUserTextContent(
+        mockSend.mock.calls.at(0)?.at(0)
       );
+      expect(textContent).toContain("Shadow Merge");
     });
 
     it("should return null when no content in response", async () => {
@@ -272,17 +283,11 @@ describe("OpenRouter API", () => {
 
       await generateLoreNarrative(context);
 
-      expect(mockSend).toHaveBeenCalledWith(
-        expect.objectContaining({
-          messages: expect.arrayContaining([
-            expect.objectContaining({
-              role: "user",
-              content: expect.stringContaining(
-                "Bypass 8 security scanners to reach central data vault"
-              ),
-            }),
-          ]),
-        })
+      const textContent = extractUserTextContent(
+        mockSend.mock.calls.at(0)?.at(0)
+      );
+      expect(textContent).toContain(
+        "Bypass 8 security scanners to reach central data vault"
       );
     });
 

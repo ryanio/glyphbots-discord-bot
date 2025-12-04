@@ -80,12 +80,22 @@ type ChatResponse = {
   }>;
 };
 
+/** Message content part for multimodal messages */
+type ContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; imageUrl: { url: string } };
+
+/** Message type for chat requests */
+type ChatMessage =
+  | { role: "system" | "assistant"; content: string }
+  | { role: "user"; content: string | ContentPart[] };
+
 /**
  * Create OpenRouter client and send chat request using dynamic import (ESM package)
  */
 const sendChatRequest = async (params: {
   model: string;
-  messages: Array<{ role: "system" | "user" | "assistant"; content: string }>;
+  messages: ChatMessage[];
   maxTokens: number;
   temperature: number;
 }): Promise<ChatResponse> => {
@@ -112,6 +122,27 @@ const sendChatRequest = async (params: {
 };
 
 /**
+ * Build user message content, optionally including the artifact image
+ */
+const buildUserContent = (context: LoreContext): string | ContentPart[] => {
+  const textPrompt = buildUserPrompt(context);
+
+  // If artifact has an image URL, include it as multimodal content
+  if (context.artifact.imageUrl) {
+    return [
+      { type: "text", text: textPrompt },
+      {
+        type: "image_url",
+        imageUrl: { url: context.artifact.imageUrl },
+      },
+    ];
+  }
+
+  // No image, return text only
+  return textPrompt;
+};
+
+/**
  * Generate a lore narrative using OpenRouter
  */
 export const generateLoreNarrative = async (
@@ -121,17 +152,22 @@ export const generateLoreNarrative = async (
   log.info(`Generating lore for ${context.bot.name} using model ${model}`);
 
   try {
-    const userPrompt = buildUserPrompt(context);
+    const userContent = buildUserContent(context);
+    const hasImage =
+      Array.isArray(userContent) &&
+      userContent.some((p) => p.type === "image_url");
 
-    log.debug("Sending request to OpenRouter");
+    log.debug(
+      `Sending request to OpenRouter${hasImage ? " (with artifact image)" : ""}`
+    );
 
     const response = await sendChatRequest({
       model,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: userPrompt },
+        { role: "user", content: userContent },
       ],
-      maxTokens: 1000,
+      maxTokens: 2000,
       temperature: 0.8,
     });
 
