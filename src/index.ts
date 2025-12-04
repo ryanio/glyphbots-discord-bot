@@ -183,7 +183,6 @@ async function main(): Promise<void> {
   });
 
   // Connect to Discord
-  logger.info("Connecting to Discord...");
   await client.login(config.discordToken);
 }
 
