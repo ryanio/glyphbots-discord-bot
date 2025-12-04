@@ -25,7 +25,7 @@ const buildMessageContent = (
   if (context.artifact.imageUrl) {
     return [
       { type: "text", text: textPrompt },
-      { type: "image_url", url: context.artifact.imageUrl },
+      { type: "image_url", image_url: { url: context.artifact.imageUrl } },
     ];
   }
   return textPrompt;

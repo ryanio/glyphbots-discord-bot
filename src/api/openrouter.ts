@@ -16,7 +16,7 @@ const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 /** Message content part for multimodal messages */
 export type ContentPart =
   | { type: "text"; text: string }
-  | { type: "image_url"; url: string };
+  | { type: "image_url"; image_url: { url: string; detail?: string } };
 
 /** Message type for chat requests */
 export type ChatMessage =
