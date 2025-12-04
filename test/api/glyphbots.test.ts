@@ -7,16 +7,13 @@ import {
   getArtifactUrl,
   getBotUrl,
 } from "../../src/api/glyphbots";
-import type {
-  Artifact,
-  ArtifactResponse,
-  ArtifactsListResponse,
-  ArtifactsSummaryResponse,
-  Bot,
-  BotResponse,
-  BotStory,
-  BotStoryResponse,
-} from "../../src/lib/types";
+import {
+  createArtifactsListResponse,
+  REAL_ARTIFACT,
+  REAL_ARTIFACTS_SUMMARY,
+  REAL_BOT,
+  REAL_BOT_STORY,
+} from "../fixtures";
 
 // Mock fetch globally
 const mockFetch = jest.fn();
@@ -29,21 +26,14 @@ describe("glyphbots API", () => {
 
   describe("fetchArtifactsSummary", () => {
     it("should fetch and return summary data", async () => {
-      const mockSummary: ArtifactsSummaryResponse = {
-        total: 1000,
-        last1d: 50,
-        last7d: 200,
-        last30d: 500,
-      };
-
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => mockSummary,
+        json: async () => REAL_ARTIFACTS_SUMMARY,
       });
 
       const result = await fetchArtifactsSummary();
 
-      expect(result).toEqual(mockSummary);
+      expect(result).toEqual(REAL_ARTIFACTS_SUMMARY);
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining("/api/artifacts/recently-minted?summary=true"),
         expect.any(Object)
@@ -71,23 +61,8 @@ describe("glyphbots API", () => {
   });
 
   describe("fetchRecentArtifacts", () => {
-    const mockArtifact: Artifact = {
-      id: "artifact-1",
-      botTokenId: 123,
-      imageUrl: "https://example.com/image.png",
-      title: "Test Artifact",
-      createdAt: "2024-01-01T00:00:00Z",
-      mintedAt: "2024-01-02T00:00:00Z",
-      contractTokenId: 456,
-      mintQuantity: 1,
-      minter: "0x1234",
-    };
-
     it("should fetch recent artifacts with default limit", async () => {
-      const mockResponse: ArtifactsListResponse = {
-        ok: true,
-        items: [mockArtifact],
-      };
+      const mockResponse = createArtifactsListResponse([REAL_ARTIFACT]);
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -97,7 +72,7 @@ describe("glyphbots API", () => {
       const result = await fetchRecentArtifacts();
 
       expect(result).toHaveLength(1);
-      expect(result.at(0)).toEqual(mockArtifact);
+      expect(result.at(0)).toEqual(REAL_ARTIFACT);
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining("limit=50"),
         expect.any(Object)
@@ -107,7 +82,7 @@ describe("glyphbots API", () => {
     it("should fetch with custom limit", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ ok: true, items: [] }),
+        json: async () => createArtifactsListResponse([]),
       });
 
       await fetchRecentArtifacts(20);
@@ -142,34 +117,17 @@ describe("glyphbots API", () => {
   });
 
   describe("fetchArtifact", () => {
-    const mockArtifact: Artifact = {
-      id: "artifact-1",
-      botTokenId: 123,
-      imageUrl: "https://example.com/image.png",
-      title: "Test Artifact",
-      createdAt: "2024-01-01T00:00:00Z",
-      mintedAt: "2024-01-02T00:00:00Z",
-      contractTokenId: 456,
-      mintQuantity: 1,
-      minter: "0x1234",
-    };
-
     it("should fetch single artifact by contractTokenId", async () => {
-      const mockResponse: ArtifactResponse = {
-        ok: true,
-        artifact: mockArtifact,
-      };
-
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => mockResponse,
+        json: async () => ({ ok: true, artifact: REAL_ARTIFACT }),
       });
 
-      const result = await fetchArtifact(456);
+      const result = await fetchArtifact(137);
 
-      expect(result).toEqual(mockArtifact);
+      expect(result).toEqual(REAL_ARTIFACT);
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/artifacts/456"),
+        expect.stringContaining("/api/artifacts/137"),
         expect.any(Object)
       );
     });
@@ -198,34 +156,17 @@ describe("glyphbots API", () => {
   });
 
   describe("fetchBot", () => {
-    const mockBot: Bot = {
-      id: "bot-123",
-      name: "Vector the Kind",
-      tokenId: 123,
-      traits: [{ trait_type: "Background", value: "Blue" }],
-      rarityRank: 500,
-      unicode: {
-        unicode: ["U+0041"],
-        textContent: ["A"],
-        colors: { background: "#000", text: "#fff" },
-      },
-      burnedAt: null,
-      burnedBy: null,
-    };
-
     it("should fetch bot by tokenId", async () => {
-      const mockResponse: BotResponse = { bot: mockBot };
-
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => mockResponse,
+        json: async () => ({ bot: REAL_BOT }),
       });
 
-      const result = await fetchBot(123);
+      const result = await fetchBot(2369);
 
-      expect(result).toEqual(mockBot);
+      expect(result).toEqual(REAL_BOT);
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/bot/123"),
+        expect.stringContaining("/api/bot/2369"),
         expect.any(Object)
       );
     });
@@ -243,54 +184,17 @@ describe("glyphbots API", () => {
   });
 
   describe("fetchBotStory", () => {
-    const mockStory: BotStory = {
-      arc: {
-        id: "arc-1",
-        title: "The Journey",
-        role: "Warrior",
-        faction: "The Order",
-        mission: {
-          type: "delivery",
-          objective: "Deliver the artifact",
-          setting: "Ancient ruins",
-          threat: "Guardians",
-          mechanic: "Stealth",
-          timeContext: "Dawn",
-          stakesSuccess: "Save the realm",
-          stakesFailure: "Eternal darkness",
-        },
-        abilities: [
-          {
-            name: "Power Strike",
-            effect: "Deal massive damage",
-            cooldown: "30s",
-            resource: "Energy",
-          },
-        ],
-        symbolBias: ["⚔️"],
-        environmentObjects: ["sword"],
-        snippet: "A warrior of renown...",
-      },
-      storySeed: 12_345,
-      storyPowers: ["teleportation"],
-      storyStats: { strength: 85 },
-      storySnippet: "Personalized snippet",
-      missionBrief: "Your mission is...",
-    };
-
     it("should fetch bot story", async () => {
-      const mockResponse: BotStoryResponse = { story: mockStory };
-
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => mockResponse,
+        json: async () => ({ story: REAL_BOT_STORY }),
       });
 
-      const result = await fetchBotStory(123);
+      const result = await fetchBotStory(2369);
 
-      expect(result).toEqual(mockStory);
+      expect(result).toEqual(REAL_BOT_STORY);
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/bot/123/story"),
+        expect.stringContaining("/api/bot/2369/story"),
         expect.any(Object)
       );
     });

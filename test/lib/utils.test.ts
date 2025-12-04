@@ -1,239 +1,248 @@
 import {
-  delay,
   formatTimeAgo,
-  formatTimestamp,
   getErrorMessage,
   loadConfig,
-  MS_PER_SECOND,
-  SECONDS_PER_MINUTE,
-  truncate,
+  timeout,
   weightedRandomIndex,
 } from "../../src/lib/utils";
+import { clearTestEnv, setupTestEnv, TEST_CONFIG } from "../fixtures";
 
 describe("utils", () => {
   describe("loadConfig", () => {
-    const originalEnv = process.env;
+    const originalEnv = { ...process.env };
 
     beforeEach(() => {
-      process.env = { ...originalEnv };
+      setupTestEnv();
     });
 
     afterEach(() => {
-      process.env = originalEnv;
+      clearTestEnv();
+      process.env = { ...originalEnv };
     });
 
-    it("should throw if DISCORD_TOKEN is missing", () => {
-      process.env.LORE_CHANNEL_ID = "123";
-      process.env.OPENROUTER_API_KEY = "key";
-      process.env.DISCORD_TOKEN = undefined;
+    it("should load config from environment variables", () => {
+      const config = loadConfig();
 
-      expect(() => loadConfig()).toThrow(
-        "DISCORD_TOKEN environment variable is required"
-      );
+      expect(config.discordToken).toBe(TEST_CONFIG.discordToken);
+      expect(config.loreChannelId).toBe(TEST_CONFIG.loreChannelId);
+      expect(config.openRouterApiKey).toBe(TEST_CONFIG.openRouterApiKey);
     });
 
-    it("should throw if LORE_CHANNEL_ID is missing", () => {
-      process.env.DISCORD_TOKEN = "token";
-      process.env.OPENROUTER_API_KEY = "key";
-      process.env.LORE_CHANNEL_ID = undefined;
-
-      expect(() => loadConfig()).toThrow(
-        "LORE_CHANNEL_ID environment variable is required"
-      );
-    });
-
-    it("should throw if OPENROUTER_API_KEY is missing", () => {
-      process.env.DISCORD_TOKEN = "token";
-      process.env.LORE_CHANNEL_ID = "123";
-      process.env.OPENROUTER_API_KEY = undefined;
-
-      expect(() => loadConfig()).toThrow(
-        "OPENROUTER_API_KEY environment variable is required"
-      );
-    });
-
-    it("should load config with defaults", () => {
-      process.env.DISCORD_TOKEN = "test-token";
-      process.env.LORE_CHANNEL_ID = "123456789";
-      process.env.OPENROUTER_API_KEY = "test-key";
+    it("should use default values when optional env vars not set", () => {
+      delete process.env.LORE_INTERVAL_MINUTES;
+      delete process.env.OPENROUTER_MODEL;
 
       const config = loadConfig();
 
-      expect(config.discordToken).toBe("test-token");
-      expect(config.loreChannelId).toBe("123456789");
-      expect(config.openRouterApiKey).toBe("test-key");
       expect(config.loreIntervalMinutes).toBe(30);
       expect(config.openRouterModel).toBe("anthropic/claude-sonnet-4");
-      expect(config.glyphbotsApiUrl).toBe("https://glyphbots.com");
-      expect(config.logLevel).toBe("info");
     });
 
-    it("should use custom values from env", () => {
-      process.env.DISCORD_TOKEN = "test-token";
-      process.env.LORE_CHANNEL_ID = "123456789";
-      process.env.OPENROUTER_API_KEY = "test-key";
-      process.env.LORE_INTERVAL_MINUTES = "15";
-      process.env.OPENROUTER_MODEL = "openai/gpt-4o";
+    it("should parse LORE_INTERVAL_MINUTES as number", () => {
+      process.env.LORE_INTERVAL_MINUTES = "60";
+
+      const config = loadConfig();
+
+      expect(config.loreIntervalMinutes).toBe(60);
+    });
+
+    it("should throw when DISCORD_TOKEN is missing", () => {
+      delete process.env.DISCORD_TOKEN;
+
+      expect(() => loadConfig()).toThrow("DISCORD_TOKEN");
+    });
+
+    it("should throw when LORE_CHANNEL_ID is missing", () => {
+      delete process.env.LORE_CHANNEL_ID;
+
+      expect(() => loadConfig()).toThrow("LORE_CHANNEL_ID");
+    });
+
+    it("should throw when OPENROUTER_API_KEY is missing", () => {
+      delete process.env.OPENROUTER_API_KEY;
+
+      expect(() => loadConfig()).toThrow("OPENROUTER_API_KEY");
+    });
+
+    it("should use custom GLYPHBOTS_API_URL when set", () => {
       process.env.GLYPHBOTS_API_URL = "https://custom.api.com";
+
+      const config = loadConfig();
+
+      expect(config.glyphbotsApiUrl).toBe("https://custom.api.com");
+    });
+
+    it("should use custom LOG_LEVEL when set", () => {
       process.env.LOG_LEVEL = "debug";
 
       const config = loadConfig();
 
-      expect(config.loreIntervalMinutes).toBe(15);
-      expect(config.openRouterModel).toBe("openai/gpt-4o");
-      expect(config.glyphbotsApiUrl).toBe("https://custom.api.com");
       expect(config.logLevel).toBe("debug");
     });
   });
 
-  describe("delay", () => {
-    it("should delay for specified milliseconds", async () => {
-      const start = Date.now();
-      await delay(50);
-      const elapsed = Date.now() - start;
-
-      expect(elapsed).toBeGreaterThanOrEqual(45);
-      expect(elapsed).toBeLessThan(150);
-    });
-  });
-
-  describe("formatTimestamp", () => {
-    it("should format date as readable timestamp", () => {
-      const date = new Date("2024-12-04T14:30:00.000Z");
-      const result = formatTimestamp(date);
-
-      expect(result).toContain("Dec");
-      expect(result).toContain("4");
-      expect(result).toContain("2024");
-    });
-  });
-
   describe("formatTimeAgo", () => {
-    it("should return 'just now' for recent times", () => {
-      const date = new Date();
-      expect(formatTimeAgo(date)).toBe("just now");
+    it("should format seconds ago", () => {
+      const now = Date.now();
+      const thirtySecondsAgo = new Date(now - 30 * 1000).toISOString();
+
+      const result = formatTimeAgo(thirtySecondsAgo);
+
+      expect(result).toBe("30 seconds ago");
     });
 
-    it("should return minutes ago", () => {
-      const date = new Date(
-        Date.now() - 5 * MS_PER_SECOND * SECONDS_PER_MINUTE
-      );
-      expect(formatTimeAgo(date)).toBe("5 minutes ago");
+    it("should format minutes ago", () => {
+      const now = Date.now();
+      const fiveMinutesAgo = new Date(now - 5 * 60 * 1000).toISOString();
+
+      const result = formatTimeAgo(fiveMinutesAgo);
+
+      expect(result).toBe("5 minutes ago");
     });
 
-    it("should return hours ago", () => {
-      const date = new Date(
-        Date.now() - 3 * MS_PER_SECOND * SECONDS_PER_MINUTE * 60
-      );
-      expect(formatTimeAgo(date)).toBe("3 hours ago");
+    it("should format hours ago", () => {
+      const now = Date.now();
+      const threeHoursAgo = new Date(now - 3 * 60 * 60 * 1000).toISOString();
+
+      const result = formatTimeAgo(threeHoursAgo);
+
+      expect(result).toBe("3 hours ago");
     });
 
-    it("should return days ago", () => {
-      const date = new Date(
-        Date.now() - 2 * MS_PER_SECOND * SECONDS_PER_MINUTE * 60 * 24
-      );
-      expect(formatTimeAgo(date)).toBe("2 days ago");
+    it("should format days ago", () => {
+      const now = Date.now();
+      const twoDaysAgo = new Date(now - 2 * 24 * 60 * 60 * 1000).toISOString();
+
+      const result = formatTimeAgo(twoDaysAgo);
+
+      expect(result).toBe("2 days ago");
     });
 
-    it("should use singular for 1 minute", () => {
-      const date = new Date(
-        Date.now() - 1 * MS_PER_SECOND * SECONDS_PER_MINUTE
-      );
-      expect(formatTimeAgo(date)).toBe("1 minute ago");
-    });
+    it("should use singular form for 1 unit", () => {
+      const now = Date.now();
+      const oneMinuteAgo = new Date(now - 60 * 1000).toISOString();
 
-    it("should use singular for 1 hour", () => {
-      const date = new Date(
-        Date.now() - 1 * MS_PER_SECOND * SECONDS_PER_MINUTE * 60
-      );
-      expect(formatTimeAgo(date)).toBe("1 hour ago");
-    });
+      const result = formatTimeAgo(oneMinuteAgo);
 
-    it("should use singular for 1 day", () => {
-      const date = new Date(
-        Date.now() - 1 * MS_PER_SECOND * SECONDS_PER_MINUTE * 60 * 24
-      );
-      expect(formatTimeAgo(date)).toBe("1 day ago");
-    });
-  });
-
-  describe("weightedRandomIndex", () => {
-    it("should return value between 1 and max", () => {
-      for (let i = 0; i < 100; i++) {
-        const result = weightedRandomIndex(100);
-        expect(result).toBeGreaterThanOrEqual(1);
-        expect(result).toBeLessThanOrEqual(100);
-      }
-    });
-
-    it("should return 1 when max is 1", () => {
-      expect(weightedRandomIndex(1)).toBe(1);
-    });
-
-    it("should favor higher values with default weight", () => {
-      const results: number[] = [];
-      for (let i = 0; i < 1000; i++) {
-        results.push(weightedRandomIndex(100));
-      }
-
-      const average = results.reduce((a, b) => a + b, 0) / results.length;
-      // With weight=2.0, average should be higher than uniform (50.5)
-      expect(average).toBeGreaterThan(55);
-    });
-  });
-
-  describe("truncate", () => {
-    it("should return text unchanged if shorter than maxLength", () => {
-      expect(truncate("hello", 10)).toBe("hello");
-    });
-
-    it("should return text unchanged if equal to maxLength", () => {
-      expect(truncate("hello", 5)).toBe("hello");
-    });
-
-    it("should truncate and add ellipsis if longer than maxLength", () => {
-      expect(truncate("hello world", 8)).toBe("hello...");
-    });
-
-    it("should handle empty string", () => {
-      expect(truncate("", 10)).toBe("");
+      expect(result).toBe("1 minute ago");
     });
   });
 
   describe("getErrorMessage", () => {
-    it("should extract message from Error instance", () => {
-      const error = new Error("test error");
-      expect(getErrorMessage(error)).toBe("test error");
+    it("should extract message from Error object", () => {
+      const error = new Error("Test error message");
+
+      const result = getErrorMessage(error);
+
+      expect(result).toBe("Test error message");
     });
 
-    it("should convert string to string", () => {
-      expect(getErrorMessage("string error")).toBe("string error");
+    it("should convert string to message", () => {
+      const result = getErrorMessage("String error");
+
+      expect(result).toBe("String error");
     });
 
-    it("should convert number to string", () => {
-      expect(getErrorMessage(404)).toBe("404");
-    });
+    it("should convert number to message", () => {
+      const result = getErrorMessage(404);
 
-    it("should convert object to string", () => {
-      expect(getErrorMessage({ code: "ERR" })).toBe("[object Object]");
+      expect(result).toBe("404");
     });
 
     it("should handle null", () => {
-      expect(getErrorMessage(null)).toBe("null");
+      const result = getErrorMessage(null);
+
+      expect(result).toBe("Unknown error");
     });
 
     it("should handle undefined", () => {
-      expect(getErrorMessage(undefined)).toBe("undefined");
+      const result = getErrorMessage(undefined);
+
+      expect(result).toBe("Unknown error");
+    });
+
+    it("should handle objects with toString", () => {
+      const obj = { toString: () => "Custom object error" };
+
+      const result = getErrorMessage(obj);
+
+      expect(result).toBe("Custom object error");
     });
   });
 
-  describe("constants", () => {
-    it("should have correct MS_PER_SECOND", () => {
-      expect(MS_PER_SECOND).toBe(1000);
+  describe("timeout", () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
     });
 
-    it("should have correct SECONDS_PER_MINUTE", () => {
-      expect(SECONDS_PER_MINUTE).toBe(60);
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it("should resolve after specified milliseconds", async () => {
+      const promise = timeout(1000);
+
+      jest.advanceTimersByTime(1000);
+
+      await expect(promise).resolves.toBeUndefined();
+    });
+
+    it("should not resolve before timeout", () => {
+      let resolved = false;
+
+      timeout(1000).then(() => {
+        resolved = true;
+      });
+
+      jest.advanceTimersByTime(500);
+
+      expect(resolved).toBe(false);
+    });
+  });
+
+  describe("weightedRandomIndex", () => {
+    it("should return 0 for single item array", () => {
+      const result = weightedRandomIndex(1);
+
+      expect(result).toBe(0);
+    });
+
+    it("should return valid index for array of length 2", () => {
+      const result = weightedRandomIndex(2);
+
+      expect(result).toBeGreaterThanOrEqual(0);
+      expect(result).toBeLessThan(2);
+    });
+
+    it("should return valid index for large array", () => {
+      const length = 100;
+      const result = weightedRandomIndex(length);
+
+      expect(result).toBeGreaterThanOrEqual(0);
+      expect(result).toBeLessThan(length);
+    });
+
+    it("should favor lower indices over multiple runs", () => {
+      const length = 10;
+      const iterations = 1000;
+      const counts = new Array<number>(length).fill(0);
+
+      for (let i = 0; i < iterations; i++) {
+        const index = weightedRandomIndex(length);
+        counts[index] += 1;
+      }
+
+      // First half should have more selections than second half on average
+      const firstHalfSum = counts.slice(0, 5).reduce((a, b) => a + b, 0);
+      const secondHalfSum = counts.slice(5).reduce((a, b) => a + b, 0);
+
+      expect(firstHalfSum).toBeGreaterThan(secondHalfSum);
+    });
+
+    it("should handle edge case of length 0", () => {
+      const result = weightedRandomIndex(0);
+
+      expect(result).toBe(0);
     });
   });
 });

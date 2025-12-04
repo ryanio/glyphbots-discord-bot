@@ -124,14 +124,14 @@ export const generateLoreNarrative = async (
     if (typeof rawContent === "string") {
       content = rawContent;
     } else if (Array.isArray(rawContent)) {
-      // Extract text from content items
-      content = rawContent
-        .filter(
-          (item): item is { type: "text"; text: string } =>
-            "type" in item && item.type === "text" && "text" in item
-        )
-        .map((item) => item.text)
-        .join("\n");
+      // Extract text from content items with type: "text"
+      const textParts: string[] = [];
+      for (const item of rawContent) {
+        if (item.type === "text" && "text" in item) {
+          textParts.push(item.text);
+        }
+      }
+      content = textParts.join("");
     } else {
       log.error("Unexpected content type from OpenRouter");
       return null;

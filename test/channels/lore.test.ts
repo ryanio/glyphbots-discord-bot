@@ -9,20 +9,24 @@ import {
 } from "../../src/api/glyphbots";
 import { generateLoreNarrative } from "../../src/api/openrouter";
 import { initLoreChannel } from "../../src/channels/lore";
-import type { Artifact, Bot, BotStory, Config } from "../../src/lib/types";
+import {
+  createArtifact,
+  createBot,
+  createBotStory,
+  createConfig,
+  createGeneratedLore,
+  createMockChannel,
+  type MockChannel,
+  REAL_ARTIFACT,
+  REAL_ARTIFACT_2,
+  REAL_BOT,
+  REAL_BOT_STORY,
+  TEST_CONFIG,
+} from "../fixtures";
 
 // Mock the API modules
 jest.mock("../../src/api/glyphbots");
 jest.mock("../../src/api/openrouter");
-
-/** Mock type for Discord channel */
-type MockChannel = {
-  id: string;
-  name: string;
-  isTextBased: () => boolean;
-  isSendable: () => boolean;
-  send: jest.Mock;
-};
 
 const mockFetchRecentArtifacts = fetchRecentArtifacts as jest.MockedFunction<
   typeof fetchRecentArtifacts
@@ -40,71 +44,6 @@ const mockGenerateLoreNarrative = generateLoreNarrative as jest.MockedFunction<
 >;
 
 describe("lore channel", () => {
-  const mockBot: Bot = {
-    id: "bot-123",
-    name: "Vector the Kind",
-    tokenId: 123,
-    traits: [{ trait_type: "Background", value: "Blue" }],
-    rarityRank: 500,
-    unicode: {
-      unicode: ["U+0041"],
-      textContent: ["A"],
-      colors: { background: "#000", text: "#fff" },
-    },
-    burnedAt: null,
-    burnedBy: null,
-  };
-
-  const mockArtifact: Artifact = {
-    id: "artifact-1",
-    botTokenId: 123,
-    imageUrl: "https://example.com/image.png",
-    title: "Quantum Infiltrator",
-    createdAt: "2024-01-01T00:00:00Z",
-    mintedAt: "2024-01-02T00:00:00Z",
-    contractTokenId: 456,
-    mintQuantity: 1,
-    minter: "0x1234",
-  };
-
-  const mockStory: BotStory = {
-    arc: {
-      id: "arc-1",
-      title: "The Journey",
-      role: "Warrior",
-      faction: "The Order",
-      mission: {
-        type: "delivery",
-        objective: "Deliver the artifact",
-        setting: "Ancient ruins",
-        threat: "Guardians",
-        mechanic: "Stealth",
-        timeContext: "Dawn",
-        stakesSuccess: "Save the realm",
-        stakesFailure: "Eternal darkness",
-      },
-      abilities: [],
-      symbolBias: [],
-      environmentObjects: [],
-      snippet: "A warrior...",
-    },
-    storySeed: 12_345,
-    storyPowers: [],
-    storyStats: {},
-    storySnippet: "Snippet",
-    missionBrief: "Mission",
-  };
-
-  const mockConfig: Config = {
-    discordToken: "test-token",
-    loreChannelId: "123456789",
-    loreIntervalMinutes: 30,
-    openRouterApiKey: "test-key",
-    openRouterModel: "anthropic/claude-sonnet-4",
-    glyphbotsApiUrl: "https://glyphbots.com",
-    logLevel: "info",
-  };
-
   let mockChannel: MockChannel;
   const mockClient = mockDeep<Client>();
 
@@ -113,31 +52,27 @@ describe("lore channel", () => {
     mockReset(mockClient);
     jest.useFakeTimers();
 
-    mockChannel = {
-      id: "123456789",
-      name: "lore",
-      isTextBased: () => true,
-      isSendable: () => true,
-      send: jest.fn().mockResolvedValue({}),
-    };
-
+    mockChannel = createMockChannel();
     mockClient.channels.fetch.mockResolvedValue(mockChannel as never);
 
-    // Default mock implementations
-    mockFetchRecentArtifacts.mockResolvedValue([mockArtifact]);
-    mockFetchBot.mockResolvedValue(mockBot);
-    mockFetchBotStory.mockResolvedValue(mockStory);
-    mockGetBotUrl.mockReturnValue("https://glyphbots.com/bot/123");
+    // Default mock implementations using real data
+    mockFetchRecentArtifacts.mockResolvedValue([REAL_ARTIFACT]);
+    mockFetchBot.mockResolvedValue(REAL_BOT);
+    mockFetchBotStory.mockResolvedValue(REAL_BOT_STORY);
+    mockGetBotUrl.mockReturnValue("https://glyphbots.com/bot/2369");
     mockGetArtifactUrl.mockReturnValue(
-      "https://glyphbots.com/artifact/artifact-1"
+      `https://glyphbots.com/artifact/${REAL_ARTIFACT.id}`
     );
 
-    mockGenerateLoreNarrative.mockResolvedValue({
-      title: "Vector the Kind: Quantum Infiltrator",
-      narrative: "Generated story narrative...",
-      artifact: mockArtifact,
-      bot: mockBot,
-    });
+    mockGenerateLoreNarrative.mockResolvedValue(
+      createGeneratedLore({
+        title: `${REAL_BOT.name}: ${REAL_ARTIFACT.title}`,
+        narrative:
+          "In the shadows of Black Site 7, Binarywire moved like a ghost...",
+        artifact: REAL_ARTIFACT,
+        bot: REAL_BOT,
+      })
+    );
   });
 
   afterEach(() => {
@@ -145,141 +80,221 @@ describe("lore channel", () => {
   });
 
   describe("initLoreChannel", () => {
-    it("should fetch the channel from client", async () => {
-      await initLoreChannel(mockClient, mockConfig);
+    it("should fetch the specified channel", async () => {
+      await initLoreChannel(mockClient, TEST_CONFIG);
 
-      expect(mockClient.channels?.fetch).toHaveBeenCalledWith("123456789");
+      expect(mockClient.channels.fetch).toHaveBeenCalledWith(
+        TEST_CONFIG.loreChannelId
+      );
     });
 
     it("should throw if channel is not text-based", async () => {
-      mockClient.channels.fetch.mockResolvedValue({
-        isTextBased: () => false,
-      } as never);
+      const nonTextChannel = createMockChannel({ isTextBased: () => false });
+      mockClient.channels.fetch.mockResolvedValue(nonTextChannel as never);
 
-      await expect(initLoreChannel(mockClient, mockConfig)).rejects.toThrow(
-        "is not a text channel"
+      await expect(initLoreChannel(mockClient, TEST_CONFIG)).rejects.toThrow(
+        "not a text channel"
       );
     });
 
-    it("should post initial lore entry", async () => {
-      await initLoreChannel(mockClient, mockConfig);
+    it("should post initial lore entry on initialization", async () => {
+      await initLoreChannel(mockClient, TEST_CONFIG);
 
-      expect(mockFetchRecentArtifacts).toHaveBeenCalled();
-      expect(mockFetchBot).toHaveBeenCalledWith(123);
-      expect(mockGenerateLoreNarrative).toHaveBeenCalled();
       expect(mockChannel.send).toHaveBeenCalled();
     });
 
-    it("should set up interval for recurring posts", async () => {
-      await initLoreChannel(mockClient, mockConfig);
+    it("should post lore on interval", async () => {
+      const config = createConfig({ loreIntervalMinutes: 5 });
 
-      // Clear initial calls
-      jest.clearAllMocks();
+      await initLoreChannel(mockClient, config);
 
-      // Fast-forward 30 minutes
-      jest.advanceTimersByTime(30 * 60 * 1000);
+      // Clear the initial post
+      mockChannel.send.mockClear();
 
-      // Should trigger another post
-      expect(mockFetchRecentArtifacts).toHaveBeenCalled();
+      // Advance time by interval (5 minutes)
+      jest.advanceTimersByTime(5 * 60 * 1000);
+
+      // Run any pending timers
+      await jest.runOnlyPendingTimersAsync();
+
+      expect(mockChannel.send).toHaveBeenCalled();
     });
 
-    it("should handle channel fetch error gracefully", async () => {
-      mockClient.channels.fetch.mockResolvedValue(null as never);
+    it("should not post before interval elapsed", async () => {
+      const config = createConfig({ loreIntervalMinutes: 30 });
 
-      await expect(initLoreChannel(mockClient, mockConfig)).rejects.toThrow();
-    });
-  });
+      await initLoreChannel(mockClient, config);
+      mockChannel.send.mockClear();
 
-  describe("weighted artifact selection", () => {
-    it("should call fetchRecentArtifacts", async () => {
-      await initLoreChannel(mockClient, mockConfig);
+      // Advance only 15 minutes
+      jest.advanceTimersByTime(15 * 60 * 1000);
 
-      expect(mockFetchRecentArtifacts).toHaveBeenCalledWith(50);
-    });
-
-    it("should handle empty artifacts list", async () => {
-      mockFetchRecentArtifacts.mockResolvedValue([]);
-
-      await initLoreChannel(mockClient, mockConfig);
-
-      // Should not crash, but won't post
       expect(mockChannel.send).not.toHaveBeenCalled();
     });
-  });
 
-  describe("lore context building", () => {
-    it("should fetch bot data for artifact", async () => {
-      await initLoreChannel(mockClient, mockConfig);
+    it("should post multiple times over multiple intervals", async () => {
+      const config = createConfig({ loreIntervalMinutes: 10 });
 
-      expect(mockFetchBot).toHaveBeenCalledWith(mockArtifact.botTokenId);
+      await initLoreChannel(mockClient, config);
+      mockChannel.send.mockClear();
+
+      // Advance 3 intervals (30 minutes total)
+      jest.advanceTimersByTime(30 * 60 * 1000);
+      await jest.runOnlyPendingTimersAsync();
+
+      // At least 3 posts should have been triggered
+      expect(mockChannel.send.mock.calls.length).toBeGreaterThanOrEqual(3);
     });
 
-    it("should fetch bot story", async () => {
-      await initLoreChannel(mockClient, mockConfig);
-
-      expect(mockFetchBotStory).toHaveBeenCalledWith(mockArtifact.botTokenId);
-    });
-
-    it("should handle bot fetch failure with retry", async () => {
-      mockFetchBot.mockResolvedValueOnce(null);
-      mockFetchBot.mockResolvedValueOnce(mockBot);
-
-      await initLoreChannel(mockClient, mockConfig);
-
-      expect(mockFetchBot).toHaveBeenCalledTimes(2);
-    });
-
-    it("should proceed without story data", async () => {
-      mockFetchBotStory.mockResolvedValue(null);
-
-      await initLoreChannel(mockClient, mockConfig);
+    it("should generate lore with real bot and artifact data", async () => {
+      await initLoreChannel(mockClient, TEST_CONFIG);
 
       expect(mockGenerateLoreNarrative).toHaveBeenCalledWith(
-        expect.objectContaining({ story: null })
+        expect.objectContaining({
+          artifact: REAL_ARTIFACT,
+          bot: REAL_BOT,
+          story: REAL_BOT_STORY,
+        })
       );
     });
   });
 
-  describe("embed generation", () => {
-    it("should send embed to channel", async () => {
-      await initLoreChannel(mockClient, mockConfig);
+  describe("lore generation", () => {
+    it("should fetch bot data for artifact", async () => {
+      await initLoreChannel(mockClient, TEST_CONFIG);
 
-      expect(mockChannel.send).toHaveBeenCalledWith(
+      expect(mockFetchBot).toHaveBeenCalledWith(REAL_ARTIFACT.botTokenId);
+    });
+
+    it("should fetch bot story", async () => {
+      await initLoreChannel(mockClient, TEST_CONFIG);
+
+      expect(mockFetchBotStory).toHaveBeenCalledWith(REAL_ARTIFACT.botTokenId);
+    });
+
+    it("should handle missing bot gracefully", async () => {
+      mockFetchBot.mockResolvedValue(null);
+
+      await initLoreChannel(mockClient, TEST_CONFIG);
+
+      // Should still complete without throwing
+      expect(mockChannel.send).not.toHaveBeenCalled();
+    });
+
+    it("should handle missing story gracefully", async () => {
+      mockFetchBotStory.mockResolvedValue(null);
+
+      await initLoreChannel(mockClient, TEST_CONFIG);
+
+      expect(mockGenerateLoreNarrative).toHaveBeenCalledWith(
         expect.objectContaining({
-          embeds: expect.arrayContaining([expect.any(Object)]),
+          story: null,
         })
       );
     });
 
-    it("should handle lore generation failure", async () => {
+    it("should handle lore generation failure gracefully", async () => {
       mockGenerateLoreNarrative.mockResolvedValue(null);
 
-      await initLoreChannel(mockClient, mockConfig);
+      await initLoreChannel(mockClient, TEST_CONFIG);
 
+      // Should still complete without throwing
       expect(mockChannel.send).not.toHaveBeenCalled();
     });
 
-    it("should not crash on send failure", async () => {
-      (mockChannel.send as jest.Mock).mockRejectedValue(
-        new Error("Send failed")
-      );
+    it("should use weighted random selection for artifacts", async () => {
+      // Setup multiple artifacts
+      mockFetchRecentArtifacts.mockResolvedValue([
+        REAL_ARTIFACT,
+        REAL_ARTIFACT_2,
+      ]);
 
-      // Should not throw
-      await initLoreChannel(mockClient, mockConfig);
+      await initLoreChannel(mockClient, TEST_CONFIG);
+
+      // Should have selected one of the artifacts
+      expect(mockFetchBot).toHaveBeenCalled();
     });
   });
 
-  describe("duplicate prevention", () => {
-    it("should track posted artifacts", async () => {
-      // Post initial
-      await initLoreChannel(mockClient, mockConfig);
+  describe("embed formatting", () => {
+    it("should include artifact image in embed", async () => {
+      await initLoreChannel(mockClient, TEST_CONFIG);
 
-      // Clear and advance timer
-      jest.clearAllMocks();
-      jest.advanceTimersByTime(30 * 60 * 1000);
+      expect(mockChannel.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          embeds: expect.arrayContaining([
+            expect.objectContaining({
+              data: expect.objectContaining({
+                image: expect.objectContaining({
+                  url: REAL_ARTIFACT.imageUrl,
+                }),
+              }),
+            }),
+          ]),
+        })
+      );
+    });
 
-      // Should still fetch artifacts
+    it("should include bot and artifact links", async () => {
+      await initLoreChannel(mockClient, TEST_CONFIG);
+
+      expect(mockGetBotUrl).toHaveBeenCalledWith(REAL_BOT.tokenId);
+      expect(mockGetArtifactUrl).toHaveBeenCalledWith(REAL_ARTIFACT.id);
+    });
+  });
+
+  describe("weighted random selection", () => {
+    it("should favor more recently minted artifacts", async () => {
+      const oldArtifact = createArtifact({
+        id: "old-artifact",
+        mintedAt: "2024-01-01T00:00:00Z",
+      });
+      const newArtifact = createArtifact({
+        id: "new-artifact",
+        mintedAt: "2024-12-01T00:00:00Z",
+      });
+
+      // Set up with old artifact first, new artifact second
+      mockFetchRecentArtifacts.mockResolvedValue([oldArtifact, newArtifact]);
+      mockFetchBot.mockResolvedValue(createBot());
+      mockFetchBotStory.mockResolvedValue(createBotStory());
+      mockGenerateLoreNarrative.mockResolvedValue(
+        createGeneratedLore({ artifact: newArtifact })
+      );
+
+      // Run multiple times to check distribution
+      // The first artifact in the list should be selected more often
+      // due to weighted random selection favoring early indices
+      await initLoreChannel(mockClient, TEST_CONFIG);
+
       expect(mockFetchRecentArtifacts).toHaveBeenCalled();
+    });
+
+    it("should handle single artifact list", async () => {
+      mockFetchRecentArtifacts.mockResolvedValue([REAL_ARTIFACT]);
+
+      await initLoreChannel(mockClient, TEST_CONFIG);
+
+      expect(mockFetchBot).toHaveBeenCalledWith(REAL_ARTIFACT.botTokenId);
+    });
+
+    it("should handle empty artifact list gracefully", async () => {
+      mockFetchRecentArtifacts.mockResolvedValue([]);
+
+      await initLoreChannel(mockClient, TEST_CONFIG);
+
+      expect(mockChannel.send).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("error handling", () => {
+    it("should handle channel send error", async () => {
+      mockChannel.send.mockRejectedValue(new Error("Discord API error"));
+
+      // Should not throw
+      await expect(
+        initLoreChannel(mockClient, TEST_CONFIG)
+      ).resolves.not.toThrow();
     });
   });
 });

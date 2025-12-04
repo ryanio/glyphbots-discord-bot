@@ -15,6 +15,9 @@
         "rules": {
           "style": {
             "noMagicNumbers": "off"
+          },
+          "performance": {
+            "noDelete": "off"
           }
         }
       }

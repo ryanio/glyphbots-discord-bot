@@ -52,8 +52,13 @@ export const loadConfig = (): Config => {
 /**
  * Delay execution for a specified number of milliseconds
  */
-export const delay = (ms: number): Promise<void> =>
+export const timeout = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Alias for timeout - delay execution for a specified number of milliseconds
+ */
+export const delay = timeout;
 
 /**
  * Format a date as a readable timestamp
@@ -71,10 +76,12 @@ export const formatTimestamp = (date: Date): string =>
 /**
  * Format a time ago string (e.g., "2 days ago", "3 hours ago")
  */
-export const formatTimeAgo = (date: Date): string => {
+export const formatTimeAgo = (date: Date | string): string => {
+  const dateObj = typeof date === "string" ? new Date(date) : date;
   const now = Date.now();
-  const diffMs = now - date.getTime();
-  const diffMinutes = Math.floor(diffMs / (MS_PER_SECOND * SECONDS_PER_MINUTE));
+  const diffMs = now - dateObj.getTime();
+  const diffSeconds = Math.floor(diffMs / MS_PER_SECOND);
+  const diffMinutes = Math.floor(diffSeconds / SECONDS_PER_MINUTE);
   const diffHours = Math.floor(diffMinutes / SECONDS_PER_MINUTE);
   const diffDays = Math.floor(diffHours / 24);
 
@@ -87,25 +94,31 @@ export const formatTimeAgo = (date: Date): string => {
   if (diffMinutes > 0) {
     return `${diffMinutes} minute${diffMinutes === 1 ? "" : "s"} ago`;
   }
+  if (diffSeconds > 0) {
+    return `${diffSeconds} second${diffSeconds === 1 ? "" : "s"} ago`;
+  }
   return "just now";
 };
 
 /**
- * Weighted random selection favoring higher indices (more recent items)
- * Uses exponential distribution to heavily favor recent items
+ * Weighted random selection favoring lower indices (first items in list)
+ * Uses exponential distribution to heavily favor early items
  *
- * @param max - Maximum value (exclusive)
- * @param weight - Weight factor (higher = more bias towards recent). Default 2.0
- * @returns Random number between 1 and max, weighted towards max
+ * @param length - Array length (number of items)
+ * @param weight - Weight factor (higher = more bias towards start). Default 2.0
+ * @returns Random index between 0 and length-1, weighted towards 0
  */
-export const weightedRandomIndex = (max: number, weight = 2.0): number => {
+export const weightedRandomIndex = (length: number, weight = 2.0): number => {
+  if (length <= 0) {
+    return 0;
+  }
   // Generate a random number with exponential distribution
-  // This naturally favors values closer to 1, which we invert
+  // This naturally favors values closer to 0 when using power function
   const random = Math.random();
-  const weighted = 1 - random ** weight;
+  const weighted = random ** weight;
 
-  // Scale to range [1, max]
-  return Math.floor(weighted * max) + 1;
+  // Scale to range [0, length-1]
+  return Math.min(Math.floor(weighted * length), length - 1);
 };
 
 /**
@@ -122,6 +135,9 @@ export const truncate = (text: string, maxLength: number): string => {
  * Safely extract error message from unknown error type
  */
 export const getErrorMessage = (error: unknown): string => {
+  if (error === null || error === undefined) {
+    return "Unknown error";
+  }
   if (error instanceof Error) {
     return error.message;
   }
