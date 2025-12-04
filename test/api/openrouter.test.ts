@@ -3,16 +3,19 @@ import type { Artifact, Bot, BotStory, LoreContext } from "../../src/lib/types";
 
 // Mock the OpenRouter SDK
 jest.mock("@openrouter/sdk", () => ({
-  OpenRouter: jest.fn().mockImplementation(() => ({
-    chat: {
-      send: jest.fn(),
-    },
-  })),
+  OpenRouter: jest.fn(),
 }));
 
 import { OpenRouter } from "@openrouter/sdk";
 
-const mockOpenRouter = OpenRouter as jest.MockedClass<typeof OpenRouter>;
+const mockOpenRouter = OpenRouter as jest.Mock;
+
+/** Helper to set up OpenRouter mock with a given send function */
+const setupOpenRouterMock = (sendFn: jest.Mock): void => {
+  mockOpenRouter.mockImplementation(() => ({
+    chat: { send: sendFn },
+  }));
+};
 
 describe("openrouter API", () => {
   const mockBot: Bot = {
@@ -105,12 +108,7 @@ describe("openrouter API", () => {
       };
 
       const mockSend = jest.fn().mockResolvedValue(mockResponse);
-      mockOpenRouter.mockImplementation(
-        () =>
-          ({
-            chat: { send: mockSend },
-          }) as unknown as InstanceType<typeof OpenRouter>
-      );
+      setupOpenRouterMock(mockSend);
 
       const context: LoreContext = {
         artifact: mockArtifact,
@@ -139,12 +137,7 @@ describe("openrouter API", () => {
       };
 
       const mockSend = jest.fn().mockResolvedValue(mockResponse);
-      mockOpenRouter.mockImplementation(
-        () =>
-          ({
-            chat: { send: mockSend },
-          }) as unknown as InstanceType<typeof OpenRouter>
-      );
+      setupOpenRouterMock(mockSend);
 
       const context: LoreContext = {
         artifact: mockArtifact,
@@ -164,12 +157,7 @@ describe("openrouter API", () => {
       };
 
       const mockSend = jest.fn().mockResolvedValue(mockResponse);
-      mockOpenRouter.mockImplementation(
-        () =>
-          ({
-            chat: { send: mockSend },
-          }) as unknown as InstanceType<typeof OpenRouter>
-      );
+      setupOpenRouterMock(mockSend);
 
       const context: LoreContext = {
         artifact: mockArtifact,
@@ -186,12 +174,7 @@ describe("openrouter API", () => {
       const mockResponse = { choices: [] };
 
       const mockSend = jest.fn().mockResolvedValue(mockResponse);
-      mockOpenRouter.mockImplementation(
-        () =>
-          ({
-            chat: { send: mockSend },
-          }) as unknown as InstanceType<typeof OpenRouter>
-      );
+      setupOpenRouterMock(mockSend);
 
       const context: LoreContext = {
         artifact: mockArtifact,
@@ -206,12 +189,7 @@ describe("openrouter API", () => {
 
     it("should return null on API error", async () => {
       const mockSend = jest.fn().mockRejectedValue(new Error("API Error"));
-      mockOpenRouter.mockImplementation(
-        () =>
-          ({
-            chat: { send: mockSend },
-          }) as unknown as InstanceType<typeof OpenRouter>
-      );
+      setupOpenRouterMock(mockSend);
 
       const context: LoreContext = {
         artifact: mockArtifact,
@@ -236,12 +214,7 @@ describe("openrouter API", () => {
       };
 
       const mockSend = jest.fn().mockResolvedValue(mockResponse);
-      mockOpenRouter.mockImplementation(
-        () =>
-          ({
-            chat: { send: mockSend },
-          }) as unknown as InstanceType<typeof OpenRouter>
-      );
+      setupOpenRouterMock(mockSend);
 
       const context: LoreContext = {
         artifact: mockArtifact,
@@ -262,12 +235,7 @@ describe("openrouter API", () => {
       };
 
       const mockSend = jest.fn().mockResolvedValue(mockResponse);
-      mockOpenRouter.mockImplementation(
-        () =>
-          ({
-            chat: { send: mockSend },
-          }) as unknown as InstanceType<typeof OpenRouter>
-      );
+      setupOpenRouterMock(mockSend);
 
       const context: LoreContext = {
         artifact: mockArtifact,
@@ -290,12 +258,7 @@ describe("openrouter API", () => {
       };
 
       const mockSend = jest.fn().mockResolvedValue(mockResponse);
-      mockOpenRouter.mockImplementation(
-        () =>
-          ({
-            chat: { send: mockSend },
-          }) as unknown as InstanceType<typeof OpenRouter>
-      );
+      setupOpenRouterMock(mockSend);
 
       const context: LoreContext = {
         artifact: mockArtifact,

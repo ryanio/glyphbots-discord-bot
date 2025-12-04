@@ -64,7 +64,7 @@ const printChannelConfig = async (
   }
 
   logger.info(`│  📢  Channel: ${channelDisplay}`);
-  logger.info(`│  ⏱️   Interval: ${config.loreIntervalMinutes} minutes`);
+  logger.info(`│  ⏱️  Interval: ${config.loreIntervalMinutes} minutes`);
   logger.info("│");
   logger.info("└─");
   logger.info("");
