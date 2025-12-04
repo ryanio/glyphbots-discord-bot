@@ -32,17 +32,17 @@ describe("Lore Prompts", () => {
       expect(NARRATIVE_STYLES).toContainEqual(style);
     });
 
-    it("should rotate through styles", () => {
+    it("should randomly select styles", () => {
       const seenStyles = new Set<string>();
 
-      // Get enough styles to see rotation
-      for (let i = 0; i < NARRATIVE_STYLES.length * 2; i++) {
+      // Get enough styles to likely see variety
+      for (let i = 0; i < NARRATIVE_STYLES.length * 10; i++) {
         const style = getNextStyle();
         seenStyles.add(style.name);
       }
 
-      // Should have seen all styles
-      expect(seenStyles.size).toBe(NARRATIVE_STYLES.length);
+      // Should have seen at least 2 different styles (statistically near-certain)
+      expect(seenStyles.size).toBeGreaterThanOrEqual(2);
     });
   });
 

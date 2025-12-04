@@ -119,7 +119,7 @@ const printConfig = async (client: Client, config: Config): Promise<void> => {
   logger.info("│");
   logger.info("├─ 📖 LORE CHANNEL");
   logger.info("│");
-  logger.info(`│  📢  Channel: ${loreChannelDisplay}`);
+  logger.info(`│  📢 Channel: ${loreChannelDisplay}`);
   logger.info(`│  ⏱️  Interval: ${config.loreIntervalMinutes} minutes`);
   logger.info("│");
   logger.info("└─");

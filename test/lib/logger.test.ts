@@ -37,7 +37,7 @@ describe("logger", () => {
       const output = stdoutSpy.mock.calls.at(0)?.at(0) as string;
       expect(output).toContain("[INFO]");
       expect(output).toContain("test message");
-      expect(output).toContain("[GlyphBots]");
+      expect(output).toContain("[GDB]");
     });
 
     it("should write warn to stderr", () => {

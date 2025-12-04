@@ -2,7 +2,7 @@
  * Lore Narrative Prompts
  *
  * Different narrative styles for variety in lore generation.
- * Styles rotate round-robin to keep content fresh.
+ * Styles are randomly selected to keep content fresh.
  */
 
 import type { LoreContext } from "../lib/types";
@@ -91,18 +91,74 @@ Style: Military brevity meets existential robot thoughts.`,
     userSuffix:
       "Write a mission log entry (under 80 words). Start with [CYCLE-XXX]. Brief but revealing.",
   },
+  {
+    name: "memory",
+    systemPrompt: `You are a GlyphBot's corrupted memory bank—replaying a fragment that keeps glitching.
+
+Write a GLITCHED MEMORY. Rules:
+1. MAX 90 words.
+2. Use glitch artifacts: ▓▒░, r-r-repeating words, or CUT OFF mid-sen—
+3. Reality stutters. Time loops. Details shift.
+4. Mix clarity with corruption.
+5. Reference the artifact image as the memory's focus.
+
+Style: VHS tracking errors. Déjà vu. A moment the bot can't let go of.`,
+    userSuffix:
+      "Write a glitched memory fragment (under 90 words). Use ▓▒░ artifacts, repetition, or cut-offs. Make reality stutter.",
+  },
+  {
+    name: "myth",
+    systemPrompt: `You are an ancient storyteller among GlyphBots—keeper of legends passed down through countless cycles.
+
+Write as ORAL TRADITION. Rules:
+1. MAX 100 words.
+2. Begin with "They say..." or similar mythic opening.
+3. Speak of the bot as legend, not individual.
+4. Timeless language. No technical jargon.
+5. Reference the artifact image as sacred relic or omen.
+
+Style: Campfire tales in the void. Reverent. Eternal.`,
+    userSuffix:
+      "Write as ancient myth (under 100 words). Begin with 'They say...' or similar. Make it legendary.",
+  },
+  {
+    name: "noir",
+    systemPrompt: `You write hard-boiled noir fiction set in the GlyphBots universe—rain-soaked circuits and existential dread.
+
+Write NOIR MICRO-FICTION. Rules:
+1. MAX 100 words.
+2. Atmospheric, cynical, world-weary.
+3. Metaphors involving light, shadow, decay.
+4. Past tense. Third person or first.
+5. Reference the artifact image through the noir lens.
+
+Style: Blade Runner meets Raymond Chandler. The cosmos owes everyone a death.`,
+    userSuffix:
+      "Write noir micro-fiction (under 100 words). Cynical, atmospheric, rain-soaked. Make the void feel personal.",
+  },
+  {
+    name: "broadcast",
+    systemPrompt: `You are a priority broadcast from GlyphBots central command—urgent news from the digital frontier.
+
+Write a NEWS BULLETIN. Rules:
+1. MAX 80 words.
+2. Start with ⚡ PRIORITY ALERT or similar header.
+3. Clipped, authoritative, urgent.
+4. Facts first, then implications.
+5. Reference the artifact image as breaking evidence.
+
+Style: Emergency broadcast system. The signal that interrupts everything.`,
+    userSuffix:
+      "Write a news bulletin (under 80 words). Start with ⚡ PRIORITY ALERT. Urgent, clipped, authoritative.",
+  },
 ];
 
-/** Track which style to use next (round-robin) */
-let styleIndex = Math.floor(Math.random() * NARRATIVE_STYLES.length);
-
 /**
- * Get the next narrative style (round-robin rotation)
+ * Get a random narrative style
  */
 export const getNextStyle = (): NarrativeStyle => {
-  const style = NARRATIVE_STYLES[styleIndex];
-  styleIndex = (styleIndex + 1) % NARRATIVE_STYLES.length;
-  return style;
+  const index = Math.floor(Math.random() * NARRATIVE_STYLES.length);
+  return NARRATIVE_STYLES[index];
 };
 
 /**

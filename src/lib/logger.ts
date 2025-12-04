@@ -49,7 +49,7 @@ const write = (level: Level, parts: unknown[]) => {
   }
   const ts = new Date().toISOString();
   const msg = parts.map(serialize).join(" ");
-  const line = `${ts} [${level.toUpperCase()}] [GlyphBots] ${msg}\n`;
+  const line = `${ts} [${level.toUpperCase()}] [GDB] ${msg}\n`;
   writeConsole(line, level);
 };
 
