@@ -5,8 +5,10 @@ An AI-enabled Discord bot for the GlyphBots community featuring automated storyt
 ## Features
 
 - 📖 **Lore Channel** - Automated AI-generated stories based on GlyphBots artifacts
+- 🎨 **5 Narrative Styles** - Rotating styles for variety (cinematic, transmission, first-person, poetic, log entries)
+- 🖼️ **Vision-Enabled** - AI sees artifact images for more contextual storytelling
 - 🎲 **Weighted Selection** - Favors recently minted artifacts for fresh content
-- 🤖 **AI-Powered** - Uses OpenRouter for flexible model selection (Claude, GPT, etc.)
+- 🤖 **AI-Powered** - Uses OpenRouter for flexible model selection (Claude, GPT, Gemini, etc.)
 - ⏱️ **Configurable Intervals** - Customize posting frequency via environment
 - 🛡️ **Type-Safe** - Full TypeScript implementation
 
@@ -17,6 +19,7 @@ An AI-enabled Discord bot for the GlyphBots community featuring automated storyt
 - [Installation](#installation)
 - [Configuration](#configuration)
 - [Environment Variables](#environment-variables)
+- [Narrative Styles](#narrative-styles)
 - [Usage](#usage)
 - [Development](#development)
 - [Testing](#testing)
@@ -102,15 +105,30 @@ https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=18432&
 
 ### Supported AI Models
 
-Any model available on [OpenRouter](https://openrouter.ai/models) can be used. Popular options:
+Any model on [OpenRouter](https://openrouter.ai/models) works. **Vision-capable models** are recommended for best results (the bot sends artifact images to the AI):
 
-| Model | Value |
-|-------|-------|
-| Claude Sonnet 4 | `anthropic/claude-sonnet-4` |
-| Claude 3.5 Sonnet | `anthropic/claude-3.5-sonnet` |
-| GPT-4o | `openai/gpt-4o` |
-| GPT-4o Mini | `openai/gpt-4o-mini` |
-| Llama 3.1 70B | `meta-llama/llama-3.1-70b-instruct` |
+| Model | Value | Vision |
+|-------|-------|--------|
+| Gemini 2.5 Pro | `google/gemini-2.5-pro-preview` | ✅ |
+| Claude Sonnet 4 | `anthropic/claude-sonnet-4` | ✅ |
+| GPT-4o | `openai/gpt-4o` | ✅ |
+| GPT-4o Mini | `openai/gpt-4o-mini` | ✅ |
+| Claude 3.5 Sonnet | `anthropic/claude-3.5-sonnet` | ✅ |
+| Llama 3.2 90B Vision | `meta-llama/llama-3.2-90b-vision-instruct` | ✅ |
+
+## Narrative Styles
+
+The bot rotates through 5 distinct narrative styles for variety:
+
+| Style | Description |
+|-------|-------------|
+| **Cinematic** | Short punchy lines with breaks, movie trailer feel |
+| **Transmission** | Fragmented intercepted signal with `[...]` breaks |
+| **First Person** | Bot's raw inner thoughts, stream of consciousness |
+| **Poetic** | Minimal 4-6 line verse, haiku-adjacent |
+| **Log Entry** | Terse mission log with `[CYCLE-XXX]` timestamps |
+
+All styles keep content short and readable (60-100 words max).
 
 ## Usage
 
@@ -148,11 +166,14 @@ yarn lint
 ```
 src/
 ├── index.ts              # Main entry point
-├── channels/
-│   └── lore.ts           # Lore channel handler
 ├── api/
 │   ├── glyphbots.ts      # GlyphBots API client
-│   └── openrouter.ts     # OpenRouter AI client
+│   └── openrouter.ts     # OpenRouter API client (generic)
+├── channels/
+│   └── lore.ts           # Discord lore channel handler
+├── lore/
+│   ├── generate.ts       # Lore generation logic
+│   └── prompts.ts        # Narrative styles & prompts
 └── lib/
     ├── logger.ts         # Logging utilities
     ├── state.ts          # State persistence
