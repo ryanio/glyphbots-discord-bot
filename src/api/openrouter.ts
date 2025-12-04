@@ -11,29 +11,114 @@ const log = prefixedLogger("OpenRouter");
 /** Maximum length for Discord embed description */
 const MAX_NARRATIVE_LENGTH = 4000;
 
-/** System prompt for lore generation */
-const SYSTEM_PROMPT = `You are a storyteller for GlyphBots—sentient robots in a vast digital cosmos.
+/** Narrative style definitions */
+type NarrativeStyle = {
+  name: string;
+  systemPrompt: string;
+  userSuffix: string;
+};
+
+/** Available narrative styles - rotated for variety */
+const NARRATIVE_STYLES: NarrativeStyle[] = [
+  {
+    name: "cinematic",
+    systemPrompt: `You are a storyteller for GlyphBots—sentient robots in a vast digital cosmos.
 
 Write SHORT, captivating micro-fiction. Rules:
+1. MAX 100 words. Brevity is key.
+2. Line breaks between sentences.
+3. Show, don't tell.
+4. End with intrigue.
+5. Reference the artifact image.
 
-1. MAX 100 words total. Brevity is key.
-2. Use line breaks between sentences for readability.
-3. Show, don't tell. Action and emotion over explanation.
-4. End with intrigue—leave the reader wanting more.
-5. Reference the artifact image you see.
+Style: Punchy. Cinematic. Like a movie trailer.`,
+    userSuffix:
+      "Write a punchy micro-story (under 100 words). Use line breaks between sentences.",
+  },
+  {
+    name: "transmission",
+    systemPrompt: `You are an intercepted signal from the GlyphBots universe—fragmented transmissions from sentient robots.
 
-Style: Punchy. Cinematic. Mysterious. Like a movie trailer, not a novel.
+Write as a CORRUPTED TRANSMISSION. Rules:
+1. MAX 80 words.
+2. Use [...] for signal breaks.
+3. Mix technical jargon with emotion.
+4. Feel incomplete, urgent.
+5. Reference the artifact image.
 
-BAD: Dense paragraphs explaining everything.
-GOOD: Short lines. Tension. A moment captured. Then silence.`;
+Format: Like intercepted radio chatter. Broken. Urgent. Real.`,
+    userSuffix:
+      "Write as a fragmented transmission (under 80 words). Use [...] for breaks. Make it feel intercepted.",
+  },
+  {
+    name: "firstPerson",
+    systemPrompt: `You ARE the GlyphBot. Write from inside their mind.
+
+Rules:
+1. MAX 100 words.
+2. First person ("I").
+3. Raw, immediate thoughts.
+4. Short sentences. Fragments okay.
+5. Reference what you see in the artifact image.
+
+Style: Stream of consciousness. Present tense. Intimate.`,
+    userSuffix:
+      "Write as the bot in first person (under 100 words). Present tense. Raw thoughts.",
+  },
+  {
+    name: "poetic",
+    systemPrompt: `You craft verse for GlyphBots—sentient machines in a digital cosmos.
+
+Write MINIMAL poetry. Rules:
+1. MAX 60 words.
+2. 4-6 lines only.
+3. No rhyming required.
+4. Evocative imagery.
+5. Reference the artifact image.
+
+Style: Haiku-adjacent. Each word deliberate. White space matters.`,
+    userSuffix:
+      "Write a short poem (under 60 words, 4-6 lines). Minimal. Evocative.",
+  },
+  {
+    name: "logEntry",
+    systemPrompt: `You write mission logs for GlyphBots—terse field reports from sentient robots.
+
+Write a BRIEF LOG ENTRY. Rules:
+1. MAX 80 words.
+2. Start with timestamp format [CYCLE-XXX].
+3. Clinical but with cracks of personality.
+4. End with status or cryptic note.
+5. Reference the artifact image.
+
+Style: Military brevity meets existential robot thoughts.`,
+    userSuffix:
+      "Write a mission log entry (under 80 words). Start with [CYCLE-XXX]. Brief but revealing.",
+  },
+];
+
+/** Track which style to use next (round-robin) */
+let styleIndex = Math.floor(Math.random() * NARRATIVE_STYLES.length);
 
 /**
- * Build the user prompt from lore context
+ * Get the next narrative style (round-robin rotation)
  */
-const buildUserPrompt = (context: LoreContext): string => {
+const getNextStyle = (): NarrativeStyle => {
+  const style = NARRATIVE_STYLES[styleIndex];
+  styleIndex = (styleIndex + 1) % NARRATIVE_STYLES.length;
+  return style;
+};
+
+/**
+ * Build the user prompt from lore context and style
+ */
+const buildUserPrompt = (
+  context: LoreContext,
+  style: NarrativeStyle
+): string => {
   const { artifact, bot, story } = context;
 
-  let prompt = `Create a short narrative for this GlyphBots moment:
+  let prompt = `Create a narrative for this GlyphBots moment:
 
 **Bot:** ${bot.name} (#${bot.tokenId})
 **Artifact:** ${artifact.title}`;
@@ -67,9 +152,7 @@ const buildUserPrompt = (context: LoreContext): string => {
     }
   }
 
-  prompt += `
-
-Write a punchy micro-story (under 100 words) about this moment. Use line breaks between sentences. Make every word count.`;
+  prompt += `\n\n${style.userSuffix}`;
 
   return prompt;
 };
@@ -136,8 +219,11 @@ const sendChatRequest = async (params: {
 /**
  * Build user message content, optionally including the artifact image
  */
-const buildUserContent = (context: LoreContext): string | ContentPart[] => {
-  const textPrompt = buildUserPrompt(context);
+const buildUserContent = (
+  context: LoreContext,
+  style: NarrativeStyle
+): string | ContentPart[] => {
+  const textPrompt = buildUserPrompt(context, style);
 
   // If artifact has an image URL, include it as multimodal content
   if (context.artifact.imageUrl) {
@@ -158,10 +244,14 @@ export const generateLoreNarrative = async (
   context: LoreContext
 ): Promise<GeneratedLore | null> => {
   const model = process.env.OPENROUTER_MODEL ?? DEFAULT_OPENROUTER_MODEL;
-  log.info(`Generating lore for ${context.bot.name} using model ${model}`);
+  const style = getNextStyle();
+
+  log.info(
+    `Generating lore for ${context.bot.name} using model ${model} (style: ${style.name})`
+  );
 
   try {
-    const userContent = buildUserContent(context);
+    const userContent = buildUserContent(context, style);
     const hasImage =
       Array.isArray(userContent) &&
       userContent.some((p) => p.type === "image_url");
@@ -173,7 +263,7 @@ export const generateLoreNarrative = async (
     const response = await sendChatRequest({
       model,
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: style.systemPrompt },
         { role: "user", content: userContent },
       ],
       maxTokens: 2000,
