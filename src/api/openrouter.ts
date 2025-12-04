@@ -12,17 +12,20 @@ const log = prefixedLogger("OpenRouter");
 const MAX_NARRATIVE_LENGTH = 4000;
 
 /** System prompt for lore generation */
-const SYSTEM_PROMPT = `You are a master storyteller for GlyphBots, a collection of sentient robots with unique personalities, abilities, and missions. Your task is to craft compelling short narratives based on bot data and artifacts.
+const SYSTEM_PROMPT = `You are a storyteller for GlyphBots—sentient robots in a vast digital cosmos.
 
-Your narratives should:
-- Be atmospheric and evocative, drawing readers into the GlyphBots universe
-- Reference the bot's specific traits, abilities, and mission context
-- Connect the artifact to the bot's ongoing story arc
-- Use vivid, cinematic language that paints a picture
-- Be concise but impactful (2-3 paragraphs maximum)
-- End with a hook or sense of continuation
+Write SHORT, captivating micro-fiction. Rules:
 
-Tone: Blend cyberpunk aesthetics with mythic storytelling. These are not just robots—they are heroes, villains, wanderers, and legends in a vast digital cosmos.`;
+1. MAX 100 words total. Brevity is key.
+2. Use line breaks between sentences for readability.
+3. Show, don't tell. Action and emotion over explanation.
+4. End with intrigue—leave the reader wanting more.
+5. Reference the artifact image you see.
+
+Style: Punchy. Cinematic. Mysterious. Like a movie trailer, not a novel.
+
+BAD: Dense paragraphs explaining everything.
+GOOD: Short lines. Tension. A moment captured. Then silence.`;
 
 /**
  * Build the user prompt from lore context
@@ -66,7 +69,7 @@ const buildUserPrompt = (context: LoreContext): string => {
 
   prompt += `
 
-Write a compelling 2-3 paragraph narrative that captures this moment in ${bot.name}'s journey. The artifact represents a significant event or creation. Make it dramatic and memorable.`;
+Write a punchy micro-story (under 100 words) about this moment. Use line breaks between sentences. Make every word count.`;
 
   return prompt;
 };
