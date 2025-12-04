@@ -2,7 +2,7 @@
   "include": ["src/**/*.ts", "test/**/*.ts"],
   "compilerOptions": {
     "module": "commonjs",
-    "target": "es2020",
+    "target": "es2022",
     "outDir": "dist",
     "esModuleInterop": true,
     "skipLibCheck": true,

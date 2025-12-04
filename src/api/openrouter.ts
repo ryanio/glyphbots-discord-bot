@@ -1,4 +1,3 @@
-import { OpenRouter } from "@openrouter/sdk";
 import { prefixedLogger } from "../lib/logger";
 import type { GeneratedLore, LoreContext } from "../lib/types";
 import {
@@ -72,19 +71,44 @@ Write a compelling 2-3 paragraph narrative that captures this moment in ${bot.na
   return prompt;
 };
 
+/** Chat response type */
+type ChatResponse = {
+  choices?: Array<{
+    message?: {
+      content?: string | Array<{ type: string; text?: string }>;
+    };
+  }>;
+};
+
 /**
- * Create OpenRouter client
+ * Create OpenRouter client and send chat request using dynamic import (ESM package)
  */
-const createClient = (): OpenRouter => {
+const sendChatRequest = async (params: {
+  model: string;
+  messages: Array<{ role: "system" | "user" | "assistant"; content: string }>;
+  maxTokens: number;
+  temperature: number;
+}): Promise<ChatResponse> => {
   const apiKey = process.env.OPENROUTER_API_KEY;
 
   if (!apiKey) {
     throw new Error("OPENROUTER_API_KEY environment variable is required");
   }
 
-  return new OpenRouter({
+  const { OpenRouter } = await import("@openrouter/sdk");
+
+  const client = new OpenRouter({
     apiKey,
   });
+
+  const response = await client.chat.send({
+    model: params.model,
+    messages: params.messages,
+    maxTokens: params.maxTokens,
+    temperature: params.temperature,
+  });
+
+  return response as ChatResponse;
 };
 
 /**
@@ -97,12 +121,11 @@ export const generateLoreNarrative = async (
   log.info(`Generating lore for ${context.bot.name} using model ${model}`);
 
   try {
-    const client = createClient();
     const userPrompt = buildUserPrompt(context);
 
     log.debug("Sending request to OpenRouter");
 
-    const response = await client.chat.send({
+    const response = await sendChatRequest({
       model,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
@@ -127,7 +150,7 @@ export const generateLoreNarrative = async (
       // Extract text from content items with type: "text"
       const textParts: string[] = [];
       for (const item of rawContent) {
-        if (item.type === "text" && "text" in item) {
+        if (item.type === "text" && "text" in item && item.text) {
           textParts.push(item.text);
         }
       }
