@@ -5,7 +5,4 @@ module.exports = {
   testMatch: ["**/*.test.ts"],
   moduleFileExtensions: ["ts", "js", "json"],
   collectCoverageFrom: ["src/**/*.ts", "!src/**/*.d.ts"],
-  moduleNameMapper: {
-    "^@openrouter/sdk$": "<rootDir>/test/__mocks__/@openrouter/sdk.ts",
-  },
 };

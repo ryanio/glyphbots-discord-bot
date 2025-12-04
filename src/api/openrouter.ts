@@ -74,6 +74,9 @@ Write a punchy micro-story (under 100 words) about this moment. Use line breaks 
   return prompt;
 };
 
+/** OpenRouter API endpoint */
+const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
+
 /** Chat response type */
 type ChatResponse = {
   choices?: Array<{
@@ -86,7 +89,7 @@ type ChatResponse = {
 /** Message content part for multimodal messages */
 type ContentPart =
   | { type: "text"; text: string }
-  | { type: "image_url"; imageUrl: { url: string } };
+  | { type: "image_url"; url: string };
 
 /** Message type for chat requests */
 type ChatMessage =
@@ -94,7 +97,7 @@ type ChatMessage =
   | { role: "user"; content: string | ContentPart[] };
 
 /**
- * Create OpenRouter client and send chat request using dynamic import (ESM package)
+ * Send chat request to OpenRouter API using fetch
  */
 const sendChatRequest = async (params: {
   model: string;
@@ -108,20 +111,26 @@ const sendChatRequest = async (params: {
     throw new Error("OPENROUTER_API_KEY environment variable is required");
   }
 
-  const { OpenRouter } = await import("@openrouter/sdk");
-
-  const client = new OpenRouter({
-    apiKey,
+  const response = await fetch(OPENROUTER_API_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: params.model,
+      messages: params.messages,
+      max_tokens: params.maxTokens,
+      temperature: params.temperature,
+    }),
   });
 
-  const response = await client.chat.send({
-    model: params.model,
-    messages: params.messages,
-    maxTokens: params.maxTokens,
-    temperature: params.temperature,
-  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`OpenRouter API error: ${response.status} ${errorText}`);
+  }
 
-  return response as ChatResponse;
+  return (await response.json()) as ChatResponse;
 };
 
 /**
@@ -134,10 +143,7 @@ const buildUserContent = (context: LoreContext): string | ContentPart[] => {
   if (context.artifact.imageUrl) {
     return [
       { type: "text", text: textPrompt },
-      {
-        type: "image_url",
-        imageUrl: { url: context.artifact.imageUrl },
-      },
+      { type: "image_url", url: context.artifact.imageUrl },
     ];
   }
 

@@ -9,22 +9,23 @@ import {
   REAL_BOT_STORY,
 } from "../fixtures";
 
-// Create a mock send function that we can control
-const mockSend = jest.fn();
+// Mock fetch globally
+const mockFetch = jest.fn();
+global.fetch = mockFetch;
 
-// Mock the OpenRouter SDK
-jest.mock("@openrouter/sdk", () => ({
-  OpenRouter: jest.fn(() => ({
-    chat: {
-      send: mockSend,
-    },
-  })),
-}));
+/** Helper to extract request body from fetch call */
+const getRequestBody = (call: unknown[]): Record<string, unknown> => {
+  const init = call.at(1) as RequestInit | undefined;
+  return JSON.parse(init?.body as string) as Record<string, unknown>;
+};
 
-/** Helper to extract text content from user message (handles multimodal format) */
-const extractUserTextContent = (call: unknown): string => {
-  const args = call as { messages: Array<{ role: string; content: unknown }> };
-  const userMsg = args.messages.find((m) => m.role === "user");
+/** Helper to extract text content from messages in request body */
+const extractUserTextContent = (body: Record<string, unknown>): string => {
+  const messages = body.messages as Array<{
+    role: string;
+    content: unknown;
+  }>;
+  const userMsg = messages.find((m) => m.role === "user");
   if (!userMsg) {
     return "";
   }
@@ -73,7 +74,10 @@ describe("OpenRouter API", () => {
         "In the shadows of Black Site 7, Binarywire moved like a ghost through the digital ether..."
       );
 
-      mockSend.mockResolvedValue(mockResponse);
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => mockResponse,
+      });
 
       const context: LoreContext = {
         artifact: REAL_ARTIFACT,
@@ -93,7 +97,10 @@ describe("OpenRouter API", () => {
     it("should generate lore without story context", async () => {
       const mockResponse = createChatResponse("A story without arc context...");
 
-      mockSend.mockResolvedValue(mockResponse);
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => mockResponse,
+      });
 
       const context = createLoreContext({
         story: null,
@@ -108,7 +115,10 @@ describe("OpenRouter API", () => {
     it("should handle bot with traits", async () => {
       const mockResponse = createChatResponse("Narrative with traits...");
 
-      mockSend.mockResolvedValue(mockResponse);
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => mockResponse,
+      });
 
       const bot = createBot({
         name: "TraitBot",
@@ -123,16 +133,18 @@ describe("OpenRouter API", () => {
       const result = await generateLoreNarrative(context);
 
       expect(result).not.toBeNull();
-      const textContent = extractUserTextContent(
-        mockSend.mock.calls.at(0)?.at(0)
-      );
+      const body = getRequestBody(mockFetch.mock.calls.at(0) ?? []);
+      const textContent = extractUserTextContent(body);
       expect(textContent).toContain("Background: Cosmic");
     });
 
     it("should include abilities in prompt when present", async () => {
       const mockResponse = createChatResponse("Story with abilities...");
 
-      mockSend.mockResolvedValue(mockResponse);
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => mockResponse,
+      });
 
       const context: LoreContext = {
         artifact: REAL_ARTIFACT,
@@ -142,15 +154,17 @@ describe("OpenRouter API", () => {
 
       await generateLoreNarrative(context);
 
-      const textContent = extractUserTextContent(
-        mockSend.mock.calls.at(0)?.at(0)
-      );
+      const body = getRequestBody(mockFetch.mock.calls.at(0) ?? []);
+      const textContent = extractUserTextContent(body);
       expect(textContent).toContain("Shadow Merge");
     });
 
     it("should return null when no content in response", async () => {
-      mockSend.mockResolvedValue({
-        choices: [{ message: { content: null } }],
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: null } }],
+        }),
       });
 
       const context = createLoreContext();
@@ -161,8 +175,11 @@ describe("OpenRouter API", () => {
     });
 
     it("should return null when choices array is empty", async () => {
-      mockSend.mockResolvedValue({
-        choices: [],
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          choices: [],
+        }),
       });
 
       const context = createLoreContext();
@@ -173,7 +190,11 @@ describe("OpenRouter API", () => {
     });
 
     it("should return null when API throws an error", async () => {
-      mockSend.mockRejectedValue(new Error("API Error"));
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: async () => "Internal Server Error",
+      });
 
       const context = createLoreContext();
 
@@ -193,17 +214,20 @@ describe("OpenRouter API", () => {
     });
 
     it("should handle array content type in response", async () => {
-      mockSend.mockResolvedValue({
-        choices: [
-          {
-            message: {
-              content: [
-                { type: "text", text: "Part 1 of the story. " },
-                { type: "text", text: "Part 2 of the story." },
-              ],
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          choices: [
+            {
+              message: {
+                content: [
+                  { type: "text", text: "Part 1 of the story. " },
+                  { type: "text", text: "Part 2 of the story." },
+                ],
+              },
             },
-          },
-        ],
+          ],
+        }),
       });
 
       const context = createLoreContext();
@@ -221,17 +245,17 @@ describe("OpenRouter API", () => {
 
       const mockResponse = createChatResponse("Response from GPT-4...");
 
-      mockSend.mockResolvedValue(mockResponse);
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => mockResponse,
+      });
 
       const context = createLoreContext();
 
       await generateLoreNarrative(context);
 
-      expect(mockSend).toHaveBeenCalledWith(
-        expect.objectContaining({
-          model: "openai/gpt-4",
-        })
-      );
+      const body = getRequestBody(mockFetch.mock.calls.at(0) ?? []);
+      expect(body.model).toBe("openai/gpt-4");
     });
 
     it("should use default model when not specified", async () => {
@@ -239,28 +263,31 @@ describe("OpenRouter API", () => {
 
       const mockResponse = createChatResponse("Response from default model...");
 
-      mockSend.mockResolvedValue(mockResponse);
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => mockResponse,
+      });
 
       const context = createLoreContext();
 
       await generateLoreNarrative(context);
 
-      expect(mockSend).toHaveBeenCalledWith(
-        expect.objectContaining({
-          model: "anthropic/claude-sonnet-4",
-        })
-      );
+      const body = getRequestBody(mockFetch.mock.calls.at(0) ?? []);
+      expect(body.model).toBe("anthropic/claude-sonnet-4");
     });
 
     it("should trim whitespace from response", async () => {
-      mockSend.mockResolvedValue({
-        choices: [
-          {
-            message: {
-              content: "  Narrative with whitespace  \n\n",
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          choices: [
+            {
+              message: {
+                content: "  Narrative with whitespace  \n\n",
+              },
             },
-          },
-        ],
+          ],
+        }),
       });
 
       const context = createLoreContext();
@@ -273,7 +300,10 @@ describe("OpenRouter API", () => {
     it("should include mission details in prompt", async () => {
       const mockResponse = createChatResponse("Mission-focused narrative...");
 
-      mockSend.mockResolvedValue(mockResponse);
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => mockResponse,
+      });
 
       const context: LoreContext = {
         artifact: REAL_ARTIFACT,
@@ -283,9 +313,8 @@ describe("OpenRouter API", () => {
 
       await generateLoreNarrative(context);
 
-      const textContent = extractUserTextContent(
-        mockSend.mock.calls.at(0)?.at(0)
-      );
+      const body = getRequestBody(mockFetch.mock.calls.at(0) ?? []);
+      const textContent = extractUserTextContent(body);
       expect(textContent).toContain(
         "Bypass 8 security scanners to reach central data vault"
       );
@@ -294,17 +323,34 @@ describe("OpenRouter API", () => {
     it("should set appropriate temperature for creative output", async () => {
       const mockResponse = createChatResponse("Creative narrative...");
 
-      mockSend.mockResolvedValue(mockResponse);
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => mockResponse,
+      });
 
       const context = createLoreContext();
 
       await generateLoreNarrative(context);
 
-      expect(mockSend).toHaveBeenCalledWith(
-        expect.objectContaining({
-          temperature: 0.8,
-        })
-      );
+      const body = getRequestBody(mockFetch.mock.calls.at(0) ?? []);
+      expect(body.temperature).toBe(0.8);
+    });
+
+    it("should send authorization header", async () => {
+      const mockResponse = createChatResponse("Test...");
+
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => mockResponse,
+      });
+
+      const context = createLoreContext();
+
+      await generateLoreNarrative(context);
+
+      const init = mockFetch.mock.calls.at(0)?.at(1) as RequestInit;
+      const headers = init.headers as Record<string, string>;
+      expect(headers.Authorization).toBe("Bearer test-api-key");
     });
   });
 });
