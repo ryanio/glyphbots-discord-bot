@@ -8,6 +8,7 @@ import {
   getBotUrl,
 } from "../../src/api/glyphbots";
 import { initLoreChannel } from "../../src/channels/lore";
+import { resolveLastPostInfo } from "../../src/lib/state";
 import { generateLoreNarrative } from "../../src/lore/generate";
 import {
   createArtifact,
@@ -27,6 +28,7 @@ import {
 // Mock the API modules
 jest.mock("../../src/api/glyphbots");
 jest.mock("../../src/lore/generate");
+jest.mock("../../src/lib/state");
 
 const mockFetchRecentArtifacts = fetchRecentArtifacts as jest.MockedFunction<
   typeof fetchRecentArtifacts
@@ -42,6 +44,9 @@ const mockGetArtifactUrl = getArtifactUrl as jest.MockedFunction<
 const mockGenerateLoreNarrative = generateLoreNarrative as jest.MockedFunction<
   typeof generateLoreNarrative
 >;
+const mockResolveLastPostInfo = resolveLastPostInfo as jest.MockedFunction<
+  typeof resolveLastPostInfo
+>;
 
 describe("lore channel", () => {
   let mockChannel: MockChannel;
@@ -56,6 +61,7 @@ describe("lore channel", () => {
     mockClient.channels.fetch.mockResolvedValue(mockChannel as never);
 
     // Default mock implementations using real data
+    mockResolveLastPostInfo.mockResolvedValue(null); // No previous posts by default
     mockFetchRecentArtifacts.mockResolvedValue([REAL_ARTIFACT]);
     mockFetchBot.mockResolvedValue(REAL_BOT);
     mockFetchBotStory.mockResolvedValue(REAL_BOT_STORY);

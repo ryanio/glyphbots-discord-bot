@@ -12,7 +12,7 @@ import {
   getBotUrl,
 } from "../api/glyphbots";
 import { prefixedLogger } from "../lib/logger";
-import { recordLorePost } from "../lib/state";
+import { recordLorePost, resolveLastPostInfo } from "../lib/state";
 import type {
   Artifact,
   Config,
@@ -284,17 +284,47 @@ export const initLoreChannel = async (
   const channelName = "name" in channel ? channel.name : loreChannelId;
   log.info(`Connected to lore channel: #${channelName}`);
 
-  // Post initial lore entry
-  log.info("Posting initial lore entry...");
-  const success = await postLoreEntry(channel);
+  // Check last post time from state
+  const lastPost = await resolveLastPostInfo("lore");
+  const intervalMs = loreIntervalMinutes * SECONDS_PER_MINUTE * MS_PER_SECOND;
+  const nowMs = Date.now();
 
-  if (!success) {
-    log.warn("Initial lore post failed, will retry on next interval");
+  if (lastPost) {
+    const lastPostMs = lastPost.timestamp * MS_PER_SECOND;
+    const timeSinceLastPost = nowMs - lastPostMs;
+    const timeUntilNextPost = intervalMs - timeSinceLastPost;
+
+    if (timeUntilNextPost > 0) {
+      const minutesUntilNext = Math.ceil(
+        timeUntilNextPost / (SECONDS_PER_MINUTE * MS_PER_SECOND)
+      );
+      log.info(
+        `Last post was ${Math.floor(timeSinceLastPost / (SECONDS_PER_MINUTE * MS_PER_SECOND))} minutes ago, waiting ${minutesUntilNext} minutes for next post`
+      );
+
+      // Schedule the first post after the remaining time
+      setTimeout(async () => {
+        log.info("Scheduled lore post triggered (initial delay)");
+        await postLoreEntry(channel);
+      }, timeUntilNextPost);
+    } else {
+      // Enough time has passed, post now
+      log.info("Posting initial lore entry...");
+      const success = await postLoreEntry(channel);
+      if (!success) {
+        log.warn("Initial lore post failed, will retry on next interval");
+      }
+    }
+  } else {
+    // No previous post, post now
+    log.info("No previous posts found, posting initial lore entry...");
+    const success = await postLoreEntry(channel);
+    if (!success) {
+      log.warn("Initial lore post failed, will retry on next interval");
+    }
   }
 
   // Set up interval for recurring posts
-  const intervalMs = loreIntervalMinutes * SECONDS_PER_MINUTE * MS_PER_SECOND;
-
   setInterval(async () => {
     log.info("Scheduled lore post triggered");
     await postLoreEntry(channel);

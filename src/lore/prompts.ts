@@ -149,7 +149,7 @@ Write a NEWS BULLETIN. Rules:
 
 Style: Emergency broadcast system. The signal that interrupts everything.`,
     userSuffix:
-      "Write a news bulletin (under 80 words). Start with ⚡ PRIORITY ALERT. Urgent, clipped, authoritative.",
+      "Write a news bulletin (under 80 words). Start with ⚡ PRIORITY ALERT (or similar). Urgent, clipped, authoritative.",
   },
 ];
 
