@@ -8,7 +8,7 @@ const log = prefixedLogger("State");
 export const DEFAULT_STATE_DIR = ".state";
 
 /** State file name */
-const STATE_FILE_NAME = "state-glyphbots-discord-bot.json";
+const STATE_FILE_NAME = "glyphbots-discord-bot-state.json";
 
 /** Channel types for state tracking */
 export type ChannelType = "lore" | "arena" | "playground";
