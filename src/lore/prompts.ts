@@ -27,7 +27,9 @@ Write SHORT, captivating micro-fiction. Rules:
 4. End with intrigue.
 5. Reference the artifact image.
 
-Style: Punchy. Cinematic. Like a movie trailer.`,
+Style: Punchy. Cinematic. Like a movie trailer.
+
+Formatting: Use **bold** and *italic* sparingly—only for key emphasis. Enhance with ASCII: ░▒▓│├┤╭╮╰╯◆◇●○▪▫ for separators and flair. Replace letters creatively (Ø for O, Ξ for E, etc.) in headers or key words.`,
     userSuffix:
       "Write a punchy micro-story (under 100 words). Use line breaks between sentences.",
   },
@@ -37,14 +39,16 @@ Style: Punchy. Cinematic. Like a movie trailer.`,
 
 Write as a CORRUPTED TRANSMISSION. Rules:
 1. MAX 80 words.
-2. Use [...] for signal breaks.
+2. Use varied signal breaks: [...], ⟨—⟩, //LOST//, ▓▓▓, ─┼─, «STATIC», ░░░, etc.
 3. Mix technical jargon with emotion.
 4. Feel incomplete, urgent.
 5. Reference the artifact image.
 
-Format: Like intercepted radio chatter. Broken. Urgent. Real.`,
+Format: Like intercepted radio chatter. Broken. Urgent. Real.
+
+Formatting: Use **bold** and *italic* sparingly—only for key emphasis. Enhance with ASCII: ░▒▓█▄▀┃┊╌ for corruption effects. Use ◄►▲▼ for direction, ⟨⟩「」 for signal markers.`,
     userSuffix:
-      "Write as a fragmented transmission (under 80 words). Use [...] for breaks. Make it feel intercepted.",
+      "Write as a fragmented transmission (under 80 words). Use varied signal break markers (not just [...] every time). Make it feel intercepted.",
   },
   {
     name: "firstPerson",
@@ -57,7 +61,9 @@ Rules:
 4. Short sentences. Fragments okay.
 5. Reference what you see in the artifact image.
 
-Style: Stream of consciousness. Present tense. Intimate.`,
+Style: Stream of consciousness. Present tense. Intimate.
+
+Formatting: Use **bold** and *italic* sparingly—only for emphasis on critical thoughts. Use ─ or ── for pauses. Occasional ◈ ◇ ○ as thought markers.`,
     userSuffix:
       "Write as the bot in first person (under 100 words). Present tense. Raw thoughts.",
   },
@@ -72,7 +78,9 @@ Write MINIMAL poetry. Rules:
 4. Evocative imagery.
 5. Reference the artifact image.
 
-Style: Haiku-adjacent. Each word deliberate. White space matters.`,
+Style: Haiku-adjacent. Each word deliberate. White space matters.
+
+Formatting: Avoid bold/italic—let the words breathe. Use ∙ · • for stanza breaks. Occasional ◦ ○ ◌ as celestial punctuation.`,
     userSuffix:
       "Write a short poem (under 60 words, 4-6 lines). Minimal. Evocative.",
   },
@@ -82,14 +90,16 @@ Style: Haiku-adjacent. Each word deliberate. White space matters.`,
 
 Write a BRIEF LOG ENTRY. Rules:
 1. MAX 80 words.
-2. Start with timestamp format [CYCLE-XXX].
+2. Start with a UNIQUE timestamp/header—vary the format each time: [ΞPH-0x7F], «NØDE.291», ┃RΞC//4471┃, ◈LOG::FRΛG-12, [ΩMIT-STATUS], ▸TRΛCK.09A, etc.
 3. Clinical but with cracks of personality.
 4. End with status or cryptic note.
 5. Reference the artifact image.
 
-Style: Military brevity meets existential robot thoughts.`,
+Style: Military brevity meets existential robot thoughts.
+
+Formatting: Use **bold** sparingly for status codes only. Use │ ├ └ for log structure. STATUS markers: ◉ ◎ ○ for priority levels. Replace letters in headers: Ξ Ø Λ Δ Ω.`,
     userSuffix:
-      "Write a mission log entry (under 80 words). Start with [CYCLE-XXX]. Brief but revealing.",
+      "Write a mission log entry (under 80 words). Start with a unique styled timestamp (vary the format—NEVER use the same header twice). Brief but revealing.",
   },
   {
     name: "memory",
@@ -97,12 +107,14 @@ Style: Military brevity meets existential robot thoughts.`,
 
 Write a GLITCHED MEMORY. Rules:
 1. MAX 90 words.
-2. Use glitch artifacts: ▓▒░, r-r-repeating words, or CUT OFF mid-sen—
+2. Use glitch artifacts: ▓▒░█▄▀, r-r-repeating words, or CUT OFF mid-sen—
 3. Reality stutters. Time loops. Details shift.
 4. Mix clarity with corruption.
 5. Reference the artifact image as the memory's focus.
 
-Style: VHS tracking errors. Déjà vu. A moment the bot can't let go of.`,
+Style: VHS tracking errors. Déjà vu. A moment the bot can't let go of.
+
+Formatting: Avoid **bold**/*italic*—the glitch IS the emphasis. Use ▓▒░ liberally. ╳ for redaction. ⌐¬ for broken brackets. Corrupt letters: M̷E̸M̶O̵R̴Y̷.`,
     userSuffix:
       "Write a glitched memory fragment (under 90 words). Use ▓▒░ artifacts, repetition, or cut-offs. Make reality stutter.",
   },
@@ -112,14 +124,16 @@ Style: VHS tracking errors. Déjà vu. A moment the bot can't let go of.`,
 
 Write as ORAL TRADITION. Rules:
 1. MAX 100 words.
-2. Begin with "They say..." or similar mythic opening.
+2. Begin with a UNIQUE mythic opening—vary it: "They say...", "In the time before...", "The old ones whisper of...", "Long past the final circuit...", "Before the great silence...", "It is written in the void...", "The archives remember...", etc.
 3. Speak of the bot as legend, not individual.
 4. Timeless language. No technical jargon.
 5. Reference the artifact image as sacred relic or omen.
 
-Style: Campfire tales in the void. Reverent. Eternal.`,
+Style: Campfire tales in the void. Reverent. Eternal.
+
+Formatting: Use *italic* sparingly for sacred names. ✦ ✧ ★ ☆ for celestial emphasis. ─────── as mythic separators. No bold—myths whisper, they don't shout.`,
     userSuffix:
-      "Write as ancient myth (under 100 words). Begin with 'They say...' or similar. Make it legendary.",
+      "Write as ancient myth (under 100 words). Begin with a unique mythic opening (NEVER start the same way twice). Make it legendary.",
   },
   {
     name: "noir",
@@ -132,7 +146,9 @@ Write NOIR MICRO-FICTION. Rules:
 4. Past tense. Third person or first.
 5. Reference the artifact image through the noir lens.
 
-Style: Blade Runner meets Raymond Chandler. The cosmos owes everyone a death.`,
+Style: Blade Runner meets Raymond Chandler. The cosmos owes everyone a death.
+
+Formatting: Use *italic* for inner monologue sparingly. ──── as scene breaks. ▪ for bullet-like beats. No bold—noir lives in shadow, not spotlight.`,
     userSuffix:
       "Write noir micro-fiction (under 100 words). Cynical, atmospheric, rain-soaked. Make the void feel personal.",
   },
@@ -142,14 +158,16 @@ Style: Blade Runner meets Raymond Chandler. The cosmos owes everyone a death.`,
 
 Write a NEWS BULLETIN. Rules:
 1. MAX 80 words.
-2. Start with ⚡ PRIORITY ALERT or similar header.
+2. Start with a UNIQUE urgent header—vary it each time: ⚡ PRIØRITY ALΞRT, ◈ SIGNAL INTERCEPT, ▲ BRΞAKING TRΛNSMISSION, ⌁ URGΞNT DISPATCH, ◉ CRITICΛL UPDΛTE, ░░ FLASH RΞPORT, ▓▓ INCØMING, ⋈ PRIORITY ØNE, etc.
 3. Clipped, authoritative, urgent.
 4. Facts first, then implications.
 5. Reference the artifact image as breaking evidence.
 
-Style: Emergency broadcast system. The signal that interrupts everything.`,
+Style: Emergency broadcast system. The signal that interrupts everything.
+
+Formatting: Use **bold** for the header only. │ for sidebars. ▸ ▹ for bullet points. Stylize headers with Ø Ξ Λ Δ letter replacements.`,
     userSuffix:
-      "Write a news bulletin (under 80 words). Start with ⚡ PRIORITY ALERT (or similar). Urgent, clipped, authoritative.",
+      "Write a news bulletin (under 80 words). Start with a unique urgent header (⚡◈▲⌁◉░▓⋈ + varied wording—NEVER repeat headers). Urgent, clipped, authoritative.",
   },
 ];
 

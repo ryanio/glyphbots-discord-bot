@@ -148,34 +148,36 @@ const buildLoreEmbed = (lore: GeneratedLore): EmbedBuilder => {
     embed.setImage(artifact.imageUrl);
   }
 
-  // Add fields for context
+  // Add fields for context - artifact first, ID at end
   const fields: Array<{ name: string; value: string; inline: boolean }> = [];
 
-  fields.push({
-    name: "Bot",
-    value: `[${bot.name} #${bot.tokenId}](${getBotUrl(bot.tokenId)})`,
-    inline: true,
-  });
-
-  // Only add artifact link if it has a contract token ID
+  // Artifact first
   if (artifact.contractTokenId) {
     fields.push({
-      name: "Artifact",
-      value: `[${artifact.title}](${getArtifactUrl(artifact.contractTokenId)})`,
+      name: "◈ Artifact",
+      value: `[${artifact.title} #${artifact.contractTokenId}](${getArtifactUrl(artifact.contractTokenId)})`,
       inline: true,
     });
   } else {
     fields.push({
-      name: "Artifact",
+      name: "◈ Artifact",
       value: artifact.title,
       inline: true,
     });
   }
 
+  // Bot second
+  fields.push({
+    name: "◉ Bot",
+    value: `[${bot.name}](${getBotUrl(bot.tokenId)})`,
+    inline: true,
+  });
+
+  // Minted date
   if (artifact.mintedAt) {
     const mintDate = new Date(artifact.mintedAt);
     fields.push({
-      name: "Minted",
+      name: "░ Minted",
       value: mintDate.toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",
@@ -184,6 +186,13 @@ const buildLoreEmbed = (lore: GeneratedLore): EmbedBuilder => {
       inline: true,
     });
   }
+
+  // ID at end
+  fields.push({
+    name: "┃ ID",
+    value: `\`${artifact.id}\``,
+    inline: true,
+  });
 
   embed.addFields(fields);
 
