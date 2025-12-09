@@ -154,45 +154,39 @@ const buildLoreEmbed = (lore: GeneratedLore): EmbedBuilder => {
   // Artifact first
   if (artifact.contractTokenId) {
     fields.push({
-      name: "◈ Artifact",
+      name: "Artifact",
       value: `[${artifact.title} #${artifact.contractTokenId}](${getArtifactUrl(artifact.contractTokenId)})`,
       inline: true,
     });
   } else {
     fields.push({
-      name: "◈ Artifact",
+      name: "Artifact",
       value: artifact.title,
       inline: true,
     });
   }
 
-  // Bot second
+  // Bot second, ID at end
   fields.push({
-    name: "◉ Bot",
-    value: `[${bot.name}](${getBotUrl(bot.tokenId)})`,
+    name: "Bot",
+    value: `[${bot.name} #${bot.tokenId}](${getBotUrl(bot.tokenId)})`,
     inline: true,
   });
 
   // Minted date
   if (artifact.mintedAt) {
     const mintDate = new Date(artifact.mintedAt);
+    const year = mintDate.getFullYear();
+    const shortYear = `'${year.toString().slice(-2)}`;
     fields.push({
-      name: "░ Minted",
-      value: mintDate.toLocaleDateString("en-US", {
+      name: "Minted",
+      value: `${mintDate.toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",
-        year: "numeric",
-      }),
+      })} ${shortYear}`,
       inline: true,
     });
   }
-
-  // ID at end
-  fields.push({
-    name: "┃ ID",
-    value: `\`${artifact.id}\``,
-    inline: true,
-  });
 
   embed.addFields(fields);
 
