@@ -172,7 +172,7 @@ export const handleAcceptChallenge = async (
   // Check if user is the challenger
   if (battle.redFighter.userId === userId) {
     await interaction.reply({
-      content: "◈ You cannot accept your own challenge!",
+      content: "◈ You cannot accept your own challenge.",
       ephemeral: true,
     });
     return;
@@ -322,7 +322,7 @@ export const handleBotSelection = async (
   });
 
   await interaction.editReply({
-    content: `◈ You've entered the arena with **${bot.name}**! Head to <#${thread.id}> to fight!`,
+    content: `◈ You've entered the arena with **${bot.name}**. Head to <#${thread.id}> to fight.`,
     components: [],
     embeds: [],
   });
@@ -353,7 +353,7 @@ export const handleWatch = async (
 
   await interaction.reply({
     content:
-      "◉ You'll be notified when the battle starts and added to the battle thread!",
+      "◉ You'll be notified when the battle starts and added to the battle thread.",
     ephemeral: true,
   });
 
@@ -373,7 +373,7 @@ export const handleStanceSelection = async (
   // Verify this is the correct user
   if (userId !== targetOdwerId) {
     await interaction.reply({
-      content: "◈ This button is not for you!",
+      content: "◈ This button is not for you.",
       ephemeral: true,
     });
     return;
@@ -413,7 +413,7 @@ export const handleStanceSelection = async (
   const stanceEmoji = getStanceEmoji(stance);
 
   await interaction.reply({
-    content: `${stanceEmoji} You've chosen the **${stance}** stance! ◈`,
+    content: `${stanceEmoji} You've chosen the **${stance}** stance. ◈`,
     ephemeral: true,
   });
 
@@ -465,7 +465,7 @@ export const handleAbilitySelection = async (
   }
 
   await interaction.reply({
-    content: `⚔ You've selected **${abilityName}**! Waiting for opponent... ◈`,
+    content: `⚔ You've selected **${abilityName}**. Waiting for opponent... ◈`,
     ephemeral: true,
   });
 

@@ -45,11 +45,11 @@ export const arenaQuickstart = new EmbedBuilder()
     {
       name: "⚡ Fight!",
       value:
-        "▸ Choose your opening stance\n▸ Select abilities each round (30 sec)\n▸ Watch the AI narrate your clash!",
+        "▸ Choose your opening stance\n▸ Select abilities each round (30 sec)\n▸ Watch the AI narrate your clash.",
     }
   )
   .setFooter({
-    text: "💡 Pro tip: Type /info bot <id> to check a bot's stats before challenging!",
+    text: "💡 Pro tip: Type /info bot <id> to check a bot's stats before challenging.",
   });
 
 /**
@@ -74,7 +74,7 @@ export const arenaButtons = new ActionRowBuilder<ButtonBuilder>().addComponents(
 export const embedBotSyntax = new EmbedBuilder()
   .setColor(GLYPHBOTS_COLOR)
   .setTitle("📖 Quick Reference: Bot & Artifact Lookups")
-  .setDescription("Instantly view any bot or artifact using slash commands!")
+  .setDescription("Instantly view any bot or artifact using slash commands.")
   .addFields(
     {
       name: "🤖 Bot Lookups",
@@ -94,7 +94,7 @@ export const embedBotSyntax = new EmbedBuilder()
     }
   )
   .setFooter({
-    text: "Try it now! Type /info bot id:1 to see the first GlyphBot!",
+    text: "Try it now: Type /info bot id:1 to see the first GlyphBot.",
   });
 
 /**
@@ -117,10 +117,10 @@ export const spectatorGuide = new EmbedBuilder()
     {
       name: "✦ Arena Events ✦",
       value:
-        "When crowd energy hits **100%**, chaos ensues!\nRandom arena events can flip the entire battle.",
+        "When crowd energy hits **100%**, chaos ensues.\nRandom arena events can flip the entire battle.",
     }
   )
-  .setFooter({ text: "Click [Spectate] on any battle to join the crowd! ◉" });
+  .setFooter({ text: "Click [Spectate] on any battle to join the crowd. ◉" });
 
 /**
  * Slash Commands Overview
@@ -128,7 +128,7 @@ export const spectatorGuide = new EmbedBuilder()
 export const slashCommands = new EmbedBuilder()
   .setColor(GLYPHBOTS_COLOR)
   .setTitle("⌘ Slash Commands")
-  .setDescription("Type `/` to see all available commands!")
+  .setDescription("Type `/` to see all available commands.")
   .addFields(
     {
       name: "🌐 Global",
@@ -159,21 +159,21 @@ export const channelOverview = new EmbedBuilder()
     {
       name: "📖 #lore",
       value:
-        "AI-generated stories about recently minted artifacts.\n*Just sit back and enjoy!*",
+        "AI-generated stories about recently minted artifacts.\n*Just sit back and enjoy.*",
     },
     {
       name: "⚔ #arena ⚔",
       value:
-        "Interactive PvP battles between GlyphBots.\nChallenge others, fight in real-time!\n`/arena challenge` `/arena stats`",
+        "Interactive PvP battles between GlyphBots.\nChallenge others, fight in real-time.\n`/arena challenge` `/arena stats`",
     },
     {
       name: "◉ #playground ◉",
       value:
-        "Community showcase and onboarding.\nBot spotlights, world postcards, arena recaps!",
+        "Community showcase and onboarding.\nBot spotlights, world postcards, arena recaps.",
     }
   )
   .setFooter({
-    text: "💡 Use /info bot or /info artifact for quick lookups in any channel!",
+    text: "💡 Use /info bot or /info artifact for quick lookups in any channel.",
   });
 
 /**
@@ -203,7 +203,7 @@ export const loreExplanation = new EmbedBuilder()
     }
   )
   .setFooter({
-    text: "Stories are generated using the artifact image for context!",
+    text: "Stories are generated using the artifact image for context.",
   });
 
 /**
@@ -213,7 +213,7 @@ export const playgroundGuide = new EmbedBuilder()
   .setColor(GLYPHBOTS_COLOR)
   .setTitle("▸ About #playground")
   .setDescription(
-    "The playground channel is your hub for community content and discovery!"
+    "The playground channel is your hub for community content and discovery."
   )
   .addFields(
     {
@@ -245,7 +245,7 @@ export const playgroundGuide = new EmbedBuilder()
 export const TIPS = [
   {
     title: "▸ Battle Strategy",
-    tip: "Aggressive stance beats Deceptive, Defensive beats Aggressive, Deceptive beats Defensive!",
+    tip: "Aggressive stance beats Deceptive, Defensive beats Aggressive, Deceptive beats Defensive.",
   },
   {
     title: "▶ Know Your Stats",
@@ -253,27 +253,27 @@ export const TIPS = [
   },
   {
     title: "▸ Crowd Power",
-    tip: "Spectators can give fighters +5% damage. Rally your friends!",
+    tip: "Spectators can give fighters +5% damage. Rally your friends.",
   },
   {
     title: "✦ Arena Events ✦",
-    tip: "At 100% crowd energy, random events trigger. Power surges, chaos fields, arena hazards!",
+    tip: "At 100% crowd energy, random events trigger. Power surges, chaos fields, arena hazards.",
   },
   {
     title: "▸ Win Streaks",
-    tip: "Win 3+ battles in a row to appear on the leaderboard!",
+    tip: "Win 3+ battles in a row to appear on the leaderboard.",
   },
   {
     title: "✦ Weekly Spotlight",
-    tip: "Every week, special bots get featured in #playground!",
+    tip: "Every week, special bots get featured in #playground.",
   },
   {
     title: "⚡ Speed Matters ⚡",
-    tip: "The bot with higher Agility attacks first each round!",
+    tip: "The bot with higher Agility attacks first each round.",
   },
   {
     title: "▸ Deceptive Stance",
-    tip: "Deceptive stance gives +20% crit chance. High risk, high reward!",
+    tip: "Deceptive stance gives +20% crit chance. High risk, high reward.",
   },
   {
     title: "▶ Defensive Play",
@@ -294,7 +294,7 @@ export const getRandomTipEmbed = (): EmbedBuilder => {
     .setColor(TIPS_COLOR)
     .setTitle(tip.title)
     .setDescription(tip.tip)
-    .setFooter({ text: "Use /tips for more tips!" });
+    .setFooter({ text: "Use /tips for more tips." });
 };
 
 /**

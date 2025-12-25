@@ -67,7 +67,7 @@ export const applyCrowdAction = (
   switch (action) {
     case "cheer_red":
       applySpectatorCheer(battle, odwerId, "red");
-      message = `🔴 You're cheering for ${battle.redFighter.bot.name}! (+${CHEER_DAMAGE_BONUS}% damage next round)`;
+      message = `🔴 You're cheering for ${battle.redFighter.bot.name}. (+${CHEER_DAMAGE_BONUS}% damage next round)`;
       energyAdded = 5;
       break;
 
@@ -76,7 +76,7 @@ export const applyCrowdAction = (
         return { success: false, message: "No blue fighter to cheer for." };
       }
       applySpectatorCheer(battle, odwerId, "blue");
-      message = `🔵 You're cheering for ${battle.blueFighter.bot.name}! (+${CHEER_DAMAGE_BONUS}% damage next round)`;
+      message = `🔵 You're cheering for ${battle.blueFighter.bot.name}. (+${CHEER_DAMAGE_BONUS}% damage next round)`;
       energyAdded = 5;
       break;
 
@@ -317,7 +317,7 @@ export const getCrowdStatusMessage = (battle: BattleState): string => {
   }
 
   if (battle.crowdEnergy >= 80) {
-    lines.push("", "⚡ **CROWD ENERGY CRITICAL!** Arena event imminent!");
+    lines.push("", "⚡ **CROWD ENERGY CRITICAL!** Arena event imminent.");
   }
 
   return lines.join("\n");

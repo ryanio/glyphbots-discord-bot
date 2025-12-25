@@ -81,7 +81,7 @@ const handleStatsMe = async (
     }
   } else {
     embed.setDescription(
-      "You haven't participated in any arena battles yet!\n\nStart your journey with `/arena challenge`"
+      "You haven't participated in any arena battles yet.\n\nStart your journey with `/arena challenge`"
     );
   }
 
@@ -132,7 +132,7 @@ const handleStatsArena = async (
     );
   } else {
     embed.setDescription(
-      `${targetUser.username} hasn't participated in any arena battles yet!`
+      `${targetUser.username} hasn't participated in any arena battles yet.`
     );
   }
 
@@ -264,7 +264,7 @@ const handleStatsBot = async (
     );
   } else {
     embed.setDescription(
-      `${bot.name} hasn't participated in any arena battles yet!\n\nBring them into the fight with \`/arena challenge bot:${tokenId}\``
+      `${bot.name} hasn't participated in any arena battles yet.\n\nBring them into the fight with \`/arena challenge bot:${tokenId}\``
     );
   }
 

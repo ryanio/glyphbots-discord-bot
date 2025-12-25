@@ -119,7 +119,7 @@ export const buildPreBattleEmbed = (battle: BattleState): EmbedBuilder => {
         inline: true,
       }
     )
-    .setFooter({ text: "⏱ Choose your opening stance! (30 seconds)" });
+    .setFooter({ text: "⏱ Choose your opening stance. (30 seconds)" });
 
   return embed;
 };
@@ -175,7 +175,7 @@ export const buildRoundEmbed = (battle: BattleState): EmbedBuilder => {
     value: `${crowdBar} ${battle.crowdEnergy}%`,
   });
 
-  embed.setFooter({ text: "⏱ Choose your action! (30 seconds)" });
+  embed.setFooter({ text: "⏱ Choose your action. (30 seconds)" });
 
   return embed;
 };
@@ -311,7 +311,7 @@ export const updateChallengeAnnouncement = async (
         name: "◉ Battle Thread",
         value: `<#${threadId}>`,
       })
-      .setFooter({ text: "Click the thread link to watch or spectate!" });
+      .setFooter({ text: "Click the thread link to watch or spectate." });
 
     await message.edit({
       embeds: [embed],

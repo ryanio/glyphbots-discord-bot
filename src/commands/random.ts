@@ -93,7 +93,7 @@ const handleRandomBot = async (
     inline: true,
   });
 
-  embed.setFooter({ text: "Use /random bot again for another!" });
+  embed.setFooter({ text: "Use /random bot again for another." });
 
   await interaction.editReply({ embeds: [embed] });
 };
@@ -154,7 +154,7 @@ const handleRandomArtifact = async (
     embed.setImage(artifact.imageUrl);
   }
 
-  embed.setFooter({ text: "Use /random artifact again for another!" });
+  embed.setFooter({ text: "Use /random artifact again for another." });
 
   await interaction.editReply({ embeds: [embed] });
 };
@@ -206,7 +206,7 @@ const handleRandomWorld = async (
     embed.setImage(artifact.imageUrl);
   }
 
-  embed.setFooter({ text: "Use /random world again for another!" });
+  embed.setFooter({ text: "Use /random world again for another." });
 
   await interaction.editReply({ embeds: [embed] });
 };

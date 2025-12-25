@@ -130,7 +130,7 @@ const handleChallenge = async (
   if (isUserInBattle(userId)) {
     await interaction.reply({
       content:
-        "◈ You are already in an active battle! Use `/arena forfeit` to surrender.",
+        "◈ You are already in an active battle. Use `/arena forfeit` to surrender.",
       ephemeral: true,
     });
     return;
@@ -216,7 +216,7 @@ const handleStats = async (
         inline: true,
       }
     )
-    .setFooter({ text: "Battle stats are tracked from your arena fights!" });
+    .setFooter({ text: "Battle stats are tracked from your arena fights." });
 
   await interaction.reply({ embeds: [embed] });
 };
@@ -235,7 +235,7 @@ const handleLeaderboard = async (
     .addFields({
       name: "◉ Rankings ◉",
       value:
-        "No battles recorded yet!\n\nStart a fight with `/arena challenge` to be the first on the leaderboard!",
+        "No battles recorded yet.\n\nStart a fight with `/arena challenge` to be the first on the leaderboard.",
     })
     .setFooter({ text: "Rankings update after each battle" });
 
@@ -259,7 +259,7 @@ const handleHistory = async (
   if (activeBattles.length === 0) {
     embed.addFields({
       name: "⚔ Active Battles",
-      value: "No active battles right now. Start one with `/arena challenge`!",
+      value: "No active battles right now. Start one with `/arena challenge`.",
     });
   } else {
     const battleList = activeBattles
@@ -280,7 +280,7 @@ const handleHistory = async (
     });
   }
 
-  embed.setFooter({ text: "Full battle history coming soon!" });
+  embed.setFooter({ text: "Full battle history coming soon." });
 
   await interaction.reply({ embeds: [embed] });
 };
