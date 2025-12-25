@@ -81,7 +81,7 @@ const addStoryToEmbed = (embed: EmbedBuilder, story: BotStory): void => {
 const buildBotEmbed = (bot: Bot, story: BotStory | null): EmbedBuilder => {
   const embed = new EmbedBuilder()
     .setColor(GLYPHBOTS_COLOR)
-    .setTitle(`◈ ${bot.name} • #${bot.tokenId} ◈`)
+    .setTitle(`▸ ${bot.name} • #${bot.tokenId}`)
     .setURL(getBotUrl(bot.tokenId));
 
   // Add traits
@@ -90,7 +90,7 @@ const buildBotEmbed = (bot: Bot, story: BotStory | null): EmbedBuilder => {
       .slice(0, 6)
       .map((t) => `**${t.trait_type}:** ${t.value}`)
       .join("\n");
-    embed.addFields({ name: "◉ Traits ◉", value: traitList, inline: true });
+    embed.addFields({ name: "◉ Traits", value: traitList, inline: true });
   }
 
   // Add story info if available
@@ -122,7 +122,7 @@ const buildArtifactEmbed = (artifact: {
 }): EmbedBuilder => {
   const embed = new EmbedBuilder()
     .setColor(GLYPHBOTS_COLOR)
-    .setTitle(`◈ ${artifact.title} ◈`);
+    .setTitle(`▸ ${artifact.title}`);
 
   if (artifact.contractTokenId) {
     embed.setURL(getArtifactUrl(artifact.contractTokenId));
@@ -171,7 +171,7 @@ const buildAboutEmbed = (): EmbedBuilder => {
 
   return new EmbedBuilder()
     .setColor(GLYPHBOTS_COLOR)
-    .setTitle("◈ GlyphBots Discord Bot ◈")
+    .setTitle("▸ GlyphBots Discord Bot")
     .setDescription(
       "AI-powered Discord bot for the GlyphBots community featuring lore narratives, arena battles, and playground content."
     )
@@ -182,7 +182,7 @@ const buildAboutEmbed = (): EmbedBuilder => {
         inline: true,
       },
       {
-        name: "◈ AI",
+        name: "▶ AI",
         value: "Google Gemini",
         inline: true,
       },
@@ -193,9 +193,9 @@ const buildAboutEmbed = (): EmbedBuilder => {
       }
     )
     .addFields({
-      name: "◈ Channels ◈",
+      name: "▸ Channels",
       value:
-        "◈ **#lore** - AI-generated narratives\n◈ **#arena** - PvP battles\n◈ **#playground** - Community content",
+        "▸ **#lore** - AI-generated narratives\n▸ **#arena** - PvP battles\n▸ **#playground** - Community content",
     })
     .setFooter({ text: "GlyphBots • glyphbots.com" });
 };
@@ -217,7 +217,7 @@ export const handleInfo = async (
       if (!bot) {
         const errorEmbed = new EmbedBuilder()
           .setColor(ERROR_COLOR)
-          .setTitle("◈ Bot Not Found")
+          .setTitle("▸ Bot Not Found")
           .setDescription(`Bot #${tokenId} could not be found.`);
         await interaction.editReply({ embeds: [errorEmbed] });
         return;
@@ -237,7 +237,7 @@ export const handleInfo = async (
       if (!artifact) {
         const errorEmbed = new EmbedBuilder()
           .setColor(ERROR_COLOR)
-          .setTitle("◈ Artifact Not Found")
+          .setTitle("▸ Artifact Not Found")
           .setDescription(`Artifact #${tokenId} could not be found.`);
         await interaction.editReply({ embeds: [errorEmbed] });
         return;

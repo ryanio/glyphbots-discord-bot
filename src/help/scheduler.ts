@@ -110,7 +110,7 @@ const buildTipsEmbed = (): EmbedBuilder => {
 
   const embed = new EmbedBuilder()
     .setColor(HELP_COLOR)
-    .setTitle("◈ Tips & Tricks ◈")
+    .setTitle("▸ Tips & Tricks")
     .setDescription("Quick tips to enhance your GlyphBots experience!");
 
   for (const tip of selectedTips) {
@@ -120,7 +120,7 @@ const buildTipsEmbed = (): EmbedBuilder => {
     });
   }
 
-  embed.setFooter({ text: "Use /tips for more tips anytime! ◈" });
+  embed.setFooter({ text: "Use /tips for more tips anytime!" });
 
   return embed;
 };

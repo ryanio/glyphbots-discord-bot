@@ -58,8 +58,8 @@ const buildChallengeEmbed = (opts: ChallengeEmbedOpts): EmbedBuilder => {
     .setDescription(
       [
         "",
-        `◈ **CHALLENGER:** <@${userId}>`,
-        `◈ **${botName}** ([#${tokenId}](${getBotUrl(tokenId)}))`,
+        `▸ **CHALLENGER:** <@${userId}>`,
+        `▸ **${botName}** ([#${tokenId}](${getBotUrl(tokenId)}))`,
         faction ? `├─ Faction: ${faction}` : "",
         role ? `└─ Role: ${role}` : "",
         "",
@@ -143,7 +143,7 @@ const handleChallenge = async (
   if (!bot) {
     const errorEmbed = new EmbedBuilder()
       .setColor(ERROR_COLOR)
-      .setTitle("◈ Bot Not Found")
+      .setTitle("▸ Bot Not Found")
       .setDescription(`Bot #${tokenId} could not be found.`);
 
     await interaction.editReply({ embeds: [errorEmbed] });
@@ -296,7 +296,7 @@ const handleForfeit = async (
   const battle = getUserBattle(userId);
   if (!battle) {
     await interaction.reply({
-      content: "◈ You are not in an active battle.",
+      content: "▸ You are not in an active battle.",
       ephemeral: true,
     });
     return;
@@ -305,7 +305,7 @@ const handleForfeit = async (
   const success = forfeitBattle(battle, userId);
   if (!success) {
     await interaction.reply({
-      content: "◈ Unable to forfeit this battle.",
+      content: "▸ Unable to forfeit this battle.",
       ephemeral: true,
     });
     return;
@@ -313,7 +313,7 @@ const handleForfeit = async (
 
   const embed = new EmbedBuilder()
     .setColor(SUCCESS_COLOR)
-    .setTitle("◈ Battle Forfeited ◈")
+    .setTitle("▸ Battle Forfeited")
     .setDescription(
       "You have surrendered the battle. Your opponent wins by forfeit."
     );

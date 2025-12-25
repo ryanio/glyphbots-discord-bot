@@ -190,7 +190,7 @@ export const handleAcceptChallenge = async (
   // Prompt user to select their bot
   const embed = new EmbedBuilder()
     .setColor(ARENA_COLOR)
-    .setTitle("◈ Select Your Fighter ◈")
+    .setTitle("▸ Select Your Fighter")
     .setDescription(
       "Enter your bot's token ID to fight!\n\nUse `/info bot id:<number>` to check bot stats before choosing."
     )

@@ -207,14 +207,14 @@ const handleStatsBot = async (
 
   if (!bot) {
     await interaction.editReply({
-      content: `◈ Bot #${tokenId} not found.`,
+      content: `▸ Bot #${tokenId} not found.`,
     });
     return;
   }
 
   const embed = new EmbedBuilder()
     .setColor(STATS_COLOR)
-    .setTitle(`◈ Combat Stats: ${bot.name} ◈`)
+    .setTitle(`▸ Combat Stats: ${bot.name}`)
     .setURL(getBotUrl(tokenId));
 
   if (botStats) {
@@ -253,7 +253,7 @@ const handleStatsBot = async (
         inline: true,
       },
       {
-        name: "◈ Totals ◈",
+        name: "▸ Totals",
         value: [
           `**Battles:** ${botStats.battlesParticipated}`,
           `**Total Damage:** ${botStats.totalDamageDealt}`,

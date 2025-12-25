@@ -46,7 +46,7 @@ const handleRandomBot = async (
   const bot = await fetchBot(tokenId);
   if (!bot) {
     await interaction.editReply({
-      content: `◈ Failed to fetch bot #${tokenId}. Please try again.`,
+      content: `▸ Failed to fetch bot #${tokenId}. Please try again.`,
     });
     return;
   }
@@ -55,7 +55,7 @@ const handleRandomBot = async (
 
   const embed = new EmbedBuilder()
     .setColor(BOT_COLOR)
-    .setTitle(`◈ ${bot.name} • #${tokenId} ◈`)
+    .setTitle(`▸ ${bot.name} • #${tokenId}`)
     .setURL(getBotUrl(tokenId));
 
   if (bot.traits.length > 0) {
@@ -93,7 +93,7 @@ const handleRandomBot = async (
     inline: true,
   });
 
-  embed.setFooter({ text: "◈ Use /random bot again for another! ◈" });
+  embed.setFooter({ text: "Use /random bot again for another!" });
 
   await interaction.editReply({ embeds: [embed] });
 };
@@ -111,7 +111,7 @@ const handleRandomArtifact = async (
   const artifacts = await fetchRecentArtifacts(100);
   if (artifacts.length === 0) {
     await interaction.editReply({
-      content: "◈ No artifacts available. Please try again later.",
+      content: "▸ No artifacts available. Please try again later.",
     });
     return;
   }
@@ -120,7 +120,7 @@ const handleRandomArtifact = async (
 
   const embed = new EmbedBuilder()
     .setColor(ARTIFACT_COLOR)
-    .setTitle(`◈ ${artifact.title} ◈`);
+    .setTitle(`▸ ${artifact.title}`);
 
   if (artifact.contractTokenId) {
     embed.setURL(getArtifactUrl(artifact.contractTokenId));
@@ -154,7 +154,7 @@ const handleRandomArtifact = async (
     embed.setImage(artifact.imageUrl);
   }
 
-  embed.setFooter({ text: "◈ Use /random artifact again for another! ◈" });
+  embed.setFooter({ text: "Use /random artifact again for another!" });
 
   await interaction.editReply({ embeds: [embed] });
 };
@@ -182,14 +182,14 @@ const handleRandomWorld = async (
 
   if (!artifact) {
     await interaction.editReply({
-      content: "◈ No worlds available. Please try again later.",
+      content: "▸ No worlds available. Please try again later.",
     });
     return;
   }
 
   const embed = new EmbedBuilder()
     .setColor(WORLD_COLOR)
-    .setTitle(`◈ ${artifact.title} ◈`)
+    .setTitle(`▸ ${artifact.title}`)
     .setDescription("*A glimpse into another realm...*");
 
   if (artifact.contractTokenId) {
@@ -206,7 +206,7 @@ const handleRandomWorld = async (
     embed.setImage(artifact.imageUrl);
   }
 
-  embed.setFooter({ text: "◈ Use /random world again for another! ◈" });
+  embed.setFooter({ text: "Use /random world again for another!" });
 
   await interaction.editReply({ embeds: [embed] });
 };

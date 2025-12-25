@@ -33,23 +33,23 @@ export const arenaQuickstart = new EmbedBuilder()
   .setDescription("Ready to prove your bot's worth? Here's how:")
   .addFields(
     {
-      name: "◈ Start a Challenge ◈",
+      name: "⚔ Start a Challenge",
       value:
         "`/arena challenge bot:4421`\nReplace 4421 with your bot's token ID",
     },
     {
-      name: "◈ Accept a Challenge ◈",
+      name: "✓ Accept a Challenge",
       value:
         "Click **[Accept Challenge]** on any open battle\nThen select which of your bots will fight",
     },
     {
-      name: "◈ Fight! ◈",
+      name: "⚡ Fight!",
       value:
-        "◈ Choose your opening stance\n◈ Select abilities each round (30 sec)\n◈ Watch the AI narrate your clash!",
+        "▸ Choose your opening stance\n▸ Select abilities each round (30 sec)\n▸ Watch the AI narrate your clash!",
     }
   )
   .setFooter({
-    text: "◈ Pro tip: Type /info bot <id> to check a bot's stats before challenging! ◈",
+    text: "💡 Pro tip: Type /info bot <id> to check a bot's stats before challenging!",
   });
 
 /**
@@ -73,11 +73,11 @@ export const arenaButtons = new ActionRowBuilder<ButtonBuilder>().addComponents(
  */
 export const embedBotSyntax = new EmbedBuilder()
   .setColor(GLYPHBOTS_COLOR)
-  .setTitle("◈ Quick Reference: Bot & Artifact Lookups ◈")
+  .setTitle("📖 Quick Reference: Bot & Artifact Lookups")
   .setDescription("Instantly view any bot or artifact using slash commands!")
   .addFields(
     {
-      name: "◈ Bot Lookups ◈",
+      name: "🤖 Bot Lookups",
       value: [
         "`/info bot id:123` ⟶ View Bot #123",
         "`/info bot id:4421` ⟶ View Bot #4421",
@@ -85,7 +85,7 @@ export const embedBotSyntax = new EmbedBuilder()
       inline: true,
     },
     {
-      name: "◈ Artifact Lookups ◈",
+      name: "✨ Artifact Lookups",
       value: [
         "`/info artifact id:456` ⟶ View Artifact #456",
         "`/info artifact id:1203` ⟶ View Artifact #1203",
@@ -94,7 +94,7 @@ export const embedBotSyntax = new EmbedBuilder()
     }
   )
   .setFooter({
-    text: "Try it now! Type /info bot id:1 to see the first GlyphBot! ◈",
+    text: "Try it now! Type /info bot id:1 to see the first GlyphBot!",
   });
 
 /**
@@ -106,11 +106,11 @@ export const spectatorGuide = new EmbedBuilder()
   .setDescription("Not fighting? You can still shape the battle!")
   .addFields(
     {
-      name: "◈ Crowd Actions ◈",
+      name: "🎭 Crowd Actions",
       value: [
-        "◈ **Cheer Red** ⟶ +5% damage to red fighter",
-        "◈ **Cheer Blue** ⟶ +5% damage to blue fighter",
-        "◈ **Bloodlust** ⟶ Both +10% dmg, -10% def",
+        "🔴 **Cheer Red** ⟶ +5% damage to red fighter",
+        "🔵 **Cheer Blue** ⟶ +5% damage to blue fighter",
+        "💀 **Bloodlust** ⟶ Both +10% dmg, -10% def",
         "⚡ **Surge** ⟶ +15 crowd energy",
       ].join("\n"),
     },
@@ -127,11 +127,11 @@ export const spectatorGuide = new EmbedBuilder()
  */
 export const slashCommands = new EmbedBuilder()
   .setColor(GLYPHBOTS_COLOR)
-  .setTitle("◈ Slash Commands ◈")
+  .setTitle("⌘ Slash Commands")
   .setDescription("Type `/` to see all available commands!")
   .addFields(
     {
-      name: "◈ Global ◈",
+      name: "🌐 Global",
       value: "`/help` `/info bot` `/info artifact` `/tips`",
       inline: true,
     },
@@ -153,11 +153,11 @@ export const slashCommands = new EmbedBuilder()
  */
 export const channelOverview = new EmbedBuilder()
   .setColor(GLYPHBOTS_COLOR)
-  .setTitle("◈ GlyphBots AI Channels ◈")
+  .setTitle("📡 GlyphBots AI Channels")
   .setDescription("")
   .addFields(
     {
-      name: "◈ #lore ◈",
+      name: "📖 #lore",
       value:
         "AI-generated stories about recently minted artifacts.\n*Just sit back and enjoy!*",
     },
@@ -173,7 +173,7 @@ export const channelOverview = new EmbedBuilder()
     }
   )
   .setFooter({
-    text: "◈ Use /info bot or /info artifact for quick lookups in any channel! ◈",
+    text: "💡 Use /info bot or /info artifact for quick lookups in any channel!",
   });
 
 /**
@@ -181,29 +181,29 @@ export const channelOverview = new EmbedBuilder()
  */
 export const loreExplanation = new EmbedBuilder()
   .setColor(GLYPHBOTS_COLOR)
-  .setTitle("◈ About #lore ◈")
+  .setTitle("▸ About #lore")
   .setDescription(
     "The lore channel features AI-generated micro-fiction about GlyphBots and their artifacts."
   )
   .addFields(
     {
-      name: "◈ How It Works ◈",
+      name: "▶ How It Works",
       value:
         "The bot selects recently minted artifacts and generates unique narratives in one of 9 different styles.",
     },
     {
-      name: "◉ Narrative Styles ◉",
+      name: "◉ Narrative Styles",
       value:
         "Cinematic • Transmission • First Person • Poetic • Log Entry • Memory • Myth • Noir • Broadcast",
     },
     {
-      name: "◈ What's Included ◈",
+      name: "▸ What's Included",
       value:
-        "Each post includes:\n◈ AI-generated story\n◈ Artifact image\n◈ Links to view the bot and artifact",
+        "Each post includes:\n▸ AI-generated story\n▸ Artifact image\n▸ Links to view the bot and artifact",
     }
   )
   .setFooter({
-    text: "Stories are generated using the artifact image for context! ◈",
+    text: "Stories are generated using the artifact image for context!",
   });
 
 /**
@@ -211,48 +211,48 @@ export const loreExplanation = new EmbedBuilder()
  */
 export const playgroundGuide = new EmbedBuilder()
   .setColor(GLYPHBOTS_COLOR)
-  .setTitle("◉ About #playground ◉")
+  .setTitle("▸ About #playground")
   .setDescription(
     "The playground channel is your hub for community content and discovery!"
   )
   .addFields(
     {
-      name: "◈ Bot Spotlights ◈",
+      name: "✦ Bot Spotlights",
       value: "Featured bots with full stats, powers, and lore",
     },
     {
-      name: "◈ World Postcards ◈",
+      name: "▸ World Postcards",
       value: "Atmospheric descriptions of world artifacts",
     },
     {
-      name: "◈ Item Discovery ◈",
+      name: "▶ Item Discovery",
       value: "Newly minted items with AI-generated lore",
     },
     {
-      name: "◈ Arena Recaps ◈",
+      name: "▸ Arena Recaps",
       value: "Daily battle summaries and leaderboards",
     },
     {
-      name: "◈ Random Encounters ◈",
+      name: "▶ Random Encounters",
       value: '"What if?" scenarios featuring random bots',
     }
   )
-  .setFooter({ text: "New content regularly! ◉" });
+  .setFooter({ text: "New content posted regularly" });
 
 /**
  * Tips content for random selection
  */
 export const TIPS = [
   {
-    title: "◈ Battle Strategy ◈",
+    title: "▸ Battle Strategy",
     tip: "Aggressive stance beats Deceptive, Defensive beats Aggressive, Deceptive beats Defensive!",
   },
   {
-    title: "◉ Know Your Stats ◉",
+    title: "▶ Know Your Stats",
     tip: "High AGI bots attack first. High LCK bots crit more. High END bots tank damage.",
   },
   {
-    title: "◈ Crowd Power ◈",
+    title: "▸ Crowd Power",
     tip: "Spectators can give fighters +5% damage. Rally your friends!",
   },
   {
@@ -260,11 +260,11 @@ export const TIPS = [
     tip: "At 100% crowd energy, random events trigger. Power surges, chaos fields, arena hazards!",
   },
   {
-    title: "◈ Win Streaks ◈",
+    title: "▸ Win Streaks",
     tip: "Win 3+ battles in a row to appear on the leaderboard!",
   },
   {
-    title: "◈ Weekly Spotlight ◈",
+    title: "✦ Weekly Spotlight",
     tip: "Every week, special bots get featured in #playground!",
   },
   {
@@ -272,15 +272,15 @@ export const TIPS = [
     tip: "The bot with higher Agility attacks first each round!",
   },
   {
-    title: "◈ Deceptive Stance ◈",
+    title: "▸ Deceptive Stance",
     tip: "Deceptive stance gives +20% crit chance. High risk, high reward!",
   },
   {
-    title: "◈ Defensive Play ◈",
+    title: "▶ Defensive Play",
     tip: "Defensive stance gives +15% DEF but -10% ATK. Great against aggressive players!",
   },
   {
-    title: "◈ Bloodlust ◈",
+    title: "▸ Bloodlust",
     tip: "Spectators can trigger Bloodlust: both fighters deal +10% damage but take -10% defense!",
   },
 ];
@@ -294,7 +294,7 @@ export const getRandomTipEmbed = (): EmbedBuilder => {
     .setColor(TIPS_COLOR)
     .setTitle(tip.title)
     .setDescription(tip.tip)
-    .setFooter({ text: "◈ Use /tips for more tips! ◈" });
+    .setFooter({ text: "Use /tips for more tips!" });
 };
 
 /**

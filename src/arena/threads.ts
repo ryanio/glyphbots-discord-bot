@@ -73,10 +73,7 @@ const formatStatsBlock = (stats: {
 /**
  * Build fighter display embed field
  */
-const formatFighterStats = (
-  fighter: FighterState,
-  color: "◈" | "◈"
-): string => {
+const formatFighterStats = (fighter: FighterState, color: string): string => {
   const lines = [`${color} **${fighter.bot.name}** (#${fighter.bot.tokenId})`];
 
   if (fighter.story) {
@@ -112,13 +109,13 @@ export const buildPreBattleEmbed = (battle: BattleState): EmbedBuilder => {
     )
     .addFields(
       {
-        name: "◈ Red Fighter ◈",
-        value: formatFighterStats(battle.redFighter, "◈"),
+        name: "▸ Red Fighter",
+        value: formatFighterStats(battle.redFighter, "▸"),
         inline: true,
       },
       {
-        name: "◈ Blue Fighter ◈",
-        value: formatFighterStats(battle.blueFighter, "◈"),
+        name: "▸ Blue Fighter",
+        value: formatFighterStats(battle.blueFighter, "▸"),
         inline: true,
       }
     )
@@ -147,12 +144,12 @@ export const buildRoundEmbed = (battle: BattleState): EmbedBuilder => {
     .setTitle(`⚔️ ━━━ ROUND ${battle.round} OF ${battle.maxRounds} ━━━ ⚔️`)
     .addFields(
       {
-        name: `◈ ${battle.redFighter.bot.name}`,
+        name: `▸ ${battle.redFighter.bot.name}`,
         value: `${hpBar(battle.redFighter.hp, battle.redFighter.maxHp)} ${battle.redFighter.hp}/${battle.redFighter.maxHp} HP (${redHpPercent}%)`,
         inline: true,
       },
       {
-        name: `◈ ${battle.blueFighter.bot.name}`,
+        name: `▸ ${battle.blueFighter.bot.name}`,
         value: `${hpBar(battle.blueFighter.hp, battle.blueFighter.maxHp)} ${battle.blueFighter.hp}/${battle.blueFighter.maxHp} HP (${blueHpPercent}%)`,
         inline: true,
       }
@@ -174,7 +171,7 @@ export const buildRoundEmbed = (battle: BattleState): EmbedBuilder => {
     "█".repeat(Math.floor(battle.crowdEnergy / 10)) +
     "░".repeat(10 - Math.floor(battle.crowdEnergy / 10));
   embed.addFields({
-    name: "◉ Crowd Energy ◉",
+    name: "◉ Crowd Energy",
     value: `${crowdBar} ${battle.crowdEnergy}%`,
   });
 
@@ -198,13 +195,13 @@ export const buildVictoryEmbed = (
   const embed = new EmbedBuilder()
     .setColor(ARENA_COLOR)
     .setTitle(isEpic ? "✦ ═══ EPIC VICTORY ═══ ✦" : "✦ ═══ VICTORY ═══ ✦")
-    .setDescription(`**◈ ${winner.bot.name} CLAIMS GLORY! ◈**`)
+    .setDescription(`**▸ ${winner.bot.name} CLAIMS GLORY!**`)
     .addFields(
       {
-        name: "◉ Final Score ◉",
+        name: "◉ Final Score",
         value: [
-          `◈ ${winner.bot.name}: ${hpBar(winner.hp, winner.maxHp)} ${winner.hp} HP ⟵ **WINNER**`,
-          `◈ ${loser.bot.name}: ⚰ DEFEATED`,
+          `▸ ${winner.bot.name}: ${hpBar(winner.hp, winner.maxHp)} ${winner.hp} HP ⟵ **WINNER**`,
+          `▸ ${loser.bot.name}: ⚰ DEFEATED`,
         ].join("\n"),
       },
       {
@@ -305,13 +302,13 @@ export const updateChallengeAnnouncement = async (
       .setTitle("⚔ ═══ BATTLE STARTED ═══ ⚔")
       .setDescription(
         [
-          `◈ <@${battle.redFighter.userId}> (${battle.redFighter.bot.name})`,
+          `▸ <@${battle.redFighter.userId}> (${battle.redFighter.bot.name})`,
           "**⟷**",
-          `◈ <@${battle.blueFighter.userId}> (${battle.blueFighter.bot.name})`,
+          `▸ <@${battle.blueFighter.userId}> (${battle.blueFighter.bot.name})`,
         ].join("\n")
       )
       .addFields({
-        name: "◉ Battle Thread ◉",
+        name: "◉ Battle Thread",
         value: `<#${threadId}>`,
       })
       .setFooter({ text: "Click the thread link to watch or spectate!" });
