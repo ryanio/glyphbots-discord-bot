@@ -121,5 +121,41 @@ export const generateRecap = async (): Promise<{
     )
   );
 
-  return { embed, components: [buttons] };
+  const actionButtons = createButtonRowWithButtons(
+    createButton(
+      "playground_request_spotlight",
+      "Request Spotlight",
+      ButtonStyle.Secondary,
+      "🌟"
+    ),
+    createButton(
+      "playground_request_discovery",
+      "Request Discovery",
+      ButtonStyle.Secondary,
+      "🎒"
+    ),
+    createButton(
+      "playground_request_encounter",
+      "Request Encounter",
+      ButtonStyle.Secondary,
+      "🎲"
+    )
+  );
+
+  const actionButtons2 = createButtonRowWithButtons(
+    createButton(
+      "playground_request_postcard",
+      "Request Postcard",
+      ButtonStyle.Secondary,
+      "🌍"
+    ),
+    createButton(
+      "playground_request_help",
+      "Request Help",
+      ButtonStyle.Secondary,
+      "❓"
+    )
+  );
+
+  return { embed, components: [buttons, actionButtons, actionButtons2] };
 };

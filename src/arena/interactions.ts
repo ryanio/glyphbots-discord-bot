@@ -616,6 +616,139 @@ export const handleSpectatorAction = async (
 };
 
 /**
+ * Handle arena my stats button
+ */
+const handleArenaMyStats = async (
+  interaction: ButtonInteraction
+): Promise<void> => {
+  await interaction.deferReply({ ephemeral: true });
+
+  const userId = interaction.user.id;
+  const { getUserStats } = await import("../arena/tracking");
+  const userStats = await getUserStats(userId);
+
+  const STATS_COLOR: HexColorString = "#00ff88";
+
+  const embed = new EmbedBuilder()
+    .setColor(STATS_COLOR)
+    .setTitle(`◉ ${interaction.user.username}'s Stats ◉`)
+    .setThumbnail(interaction.user.displayAvatarURL());
+
+  if (userStats) {
+    const winRate =
+      userStats.wins + userStats.losses > 0
+        ? Math.round(
+            (userStats.wins / (userStats.wins + userStats.losses)) * 100
+          )
+        : 0;
+
+    embed.addFields(
+      {
+        name: "⚔ Arena Record ⚔",
+        value: [
+          `**Wins:** ${userStats.wins}`,
+          `**Losses:** ${userStats.losses}`,
+          `**Win Rate:** ${winRate}%`,
+        ].join("\n"),
+        inline: true,
+      },
+      {
+        name: "✦ Streaks ✦",
+        value: [
+          `**Current:** ${userStats.currentStreak} wins`,
+          `**Best Ever:** ${userStats.bestStreak} wins`,
+        ].join("\n"),
+        inline: true,
+      },
+      {
+        name: "◈ Achievements ◈",
+        value: [
+          `**Epic Victories:** ${userStats.epicVictories}`,
+          `**Total Rounds:** ${userStats.totalRounds}`,
+        ].join("\n"),
+        inline: true,
+      }
+    );
+
+    if (userStats.lastBattleAt) {
+      const lastBattle = new Date(userStats.lastBattleAt);
+      embed.setFooter({
+        text: `Last battle: ${lastBattle.toLocaleDateString()}`,
+      });
+    }
+  } else {
+    embed.setDescription(
+      "You haven't participated in any arena battles yet.\n\nStart your journey with `/arena challenge`"
+    );
+  }
+
+  await interaction.editReply({ embeds: [embed] });
+};
+
+/**
+ * Handle arena leaderboard button
+ */
+const handleArenaLeaderboard = async (
+  interaction: ButtonInteraction
+): Promise<void> => {
+  await interaction.deferReply({ ephemeral: true });
+
+  const { getLeaderboard, getServerStats } = await import("../arena/tracking");
+  const [leaderboard, serverStats] = await Promise.all([
+    getLeaderboard(10),
+    getServerStats(),
+  ]);
+
+  const embed = new EmbedBuilder()
+    .setColor(ARENA_COLOR)
+    .setTitle("✦ ═══ Arena Leaderboard ═══ ✦")
+    .setDescription("Top fighters this season");
+
+  embed.addFields({
+    name: "◉ Server Stats ◉",
+    value: [
+      `**Total Battles:** ${serverStats.totalBattles}`,
+      `**Total Rounds:** ${serverStats.totalRounds}`,
+      `**Epic Victories:** ${serverStats.epicVictories}`,
+      `**Unique Fighters:** ${serverStats.uniqueFighters}`,
+    ].join("\n"),
+    inline: true,
+  });
+
+  if (leaderboard.length > 0) {
+    const getMedal = (rank: number): string => {
+      const medals = ["🥇", "🥈", "🥉"];
+      if (rank < medals.length) {
+        return medals[rank];
+      }
+      return `${rank + 1}.`;
+    };
+    const leaderboardText = leaderboard
+      .map((user, i) => {
+        const medal = getMedal(i);
+        return `${medal} **${user.username}** - ${user.wins}W/${user.losses}L (${user.bestStreak}🔥)`;
+      })
+      .join("\n");
+
+    embed.addFields({
+      name: "🏆 Top Fighters",
+      value: leaderboardText || "No battles yet!",
+      inline: true,
+    });
+  } else {
+    embed.addFields({
+      name: "🏆 Top Fighters",
+      value: "No battles recorded yet!\nBe the first with `/arena challenge`",
+      inline: true,
+    });
+  }
+
+  embed.setFooter({ text: "Rankings update after each battle" });
+
+  await interaction.editReply({ embeds: [embed] });
+};
+
+/**
  * Main button interaction router
  */
 export const handleArenaButton = async (
@@ -630,6 +763,10 @@ export const handleArenaButton = async (
   } else if (customId.startsWith("arena_watch_")) {
     const battleId = customId.replace("arena_watch_", "");
     await handleWatch(interaction, battleId);
+  } else if (customId === "arena_my_stats") {
+    await handleArenaMyStats(interaction);
+  } else if (customId === "arena_leaderboard") {
+    await handleArenaLeaderboard(interaction);
   } else if (customId.startsWith("stance_")) {
     const parts = customId.split("_");
     const stance = parts[1] as Stance;

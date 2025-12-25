@@ -7,6 +7,7 @@
 import {
   type ActionRowBuilder,
   type ButtonBuilder,
+  ButtonStyle,
   EmbedBuilder,
   type HexColorString,
 } from "discord.js";
@@ -14,6 +15,7 @@ import { fetchBot, fetchBotStory, getBotUrl } from "../api/glyphbots";
 import { generateText } from "../api/google-ai";
 import {
   createBotLinkButton,
+  createButton,
   createButtonRowWithButtons,
 } from "../lib/discord/buttons";
 import { prefixedLogger } from "../lib/logger";
@@ -122,7 +124,43 @@ export const generateEncounter = async (): Promise<{
     )
   );
 
-  return { embed, components: [buttons] };
+  const actionButtons = createButtonRowWithButtons(
+    createButton(
+      "playground_request_spotlight",
+      "Request Spotlight",
+      ButtonStyle.Secondary,
+      "🌟"
+    ),
+    createButton(
+      "playground_request_discovery",
+      "Request Discovery",
+      ButtonStyle.Secondary,
+      "🎒"
+    ),
+    createButton(
+      "playground_request_postcard",
+      "Request Postcard",
+      ButtonStyle.Secondary,
+      "🌍"
+    )
+  );
+
+  const actionButtons2 = createButtonRowWithButtons(
+    createButton(
+      "playground_request_recap",
+      "Request Recap",
+      ButtonStyle.Secondary,
+      "📰"
+    ),
+    createButton(
+      "playground_request_help",
+      "Request Help",
+      ButtonStyle.Secondary,
+      "❓"
+    )
+  );
+
+  return { embed, components: [buttons, actionButtons, actionButtons2] };
 };
 
 type EncounterNarrativeOpts = {

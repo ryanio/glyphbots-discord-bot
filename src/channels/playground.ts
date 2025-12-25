@@ -5,7 +5,12 @@
  */
 
 import type { Client, EmbedBuilder, TextChannel } from "discord.js";
+import { ButtonStyle } from "discord.js";
 import { generateHelpEmbed } from "../help/scheduler";
+import {
+  createButton,
+  createButtonRowWithButtons,
+} from "../lib/discord/buttons";
 import { prefixedLogger } from "../lib/logger";
 import type { Config } from "../lib/types";
 import { delay } from "../lib/utils";
@@ -59,7 +64,47 @@ const generateContent = async (
       return await generateEncounter();
     case "help": {
       const embed = await generateHelpEmbed();
-      return embed ? { embed, components: [] } : null;
+      if (!embed) {
+        return null;
+      }
+
+      const actionButtons = createButtonRowWithButtons(
+        createButton(
+          "playground_request_spotlight",
+          "Request Spotlight",
+          ButtonStyle.Secondary,
+          "🌟"
+        ),
+        createButton(
+          "playground_request_discovery",
+          "Request Discovery",
+          ButtonStyle.Secondary,
+          "🎒"
+        ),
+        createButton(
+          "playground_request_encounter",
+          "Request Encounter",
+          ButtonStyle.Secondary,
+          "🎲"
+        )
+      );
+
+      const actionButtons2 = createButtonRowWithButtons(
+        createButton(
+          "playground_request_postcard",
+          "Request Postcard",
+          ButtonStyle.Secondary,
+          "🌍"
+        ),
+        createButton(
+          "playground_request_recap",
+          "Request Recap",
+          ButtonStyle.Secondary,
+          "📰"
+        )
+      );
+
+      return { embed, components: [actionButtons, actionButtons2] };
     }
     default:
       log.warn(`Unknown content type: ${type}`);
@@ -179,6 +224,38 @@ export const initPlaygroundChannel = async (
   } catch (error) {
     log.error("Failed to initialize playground channel:", error);
     return null;
+  }
+};
+
+/**
+ * Post user-triggered content to the playground channel
+ */
+export const postUserTriggeredContent = async (
+  contentType: ContentType
+): Promise<boolean> => {
+  if (!playgroundState) {
+    log.warn("Playground state not initialized");
+    return false;
+  }
+
+  try {
+    const content = await generateContent(contentType);
+    if (!content) {
+      log.warn(`Failed to generate content: ${contentType}`);
+      return false;
+    }
+
+    await playgroundState.channel.send({
+      embeds: [content.embed],
+      components: content.components,
+    });
+    recordContentPost(contentType);
+
+    log.info(`Posted user-triggered content: ${contentType}`);
+    return true;
+  } catch (error) {
+    log.error("Failed to post user-triggered content:", error);
+    return false;
   }
 };
 

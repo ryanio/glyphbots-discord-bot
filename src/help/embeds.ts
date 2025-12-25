@@ -47,10 +47,7 @@ export const arenaQuickstart = new EmbedBuilder()
       value:
         "▸ Choose your opening stance\n▸ Select abilities each round (30 sec)\n▸ Watch the AI narrate your clash.",
     }
-  )
-  .setFooter({
-    text: "💡 Pro tip: Type /info bot <id> to check a bot's stats before challenging.",
-  });
+  );
 
 /**
  * Arena action buttons
@@ -168,7 +165,7 @@ export const channelOverview = new EmbedBuilder()
     {
       name: "◉ #playground ◉",
       value:
-        "Community showcase and onboarding.\nBot spotlights, world postcards, arena recaps.",
+        "Community showcase and onboarding.\nBot spotlights, world postcards, arena recaps.\n**Request new content** with buttons on any post!",
     }
   )
   .setFooter({
@@ -188,22 +185,19 @@ export const loreExplanation = new EmbedBuilder()
     {
       name: "▶ How It Works",
       value:
-        "The bot selects recently minted artifacts and generates unique narratives in one of 9 different styles.",
+        "The bot selects recently minted artifacts and generates unique narratives in varied styles that shift with each post.",
     },
     {
       name: "◉ Narrative Styles",
       value:
-        "Cinematic • Transmission • First Person • Poetic • Log Entry • Memory • Myth • Noir • Broadcast",
+        "Each story emerges in a different voice—sometimes cinematic, sometimes fragmented transmissions, other times as logs, memories, or prophecies. The style is always a surprise.",
     },
     {
       name: "▸ What's Included",
       value:
         "Each post includes:\n▸ AI-generated story\n▸ Artifact image\n▸ Links to view the bot and artifact",
     }
-  )
-  .setFooter({
-    text: "Stories are generated using the artifact image for context.",
-  });
+  );
 
 /**
  * Playground Guide
@@ -216,27 +210,42 @@ export const playgroundGuide = new EmbedBuilder()
   )
   .addFields(
     {
-      name: "✦ Bot Spotlights",
-      value: "Featured bots with full stats, powers, and lore",
+      name: "✦ Content Types",
+      value: [
+        "**🌟 Bot Spotlights** - Featured bots with full stats, powers, and lore",
+        "**🌍 World Postcards** - Atmospheric descriptions of world artifacts",
+        "**🎒 Item Discovery** - Newly minted items with AI-generated lore",
+        "**📰 Arena Recaps** - Daily battle summaries and leaderboards",
+        "**🎲 Random Encounters** - 'What if?' scenarios featuring random bots",
+        "**❓ Help Content** - Tips, guides, and command references",
+      ].join("\n"),
     },
     {
-      name: "▸ World Postcards",
-      value: "Atmospheric descriptions of world artifacts",
+      name: "◉ Request New Content",
+      value: [
+        "Click the **Request** buttons on any playground post to trigger new content!",
+        "",
+        "**Available Requests:**",
+        "▸ Request Spotlight • Request Discovery • Request Encounter",
+        "▸ Request Postcard • Request Recap • Request Help",
+        "",
+        "**Rate Limit:** Max 1 request per type per 6 hours",
+      ].join("\n"),
     },
     {
-      name: "▶ Item Discovery",
-      value: "Newly minted items with AI-generated lore",
-    },
-    {
-      name: "▸ Arena Recaps",
-      value: "Daily battle summaries and leaderboards",
-    },
-    {
-      name: "▶ Random Encounters",
-      value: '"What if?" scenarios featuring random bots',
+      name: "⌘ Commands",
+      value: [
+        "`/spotlight` - Show a random bot spotlight",
+        "`/random bot` - Get a random bot",
+        "`/random artifact` - Get a random artifact",
+        "`/random world` - Get a random world postcard",
+      ].join("\n"),
+      inline: true,
     }
   )
-  .setFooter({ text: "New content posted regularly" });
+  .setFooter({
+    text: "💡 Use request buttons to kickstart new posts! (1 per type per 6 hours)",
+  });
 
 /**
  * Tips content for random selection

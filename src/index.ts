@@ -315,7 +315,7 @@ async function main(): Promise<void> {
 
       if (arenaStatus) {
         logger.info(
-          `│  ⚔️ Arena: #${arenaStatus.channelName} | ${arenaStatus.status}`
+          `│  ⚔️  Arena: #${arenaStatus.channelName} | ${arenaStatus.status}`
         );
       }
 

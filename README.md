@@ -7,7 +7,8 @@ An AI-enabled Discord bot for the GlyphBots community featuring automated storyt
 - 📖 **Lore Channel** - Automated AI-generated stories based on GlyphBots artifacts
 - ⚔️ **Arena Battles** - Interactive PvP battles between GlyphBots with spectator mechanics
 - 🎮 **Playground** - Community showcase with bot spotlights, world postcards, and arena recaps
-- 🎨 **9 Narrative Styles** - Rotating styles for variety (cinematic, transmission, first-person, poetic, log entries, myth, noir, broadcast, memory)
+- 🎯 **User-Triggered Content** - Users can request new playground posts with rate-limited action buttons
+- 🎨 **16 Narrative Styles** - Rotating styles for variety (cinematic, transmission, first-person, poetic, log entries, memory, myth, noir, broadcast, journal, prophecy, technical, dialogue, archive, testimony, dream)
 - 🖼️ **AI Image Generation** - 2K images for epic moments (victories, critical hits, spotlights)
 - 🎲 **Weighted Selection** - Favors recently minted artifacts for fresh content
 - 🤖 **Google AI Integration** - Uses Gemini models for text and image generation
@@ -20,6 +21,7 @@ An AI-enabled Discord bot for the GlyphBots community featuring automated storyt
 - [Configuration](#configuration)
 - [Environment Variables](#environment-variables)
 - [Arena Battles](#arena-battles)
+- [Playground Channel](#playground-channel)
 - [Slash Commands](#slash-commands)
 - [Usage](#usage)
 - [Development](#development)
@@ -163,6 +165,36 @@ When crowd energy reaches 100%, random arena events trigger:
 
 Each battle runs in its own public thread to keep the main channel clean. Threads auto-archive after 24 hours of inactivity.
 
+## Playground Channel
+
+The Playground channel features rotating community content with user-triggered posts.
+
+### Content Types
+
+- **🌟 Bot Spotlights** - Featured bots with full stats, powers, and lore
+- **🌍 World Postcards** - Atmospheric descriptions of world artifacts
+- **🎒 Item Discovery** - Newly minted items with AI-generated lore
+- **📰 Arena Recaps** - Daily battle summaries and leaderboards
+- **🎲 Random Encounters** - "What if?" scenarios featuring random bots
+- **❓ Help Content** - Tips, guides, and command references
+
+### User Actions
+
+Users can request new content by clicking **Request** buttons on any playground post:
+
+- **Request Spotlight** - Trigger a new bot spotlight
+- **Request Discovery** - Trigger a new item discovery
+- **Request Encounter** - Trigger a new random encounter
+- **Request Postcard** - Trigger a new world postcard
+- **Request Recap** - Trigger a new arena recap
+- **Request Help** - Trigger new help content
+
+**Rate Limits:** Each user can request each content type **once per 6 hours**. This prevents spam while allowing active community engagement.
+
+### Automatic Posting
+
+The bot automatically posts new content at random intervals (default: 4-12 hours). User requests supplement this with on-demand content.
+
 ## Slash Commands
 
 ### Global Commands
@@ -192,6 +224,7 @@ Each battle runs in its own public thread to keep the main channel clean. Thread
 | `/random bot` | Get a random bot spotlight |
 | `/random artifact` | Get a random artifact showcase |
 | `/random world` | Get a random world postcard |
+| `/help playground` | Get help about playground features and user actions |
 
 ### Stats Commands
 
@@ -271,7 +304,10 @@ src/
 │   ├── spotlight.ts      # Bot spotlight
 │   ├── postcard.ts       # World postcard
 │   ├── discovery.ts      # Item discovery
-│   └── recap.ts          # Arena recap
+│   ├── encounter.ts      # Random encounters
+│   ├── recap.ts          # Arena recap
+│   ├── interactions.ts   # Button interaction handlers
+│   └── rate-limit.ts     # User action rate limiting
 ├── lore/
 │   ├── generate.ts       # Lore generation
 │   └── prompts.ts        # Narrative styles

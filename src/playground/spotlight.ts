@@ -146,10 +146,43 @@ export const generateSpotlight = async (): Promise<{
       "New Spotlight",
       ButtonStyle.Secondary,
       "✨"
+    ),
+    createButton(
+      "playground_request_discovery",
+      "Request Discovery",
+      ButtonStyle.Secondary,
+      "🎒"
+    ),
+    createButton(
+      "playground_request_encounter",
+      "Request Encounter",
+      ButtonStyle.Secondary,
+      "🎲"
     )
   );
 
-  return { embed, components: [buttons] };
+  const actionButtons = createButtonRowWithButtons(
+    createButton(
+      "playground_request_postcard",
+      "Request Postcard",
+      ButtonStyle.Secondary,
+      "🌍"
+    ),
+    createButton(
+      "playground_request_recap",
+      "Request Recap",
+      ButtonStyle.Secondary,
+      "📰"
+    ),
+    createButton(
+      "playground_request_help",
+      "Request Help",
+      ButtonStyle.Secondary,
+      "❓"
+    )
+  );
+
+  return { embed, components: [buttons, actionButtons] };
 };
 
 /**

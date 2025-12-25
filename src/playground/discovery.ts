@@ -7,6 +7,7 @@
 import {
   type ActionRowBuilder,
   type ButtonBuilder,
+  ButtonStyle,
   EmbedBuilder,
   type HexColorString,
 } from "discord.js";
@@ -19,6 +20,7 @@ import { generateText } from "../api/google-ai";
 import {
   createArtifactLinkButton,
   createBotLinkButton,
+  createButton,
   createButtonRowWithButtons,
 } from "../lib/discord/buttons";
 import { prefixedLogger } from "../lib/logger";
@@ -125,9 +127,46 @@ export const generateDiscovery = async (): Promise<{
     )
   );
 
+  const actionButtons = [
+    createButton(
+      "playground_request_spotlight",
+      "Request Spotlight",
+      ButtonStyle.Secondary,
+      "🌟"
+    ),
+    createButton(
+      "playground_request_encounter",
+      "Request Encounter",
+      ButtonStyle.Secondary,
+      "🎲"
+    ),
+    createButton(
+      "playground_request_postcard",
+      "Request Postcard",
+      ButtonStyle.Secondary,
+      "🌍"
+    ),
+    createButton(
+      "playground_request_recap",
+      "Request Recap",
+      ButtonStyle.Secondary,
+      "📰"
+    ),
+    createButton(
+      "playground_request_help",
+      "Request Help",
+      ButtonStyle.Secondary,
+      "❓"
+    ),
+  ];
+
   return {
     embed,
-    components: [createButtonRowWithButtons(...buttonComponents)],
+    components: [
+      createButtonRowWithButtons(...buttonComponents),
+      createButtonRowWithButtons(...actionButtons.slice(0, 3)),
+      createButtonRowWithButtons(...actionButtons.slice(3)),
+    ],
   };
 };
 
