@@ -159,7 +159,7 @@ export const channelOverview = new EmbedBuilder()
     {
       name: "◈ #lore ◈",
       value:
-        "AI-generated stories about recently minted artifacts.\nNew narratives every 30 minutes.\n*Just sit back and enjoy!*",
+        "AI-generated stories about recently minted artifacts.\n*Just sit back and enjoy!*",
     },
     {
       name: "⚔ #arena ⚔",
@@ -189,7 +189,7 @@ export const loreExplanation = new EmbedBuilder()
     {
       name: "◈ How It Works ◈",
       value:
-        "Every 30 minutes, the bot selects a recently minted artifact and generates a unique narrative in one of 9 different styles.",
+        "The bot selects recently minted artifacts and generates unique narratives in one of 9 different styles.",
     },
     {
       name: "◉ Narrative Styles ◉",
@@ -237,7 +237,7 @@ export const playgroundGuide = new EmbedBuilder()
       value: '"What if?" scenarios featuring random bots',
     }
   )
-  .setFooter({ text: "New content every 45-90 minutes! ◉" });
+  .setFooter({ text: "New content regularly! ◉" });
 
 /**
  * Tips content for random selection
