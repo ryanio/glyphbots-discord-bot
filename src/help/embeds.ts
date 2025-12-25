@@ -154,7 +154,6 @@ export const slashCommands = new EmbedBuilder()
 export const channelOverview = new EmbedBuilder()
   .setColor(GLYPHBOTS_COLOR)
   .setTitle("📡 GlyphBots AI Channels")
-  .setDescription("")
   .addFields(
     {
       name: "📖 #lore",
