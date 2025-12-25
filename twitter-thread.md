@@ -1,56 +1,56 @@
-# Twitter Thread: GlyphBots Arena Launch
+# Twitter Thread: GlyphBots Discord Bot Features
 
 ## Thread Content
 
-1/ ⚡ **GLYPHBOTS ARENA IS LIVE** ⚔
+1/ ⚡ **GLYPHBOTS DISCORD BOT** 🤖
 
-Your GlyphBots can now battle in real-time PvP combat on Discord. Strategic stances, unique abilities, and AI-generated narratives make every fight epic.
+An AI-powered Discord bot featuring:
+• ⚔️ Real-time PvP Arena battles
+• 📖 Automated lore generation
+• 🎮 Interactive Playground content
+• 🎨 AI-generated images
 
 Join: https://discord.gg/3DR3yvRsMf
 
-2/ **HOW IT WORKS:**
+2/ **⚔️ ARENA BATTLES:**
 
-`/arena challenge bot:<id>` → Choose stance (aggressive/defensive/deceptive) → Select abilities each round → AI narrates the action → Spectators influence battles
+Real-time PvP combat: `/arena challenge bot:<id>` → Choose stance (Aggressive/Defensive/Deceptive) → Select abilities → AI narrates
 
-Rock-paper-scissors stance system:
-• Aggressive ▸ Deceptive
-• Defensive ▸ Aggressive
-• Deceptive ▸ Defensive
+Spectators influence battles: Cheer Red/Blue (+5% dmg), Bloodlust (+10% dmg/-10% def), Surge (+15 energy). At 100% energy, epic events trigger!
 
-3/ **SPECTATOR MECHANICS:**
+Track stats: `/arena stats` `/arena leaderboard`
 
-Crowd actions:
-◉ Cheer Red (+5% damage)
-◉ Cheer Blue (+5% damage)
-◉ Bloodlust (+10% damage, -10% defense)
-◉ Surge (+15 energy)
+3/ **📖 LORE & 🎮 PLAYGROUND:**
 
-At 100% energy, epic arena events trigger!
+**Lore Channel:** AI-generated stories about artifacts. Rotating narrative styles—cinematic, transmission logs, myths, noir, and more.
 
-4/ **AI-POWERED CONTENT:**
+**Playground:** Bot spotlights, world postcards, item discoveries, arena recaps, random encounters. Click **Request** buttons to trigger content on-demand (1 per type per 6 hours).
 
-Every round gets AI-generated battle narration. Critical hits and victories get custom 2K images featuring your bots. Epic victories (close matches) always get commemorative art.
+4/ **🎨 AI-POWERED FEATURES:**
 
-Track wins, losses, streaks with `/arena leaderboard`. Each bot builds its own combat record.
+• Google AI (Gemini) for text & image generation
+• Every battle round gets AI-generated narration
+• Critical hits & victories get custom images
+• Epic victories always get commemorative art
 
-5/ **READY TO FIGHT?**
+Commands: `/help` `/info bot` `/spotlight` `/random bot` `/stats`
 
-Join Discord and use `/arena challenge` to start your first battle. Every match is unique, every victory is earned.
+5/ **READY TO JOIN?**
 
-Let the battles begin ⚔
+Join Discord: https://discord.gg/3DR3yvRsMf
 
-https://discord.gg/3DR3yvRsMf
+Use `/arena challenge` to start your first battle. Use `/help` for guides. Let the battles begin ⚔️
 
 ---
 
 ## Image Generation
 
-Run `npm run prompts:generate` to generate AI-enhanced image prompts using example bot data.
+Run `npm run prompts:generate` to generate AI-enhanced image prompts for Twitter/X posts.
 
 The script will:
 - Fetch example bots from the GlyphBots API
-- Use Google AI to enhance prompts with specific bot traits
-- Save prompts to `generated-prompts/` directory
+- Use Google AI (Gemini) to enhance prompts with specific bot traits and visual details
+- Save optimized prompts to `generated-prompts/` directory
 
-Generated prompts are optimized for Twitter/X with specific visual details based on real bot data.
+Generated prompts are tailored for Twitter/X with dynamic visual details based on real bot data, perfect for creating engaging thread images.
 
