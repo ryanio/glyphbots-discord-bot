@@ -11,8 +11,6 @@ An AI-enabled Discord bot for the GlyphBots community featuring automated storyt
 - 🖼️ **AI Image Generation** - 2K images for epic moments (victories, critical hits, spotlights)
 - 🎲 **Weighted Selection** - Favors recently minted artifacts for fresh content
 - 🤖 **Google AI Integration** - Uses Gemini models for text and image generation
-- ⏱️ **Configurable Intervals** - Customize posting frequency via environment
-- 🛡️ **Type-Safe** - Full TypeScript implementation
 
 ## Table of Contents
 

@@ -105,20 +105,22 @@ export const getArenaStats = (): {
 export const initArenaChannel = async (
   client: Client,
   config: Config
-): Promise<void> => {
+): Promise<{ channelName: string; status: string } | null> => {
   if (!config.arenaChannelId) {
-    log.info("Arena channel not configured, skipping initialization");
-    return;
+    return null;
   }
-
-  log.info(`Initializing arena channel: ${config.arenaChannelId}`);
 
   try {
     const channel = await client.channels.fetch(config.arenaChannelId);
     if (!(channel && "send" in channel)) {
       log.error("Arena channel not found or invalid");
-      return;
+      return null;
     }
+
+    const channelName =
+      "name" in channel && channel.name
+        ? channel.name
+        : String(config.arenaChannelId);
 
     arenaState = {
       channel: channel as TextChannel,
@@ -131,9 +133,13 @@ export const initArenaChannel = async (
       log.error("Arena expiry check loop error:", error);
     });
 
-    log.info("Arena channel initialized successfully");
+    return {
+      channelName,
+      status: "Ready for battles",
+    };
   } catch (error) {
     log.error("Failed to initialize arena channel:", error);
+    return null;
   }
 };
 

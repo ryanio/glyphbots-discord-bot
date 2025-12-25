@@ -114,9 +114,7 @@ const contentLoop = async (): Promise<void> => {
       playgroundState.config.playgroundMaxIntervalMinutes
     );
 
-    log.info(
-      `Next playground post in ${Math.round(interval / 60_000)} minutes`
-    );
+    // Log only when actually posting (not on startup)
 
     // Wait for interval
     await delay(interval);
@@ -134,20 +132,26 @@ const contentLoop = async (): Promise<void> => {
 export const initPlaygroundChannel = async (
   client: Client,
   config: Config
-): Promise<void> => {
+): Promise<{
+  channelName: string;
+  nextPostMinutes: number;
+  status: string;
+} | null> => {
   if (!config.playgroundChannelId) {
-    log.info("Playground channel not configured, skipping initialization");
-    return;
+    return null;
   }
-
-  log.info(`Initializing playground channel: ${config.playgroundChannelId}`);
 
   try {
     const channel = await client.channels.fetch(config.playgroundChannelId);
     if (!(channel && "send" in channel)) {
       log.error("Playground channel not found or invalid");
-      return;
+      return null;
     }
+
+    const channelName =
+      "name" in channel && channel.name
+        ? channel.name
+        : String(config.playgroundChannelId);
 
     playgroundState = {
       channel: channel as TextChannel,
@@ -155,14 +159,26 @@ export const initPlaygroundChannel = async (
       isActive: true,
     };
 
+    // Calculate next interval for status
+    const nextInterval = calculateNextInterval(
+      config.playgroundMinIntervalMinutes,
+      config.playgroundMaxIntervalMinutes
+    );
+    const nextPostMinutes = Math.round(nextInterval / 60_000);
+
     // Start the content loop
     contentLoop().catch((error) => {
       log.error("Playground content loop error:", error);
     });
 
-    log.info("Playground channel initialized successfully");
+    return {
+      channelName,
+      nextPostMinutes,
+      status: "Content loop active",
+    };
   } catch (error) {
     log.error("Failed to initialize playground channel:", error);
+    return null;
   }
 };
 

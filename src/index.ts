@@ -294,12 +294,40 @@ async function main(): Promise<void> {
     logger.info("════════════════════════════════════════════════════════════");
 
     try {
-      // Initialize channels
-      await initLoreChannel(client, config);
-      await initArenaChannel(client, config);
-      await initPlaygroundChannel(client, config);
+      // Initialize channels and collect status
+      const loreStatus = await initLoreChannel(client, config);
+      const arenaStatus = await initArenaChannel(client, config);
+      const playgroundStatus = await initPlaygroundChannel(client, config);
 
-      logger.info("All channels initialized successfully");
+      // Print consolidated channel status
+      logger.info("");
+      logger.info("┌─ 🚀 CHANNELS INITIALIZED");
+      logger.info("│");
+
+      if (loreStatus) {
+        const nextPostInfo = loreStatus.nextPostMinutes
+          ? `Next post in ${loreStatus.nextPostMinutes} min`
+          : "Scheduled";
+        logger.info(
+          `│  📖 Lore: #${loreStatus.channelName} | ${loreStatus.status} | ${nextPostInfo}`
+        );
+      }
+
+      if (arenaStatus) {
+        logger.info(
+          `│  ⚔️  Arena: #${arenaStatus.channelName} | ${arenaStatus.status}`
+        );
+      }
+
+      if (playgroundStatus) {
+        logger.info(
+          `│  🎮 Playground: #${playgroundStatus.channelName} | ${playgroundStatus.status} | Next post in ${playgroundStatus.nextPostMinutes} min`
+        );
+      }
+
+      logger.info("│");
+      logger.info("└─ ✅ All systems ready");
+      logger.info("");
     } catch (error) {
       logger.error("Failed to initialize channels:", error);
       process.exit(1);

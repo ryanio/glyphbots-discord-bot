@@ -267,14 +267,13 @@ const postLoreEntry = async (channel: TextBasedChannel): Promise<boolean> => {
 export const initLoreChannel = async (
   client: Client,
   config: Config
-): Promise<void> => {
+): Promise<{
+  channelName: string;
+  nextPostMinutes: number | null;
+  status: string;
+}> => {
   const { loreChannelId, loreMinIntervalMinutes, loreMaxIntervalMinutes } =
     config;
-
-  log.info(`Initializing lore channel: ${loreChannelId}`);
-  log.info(
-    `Posting interval: ${loreMinIntervalMinutes}-${loreMaxIntervalMinutes} minutes`
-  );
 
   // Fetch the channel
   const channel = await client.channels.fetch(loreChannelId);
@@ -283,8 +282,8 @@ export const initLoreChannel = async (
     throw new Error(`Channel ${loreChannelId} is not a text channel`);
   }
 
-  const channelName = "name" in channel ? channel.name : loreChannelId;
-  log.info(`Connected to lore channel: #${channelName}`);
+  const channelName =
+    "name" in channel && channel.name ? channel.name : String(loreChannelId);
 
   // Calculate random interval between min and max
   const getRandomInterval = (): number => {
@@ -296,12 +295,6 @@ export const initLoreChannel = async (
   // Set up interval for recurring posts with random intervals
   const scheduleNextPost = (): void => {
     const nextIntervalMs = getRandomInterval();
-    const nextIntervalMinutes = Math.round(
-      nextIntervalMs / (SECONDS_PER_MINUTE * MS_PER_SECOND)
-    );
-    log.info(
-      `Scheduling next lore post in ${nextIntervalMinutes} minutes (${Math.round(nextIntervalMinutes / 60)} hours)`
-    );
     setTimeout(async () => {
       log.info("Scheduled lore post triggered");
       await postLoreEntry(channel);
@@ -312,6 +305,8 @@ export const initLoreChannel = async (
   // Check last post time from state
   const lastPost = await resolveLastPostInfo("lore");
   const nowMs = Date.now();
+  let nextPostMinutes: number | null = null;
+  let status = "Initializing";
 
   if (lastPost) {
     const lastPostMs = lastPost.timestamp * MS_PER_SECOND;
@@ -322,12 +317,13 @@ export const initLoreChannel = async (
     // If less than minimum interval has passed, wait for the remainder
     if (timeSinceLastPost < minIntervalMs) {
       const timeUntilNextPost = minIntervalMs - timeSinceLastPost;
-      const minutesUntilNext = Math.ceil(
+      nextPostMinutes = Math.ceil(
         timeUntilNextPost / (SECONDS_PER_MINUTE * MS_PER_SECOND)
       );
-      log.info(
-        `Last post was ${Math.floor(timeSinceLastPost / (SECONDS_PER_MINUTE * MS_PER_SECOND))} minutes ago, waiting ${minutesUntilNext} minutes for next post`
+      const minutesAgo = Math.floor(
+        timeSinceLastPost / (SECONDS_PER_MINUTE * MS_PER_SECOND)
       );
+      status = `Last post ${minutesAgo} min ago, waiting ${nextPostMinutes} min`;
 
       // Schedule the first post after the remaining time
       setTimeout(async () => {
@@ -337,24 +333,30 @@ export const initLoreChannel = async (
       }, timeUntilNextPost);
     } else {
       // Enough time has passed, post now
-      log.info("Posting initial lore entry...");
       const success = await postLoreEntry(channel);
-      if (!success) {
+      if (success) {
+        status = "Posted initial entry";
+      } else {
         log.warn("Initial lore post failed, will retry on next interval");
+        status = "Initial post failed, will retry";
       }
       scheduleNextPost();
     }
   } else {
     // No previous post, post now
-    log.info("No previous posts found, posting initial lore entry...");
     const success = await postLoreEntry(channel);
-    if (!success) {
+    if (success) {
+      status = "Posted initial entry";
+    } else {
       log.warn("Initial lore post failed, will retry on next interval");
+      status = "Initial post failed, will retry";
     }
     scheduleNextPost();
   }
 
-  log.info(
-    `Lore scheduler active: posting every ${loreMinIntervalMinutes}-${loreMaxIntervalMinutes} minutes (${Math.round(loreMinIntervalMinutes / 60)}-${Math.round(loreMaxIntervalMinutes / 60)} hours)`
-  );
+  return {
+    channelName,
+    nextPostMinutes,
+    status,
+  };
 };
