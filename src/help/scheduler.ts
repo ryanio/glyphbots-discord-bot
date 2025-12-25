@@ -111,9 +111,7 @@ const buildTipsEmbed = (): EmbedBuilder => {
   const embed = new EmbedBuilder()
     .setColor(HELP_COLOR)
     .setTitle("◈ Tips & Tricks ◈")
-    .setDescription(
-      "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nQuick tips to enhance your GlyphBots experience!"
-    );
+    .setDescription("Quick tips to enhance your GlyphBots experience!");
 
   for (const tip of selectedTips) {
     embed.addFields({

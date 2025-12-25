@@ -173,7 +173,7 @@ const buildAboutEmbed = (): EmbedBuilder => {
     .setColor(GLYPHBOTS_COLOR)
     .setTitle("◈ GlyphBots Discord Bot ◈")
     .setDescription(
-      "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nAI-powered Discord bot for the GlyphBots community featuring lore narratives, arena battles, and playground content."
+      "AI-powered Discord bot for the GlyphBots community featuring lore narratives, arena battles, and playground content."
     )
     .addFields(
       {

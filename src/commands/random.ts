@@ -190,9 +190,7 @@ const handleRandomWorld = async (
   const embed = new EmbedBuilder()
     .setColor(WORLD_COLOR)
     .setTitle(`◈ ${artifact.title} ◈`)
-    .setDescription(
-      "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n*A glimpse into another realm...*"
-    );
+    .setDescription("*A glimpse into another realm...*");
 
   if (artifact.contractTokenId) {
     embed.setURL(getArtifactUrl(artifact.contractTokenId));

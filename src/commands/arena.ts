@@ -57,7 +57,6 @@ const buildChallengeEmbed = (opts: ChallengeEmbedOpts): EmbedBuilder => {
     .setTitle("⚔ ═══ ARENA CHALLENGE ═══ ⚔")
     .setDescription(
       [
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
         "",
         `◈ **CHALLENGER:** <@${userId}>`,
         `◈ **${botName}** ([#${tokenId}](${getBotUrl(tokenId)}))`,
@@ -232,9 +231,7 @@ const handleLeaderboard = async (
   const embed = new EmbedBuilder()
     .setColor(ARENA_COLOR)
     .setTitle("✦ ═══ Arena Leaderboard ═══ ✦")
-    .setDescription(
-      "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nTop fighters this season"
-    )
+    .setDescription("Top fighters this season")
     .addFields({
       name: "◉ Rankings ◉",
       value:
@@ -257,9 +254,7 @@ const handleHistory = async (
   const embed = new EmbedBuilder()
     .setColor(ARENA_COLOR)
     .setTitle("✦ Arena History ✦")
-    .setDescription(
-      "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nRecent battles in the arena"
-    );
+    .setDescription("Recent battles in the arena");
 
   if (activeBattles.length === 0) {
     embed.addFields({
@@ -320,7 +315,7 @@ const handleForfeit = async (
     .setColor(SUCCESS_COLOR)
     .setTitle("◈ Battle Forfeited ◈")
     .setDescription(
-      "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nYou have surrendered the battle. Your opponent wins by forfeit."
+      "You have surrendered the battle. Your opponent wins by forfeit."
     );
 
   await interaction.reply({ embeds: [embed] });

@@ -192,7 +192,7 @@ export const handleAcceptChallenge = async (
     .setColor(ARENA_COLOR)
     .setTitle("◈ Select Your Fighter ◈")
     .setDescription(
-      "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nEnter your bot's token ID to fight!\n\nUse `/info bot id:<number>` to check bot stats before choosing."
+      "Enter your bot's token ID to fight!\n\nUse `/info bot id:<number>` to check bot stats before choosing."
     )
     .setFooter({ text: "The battle will begin once you select your bot." });
 
@@ -316,7 +316,7 @@ export const handleBotSelection = async (
   const blueStanceButtons = buildStanceButtons(blueUserId);
 
   await thread.send({
-    content: `⚔ **Battle Thread Created!**\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n<@${battle.redFighter.userId}> and <@${battle.blueFighter?.userId}>, choose your opening stance!`,
+    content: `⚔ **Battle Thread Created!**\n\n<@${battle.redFighter.userId}> and <@${battle.blueFighter?.userId}>, choose your opening stance!`,
     embeds: [preBattleEmbed],
     components: [redStanceButtons, blueStanceButtons],
   });

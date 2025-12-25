@@ -30,9 +30,7 @@ const TIPS_COLOR: HexColorString = "#ffaa00";
 export const arenaQuickstart = new EmbedBuilder()
   .setColor(ARENA_COLOR)
   .setTitle("⚔ ═══ Arena Quick Start ═══ ⚔")
-  .setDescription(
-    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nReady to prove your bot's worth? Here's how:"
-  )
+  .setDescription("Ready to prove your bot's worth? Here's how:")
   .addFields(
     {
       name: "◈ Start a Challenge ◈",
@@ -76,9 +74,7 @@ export const arenaButtons = new ActionRowBuilder<ButtonBuilder>().addComponents(
 export const embedBotSyntax = new EmbedBuilder()
   .setColor(GLYPHBOTS_COLOR)
   .setTitle("◈ Quick Reference: Bot & Artifact Lookups ◈")
-  .setDescription(
-    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nInstantly view any bot or artifact using slash commands!"
-  )
+  .setDescription("Instantly view any bot or artifact using slash commands!")
   .addFields(
     {
       name: "◈ Bot Lookups ◈",
@@ -107,9 +103,7 @@ export const embedBotSyntax = new EmbedBuilder()
 export const spectatorGuide = new EmbedBuilder()
   .setColor(SPECTATOR_COLOR)
   .setTitle("◉ Spectator Mode ◉")
-  .setDescription(
-    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nNot fighting? You can still shape the battle!"
-  )
+  .setDescription("Not fighting? You can still shape the battle!")
   .addFields(
     {
       name: "◈ Crowd Actions ◈",
@@ -134,9 +128,7 @@ export const spectatorGuide = new EmbedBuilder()
 export const slashCommands = new EmbedBuilder()
   .setColor(GLYPHBOTS_COLOR)
   .setTitle("◈ Slash Commands ◈")
-  .setDescription(
-    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nType `/` to see all available commands!"
-  )
+  .setDescription("Type `/` to see all available commands!")
   .addFields(
     {
       name: "◈ Global ◈",
@@ -162,7 +154,7 @@ export const slashCommands = new EmbedBuilder()
 export const channelOverview = new EmbedBuilder()
   .setColor(GLYPHBOTS_COLOR)
   .setTitle("◈ GlyphBots AI Channels ◈")
-  .setDescription("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+  .setDescription("")
   .addFields(
     {
       name: "◈ #lore ◈",
@@ -191,7 +183,7 @@ export const loreExplanation = new EmbedBuilder()
   .setColor(GLYPHBOTS_COLOR)
   .setTitle("◈ About #lore ◈")
   .setDescription(
-    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nThe lore channel features AI-generated micro-fiction about GlyphBots and their artifacts."
+    "The lore channel features AI-generated micro-fiction about GlyphBots and their artifacts."
   )
   .addFields(
     {
@@ -221,7 +213,7 @@ export const playgroundGuide = new EmbedBuilder()
   .setColor(GLYPHBOTS_COLOR)
   .setTitle("◉ About #playground ◉")
   .setDescription(
-    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nThe playground channel is your hub for community content and discovery!"
+    "The playground channel is your hub for community content and discovery!"
   )
   .addFields(
     {

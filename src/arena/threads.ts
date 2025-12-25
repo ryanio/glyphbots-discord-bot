@@ -108,7 +108,7 @@ export const buildPreBattleEmbed = (battle: BattleState): EmbedBuilder => {
     .setColor(ARENA_COLOR)
     .setTitle("⚔️ ═══ FIGHTERS LOCKED IN ═══ ⚔️")
     .setDescription(
-      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n<@${battle.redFighter.userId}> **⟷** <@${battle.blueFighter.userId}>`
+      `<@${battle.redFighter.userId}> **⟷** <@${battle.blueFighter.userId}>`
     )
     .addFields(
       {
@@ -198,9 +198,7 @@ export const buildVictoryEmbed = (
   const embed = new EmbedBuilder()
     .setColor(ARENA_COLOR)
     .setTitle(isEpic ? "✦ ═══ EPIC VICTORY ═══ ✦" : "✦ ═══ VICTORY ═══ ✦")
-    .setDescription(
-      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n**◈ ${winner.bot.name} CLAIMS GLORY! ◈**`
-    )
+    .setDescription(`**◈ ${winner.bot.name} CLAIMS GLORY! ◈**`)
     .addFields(
       {
         name: "◉ Final Score ◉",
@@ -307,7 +305,6 @@ export const updateChallengeAnnouncement = async (
       .setTitle("⚔ ═══ BATTLE STARTED ═══ ⚔")
       .setDescription(
         [
-          "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
           `◈ <@${battle.redFighter.userId}> (${battle.redFighter.bot.name})`,
           "**⟷**",
           `◈ <@${battle.blueFighter.userId}> (${battle.blueFighter.bot.name})`,
