@@ -110,7 +110,10 @@ describe("lore channel", () => {
     });
 
     it("should post lore on interval", async () => {
-      const config = createConfig({ loreIntervalMinutes: 5 });
+      const config = createConfig({
+        loreMinIntervalMinutes: 5,
+        loreMaxIntervalMinutes: 5,
+      });
 
       await initLoreChannel(mockClient, config);
 
@@ -126,20 +129,26 @@ describe("lore channel", () => {
       expect(mockChannel.send).toHaveBeenCalled();
     });
 
-    it("should not post before interval elapsed", async () => {
-      const config = createConfig({ loreIntervalMinutes: 30 });
+    it("should not post before minimum interval elapsed", async () => {
+      const config = createConfig({
+        loreMinIntervalMinutes: 30,
+        loreMaxIntervalMinutes: 60,
+      });
 
       await initLoreChannel(mockClient, config);
       mockChannel.send.mockClear();
 
-      // Advance only 15 minutes
+      // Advance only 15 minutes (less than minimum)
       jest.advanceTimersByTime(15 * 60 * 1000);
 
       expect(mockChannel.send).not.toHaveBeenCalled();
     });
 
     it("should post multiple times over multiple intervals", async () => {
-      const config = createConfig({ loreIntervalMinutes: 10 });
+      const config = createConfig({
+        loreMinIntervalMinutes: 10,
+        loreMaxIntervalMinutes: 10,
+      });
 
       await initLoreChannel(mockClient, config);
       mockChannel.send.mockClear();

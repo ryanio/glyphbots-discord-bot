@@ -1,5 +1,5 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { ensureDirectory, readFileText, writeFileText } from "./fs";
 import { prefixedLogger } from "./logger";
 
 const log = prefixedLogger("State");
@@ -114,8 +114,8 @@ class BotStateStore {
    */
   private async readStateFile(): Promise<string | undefined> {
     const dir = dirname(this.filePath);
-    await mkdir(dir, { recursive: true });
-    const content = await readFile(this.filePath, "utf8");
+    await ensureDirectory(dir);
+    const content = await readFileText(this.filePath);
     return content;
   }
 
@@ -182,12 +182,8 @@ class BotStateStore {
 
     try {
       const dir = dirname(this.filePath);
-      await mkdir(dir, { recursive: true });
-      await writeFile(
-        this.filePath,
-        JSON.stringify(this.state, null, 2),
-        "utf8"
-      );
+      await ensureDirectory(dir);
+      await writeFileText(this.filePath, JSON.stringify(this.state, null, 2));
       this.dirty = false;
       log.debug(`State saved to ${this.filePath}`);
     } catch (error) {

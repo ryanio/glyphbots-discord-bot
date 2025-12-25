@@ -1,0 +1,145 @@
+/**
+ * Item Discovery Content
+ *
+ * Features newly minted artifacts with AI-generated lore.
+ */
+
+import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  EmbedBuilder,
+  type HexColorString,
+} from "discord.js";
+import {
+  fetchRecentArtifacts,
+  getArtifactUrl,
+  getBotUrl,
+} from "../api/glyphbots";
+import { generateText } from "../api/google-ai";
+import { prefixedLogger } from "../lib/logger";
+
+const log = prefixedLogger("Discovery");
+
+/** Discovery brand color */
+const DISCOVERY_COLOR: HexColorString = "#00ff88";
+
+/**
+ * Generate an item discovery embed with buttons
+ */
+export const generateDiscovery = async (): Promise<{
+  embed: EmbedBuilder;
+  components: ActionRowBuilder<ButtonBuilder>[];
+} | null> => {
+  log.info("Generating item discovery");
+
+  // Get recent artifacts and pick one of the newest
+  const artifacts = await fetchRecentArtifacts(20);
+  if (artifacts.length === 0) {
+    log.warn("No recent artifacts for discovery");
+    return null;
+  }
+
+  // Pick from top 5 most recent
+  const recentSlice = artifacts.slice(0, 5);
+  const artifact = recentSlice[Math.floor(Math.random() * recentSlice.length)];
+
+  // Generate item lore
+  const lore = await generateItemLore(artifact.title);
+
+  const embed = new EmbedBuilder()
+    .setColor(DISCOVERY_COLOR)
+    .setTitle("🎒 ITEM DISCOVERY")
+    .setDescription("*A new artifact has emerged from the forges...*");
+
+  embed.addFields({
+    name: "📦 Artifact",
+    value: `**${artifact.title}**`,
+  });
+
+  if (lore) {
+    embed.addFields({
+      name: "📜 Lore",
+      value: lore,
+    });
+  }
+
+  embed.addFields(
+    {
+      name: "🔗 View Artifact",
+      value: artifact.contractTokenId
+        ? `[View on GlyphBots](${getArtifactUrl(artifact.contractTokenId)})`
+        : "Not yet minted",
+      inline: true,
+    },
+    {
+      name: "🤖 Creator",
+      value: `[Bot #${artifact.botTokenId}](${getBotUrl(artifact.botTokenId)})`,
+      inline: true,
+    }
+  );
+
+  if (artifact.mintedAt) {
+    const mintDate = new Date(artifact.mintedAt);
+    embed.addFields({
+      name: "⏰ Minted",
+      value: mintDate.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      }),
+      inline: true,
+    });
+  }
+
+  if (artifact.imageUrl) {
+    embed.setImage(artifact.imageUrl);
+  }
+
+  embed.setFooter({
+    text: "🎒 Use /random artifact to discover more items!",
+  });
+
+  // Build buttons
+  const buttons = new ActionRowBuilder<ButtonBuilder>();
+  if (artifact.contractTokenId) {
+    buttons.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`playground_view_artifact_${artifact.contractTokenId}`)
+        .setLabel("View Artifact")
+        .setStyle(ButtonStyle.Link)
+        .setURL(getArtifactUrl(artifact.contractTokenId))
+    );
+  }
+  buttons.addComponents(
+    new ButtonBuilder()
+      .setCustomId(`playground_view_bot_${artifact.botTokenId}`)
+      .setLabel("View Creator Bot")
+      .setStyle(ButtonStyle.Link)
+      .setURL(getBotUrl(artifact.botTokenId))
+  );
+
+  return { embed, components: [buttons] };
+};
+
+/**
+ * Generate item lore
+ */
+const generateItemLore = async (itemName: string): Promise<string | null> => {
+  const prompt = `Write a SHORT (2-3 sentences) mysterious lore description for an artifact called "${itemName}".
+
+Think: ancient item with hidden powers. What is its origin? What can it do? Who covets it?
+Style: Mysterious, intriguing, hints at greater power.`;
+
+  const result = await generateText({
+    systemPrompt:
+      "You write mysterious artifact descriptions for a sci-fi/fantasy robot world. Short and evocative.",
+    userPrompt: prompt,
+    maxTokens: 150,
+    temperature: 0.85,
+  });
+
+  return result ? result.trim() : null;
+};

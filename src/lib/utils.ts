@@ -1,49 +1,89 @@
+import {
+  DEFAULT_ARENA_CHALLENGE_TIMEOUT_SECONDS,
+  DEFAULT_ARENA_MAX_ROUNDS,
+  DEFAULT_ARENA_ROUND_TIMEOUT_SECONDS,
+  DEFAULT_GLYPHBOTS_API_URL,
+  DEFAULT_LORE_MAX_INTERVAL_MINUTES,
+  DEFAULT_LORE_MIN_INTERVAL_MINUTES,
+  DEFAULT_PLAYGROUND_MAX_INTERVAL_MINUTES,
+  DEFAULT_PLAYGROUND_MIN_INTERVAL_MINUTES,
+  MS_PER_SECOND,
+  SECONDS_PER_MINUTE,
+} from "./constants";
 import type { Config } from "./types";
 
-/** Milliseconds per second */
-export const MS_PER_SECOND = 1000;
-
-/** Seconds per minute */
-export const SECONDS_PER_MINUTE = 60;
-
-/** Default interval in minutes for lore posts */
-export const DEFAULT_LORE_INTERVAL_MINUTES = 30;
-
-/** Default OpenRouter model */
-export const DEFAULT_OPENROUTER_MODEL = "anthropic/claude-sonnet-4";
-
-/** Default GlyphBots API URL */
-export const DEFAULT_GLYPHBOTS_API_URL = "https://glyphbots.com";
+/**
+ * Parse number from environment variable with default fallback
+ */
+const parseEnvNumber = (
+  envVar: string | undefined,
+  defaultValue: number
+): number => Number(envVar) || defaultValue;
 
 /**
  * Load and validate configuration from environment variables
  */
 export const loadConfig = (): Config => {
   const discordToken = process.env.DISCORD_TOKEN;
+  const discordClientId = process.env.DISCORD_CLIENT_ID;
   const loreChannelId = process.env.LORE_CHANNEL_ID;
-  const openRouterApiKey = process.env.OPENROUTER_API_KEY;
+  const googleAiApiKey = process.env.GOOGLE_AI_API_KEY;
 
   if (!discordToken) {
     throw new Error("DISCORD_TOKEN environment variable is required");
+  }
+
+  if (!discordClientId) {
+    throw new Error("DISCORD_CLIENT_ID environment variable is required");
   }
 
   if (!loreChannelId) {
     throw new Error("LORE_CHANNEL_ID environment variable is required");
   }
 
-  if (!openRouterApiKey) {
-    throw new Error("OPENROUTER_API_KEY environment variable is required");
+  if (!googleAiApiKey) {
+    throw new Error("GOOGLE_AI_API_KEY environment variable is required");
   }
 
-  const loreIntervalMinutes =
-    Number(process.env.LORE_INTERVAL_MINUTES) || DEFAULT_LORE_INTERVAL_MINUTES;
+  const loreMinIntervalMinutes = parseEnvNumber(
+    process.env.LORE_MIN_INTERVAL_MINUTES,
+    DEFAULT_LORE_MIN_INTERVAL_MINUTES
+  );
+  const loreMaxIntervalMinutes = parseEnvNumber(
+    process.env.LORE_MAX_INTERVAL_MINUTES,
+    DEFAULT_LORE_MAX_INTERVAL_MINUTES
+  );
 
   return {
     discordToken,
+    discordClientId,
+    discordGuildId: process.env.DISCORD_GUILD_ID ?? null,
     loreChannelId,
-    loreIntervalMinutes,
-    openRouterApiKey,
-    openRouterModel: process.env.OPENROUTER_MODEL ?? DEFAULT_OPENROUTER_MODEL,
+    loreMinIntervalMinutes,
+    loreMaxIntervalMinutes,
+    arenaChannelId: process.env.ARENA_CHANNEL_ID ?? null,
+    arenaChallengeTimeoutSeconds: parseEnvNumber(
+      process.env.ARENA_CHALLENGE_TIMEOUT_SECONDS,
+      DEFAULT_ARENA_CHALLENGE_TIMEOUT_SECONDS
+    ),
+    arenaRoundTimeoutSeconds: parseEnvNumber(
+      process.env.ARENA_ROUND_TIMEOUT_SECONDS,
+      DEFAULT_ARENA_ROUND_TIMEOUT_SECONDS
+    ),
+    arenaMaxRounds: parseEnvNumber(
+      process.env.ARENA_MAX_ROUNDS,
+      DEFAULT_ARENA_MAX_ROUNDS
+    ),
+    playgroundChannelId: process.env.PLAYGROUND_CHANNEL_ID ?? null,
+    playgroundMinIntervalMinutes: parseEnvNumber(
+      process.env.PLAYGROUND_MIN_INTERVAL_MINUTES,
+      DEFAULT_PLAYGROUND_MIN_INTERVAL_MINUTES
+    ),
+    playgroundMaxIntervalMinutes: parseEnvNumber(
+      process.env.PLAYGROUND_MAX_INTERVAL_MINUTES,
+      DEFAULT_PLAYGROUND_MAX_INTERVAL_MINUTES
+    ),
+    googleAiApiKey,
     glyphbotsApiUrl: process.env.GLYPHBOTS_API_URL ?? DEFAULT_GLYPHBOTS_API_URL,
     logLevel: process.env.LOG_LEVEL ?? "info",
   };

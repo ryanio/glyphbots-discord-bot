@@ -131,10 +131,19 @@ export type GeneratedLore = {
 
 export type Config = {
   discordToken: string;
+  discordClientId: string;
+  discordGuildId: string | null;
   loreChannelId: string;
-  loreIntervalMinutes: number;
-  openRouterApiKey: string;
-  openRouterModel: string;
+  loreMinIntervalMinutes: number;
+  loreMaxIntervalMinutes: number;
+  arenaChannelId: string | null;
+  arenaChallengeTimeoutSeconds: number;
+  arenaRoundTimeoutSeconds: number;
+  arenaMaxRounds: number;
+  playgroundChannelId: string | null;
+  playgroundMinIntervalMinutes: number;
+  playgroundMaxIntervalMinutes: number;
+  googleAiApiKey: string;
   glyphbotsApiUrl: string;
   logLevel: string;
 };

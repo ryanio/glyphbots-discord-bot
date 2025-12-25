@@ -2,82 +2,44 @@ import type { LoreContext } from "../../src/lib/types";
 import { generateLoreNarrative } from "../../src/lore/generate";
 import {
   createBot,
-  createChatResponse,
   createLoreContext,
   REAL_ARTIFACT,
   REAL_BOT,
   REAL_BOT_STORY,
 } from "../fixtures";
 
-// Mock fetch globally
-const mockFetch = jest.fn();
-global.fetch = mockFetch;
+// Mock the Google AI module
+jest.mock("../../src/api/google-ai", () => ({
+  generateText: jest.fn(),
+}));
 
-/** Helper to extract request body from fetch call */
-const getRequestBody = (call: unknown[]): Record<string, unknown> => {
-  const init = call.at(1) as RequestInit | undefined;
-  return JSON.parse(init?.body as string) as Record<string, unknown>;
-};
+import { generateText } from "../../src/api/google-ai";
 
-/** Helper to extract text content from messages in request body */
-const extractUserTextContent = (body: Record<string, unknown>): string => {
-  const messages = body.messages as Array<{
-    role: string;
-    content: unknown;
-  }>;
-  const userMsg = messages.find((m) => m.role === "user");
-  if (!userMsg) {
-    return "";
-  }
-  const content = userMsg.content;
-  if (typeof content === "string") {
-    return content;
-  }
-  if (Array.isArray(content)) {
-    return content
-      .filter(
-        (p): p is { type: "text"; text: string } =>
-          typeof p === "object" && p.type === "text"
-      )
-      .map((p) => p.text)
-      .join("");
-  }
-  return "";
-};
+const mockGenerateText = generateText as jest.MockedFunction<
+  typeof generateText
+>;
 
 describe("Lore Generation", () => {
-  const originalApiKey = process.env.OPENROUTER_API_KEY;
-  const originalModel = process.env.OPENROUTER_MODEL;
+  const originalApiKey = process.env.GOOGLE_AI_API_KEY;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    process.env.OPENROUTER_API_KEY = "test-api-key";
-    process.env.OPENROUTER_MODEL = "anthropic/claude-sonnet-4";
+    process.env.GOOGLE_AI_API_KEY = "test-google-ai-key";
   });
 
   afterEach(() => {
     if (originalApiKey !== undefined) {
-      process.env.OPENROUTER_API_KEY = originalApiKey;
+      process.env.GOOGLE_AI_API_KEY = originalApiKey;
     } else {
-      delete process.env.OPENROUTER_API_KEY;
-    }
-    if (originalModel !== undefined) {
-      process.env.OPENROUTER_MODEL = originalModel;
-    } else {
-      delete process.env.OPENROUTER_MODEL;
+      delete process.env.GOOGLE_AI_API_KEY;
     }
   });
 
   describe("generateLoreNarrative", () => {
     it("should generate lore with story context using real data", async () => {
-      const mockResponse = createChatResponse(
+      mockGenerateText.mockResolvedValue(
         "In the shadows of Black Site 7, Binarywire moved like a ghost..."
       );
-
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => mockResponse,
-      });
 
       const context: LoreContext = {
         artifact: REAL_ARTIFACT,
@@ -95,12 +57,7 @@ describe("Lore Generation", () => {
     });
 
     it("should generate lore without story context", async () => {
-      const mockResponse = createChatResponse("A story without arc context...");
-
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => mockResponse,
-      });
+      mockGenerateText.mockResolvedValue("A story without arc context...");
 
       const context = createLoreContext({
         story: null,
@@ -113,12 +70,7 @@ describe("Lore Generation", () => {
     });
 
     it("should handle bot with traits", async () => {
-      const mockResponse = createChatResponse("Narrative with traits...");
-
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => mockResponse,
-      });
+      mockGenerateText.mockResolvedValue("Narrative with traits...");
 
       const bot = createBot({
         name: "TraitBot",
@@ -133,18 +85,15 @@ describe("Lore Generation", () => {
       const result = await generateLoreNarrative(context);
 
       expect(result).not.toBeNull();
-      const body = getRequestBody(mockFetch.mock.calls.at(0) ?? []);
-      const textContent = extractUserTextContent(body);
-      expect(textContent).toContain("Background: Cosmic");
+      expect(mockGenerateText).toHaveBeenCalledWith(
+        expect.objectContaining({
+          prompt: expect.stringContaining("Background: Cosmic"),
+        })
+      );
     });
 
     it("should include abilities in prompt when present", async () => {
-      const mockResponse = createChatResponse("Story with abilities...");
-
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => mockResponse,
-      });
+      mockGenerateText.mockResolvedValue("Story with abilities...");
 
       const context: LoreContext = {
         artifact: REAL_ARTIFACT,
@@ -154,18 +103,15 @@ describe("Lore Generation", () => {
 
       await generateLoreNarrative(context);
 
-      const body = getRequestBody(mockFetch.mock.calls.at(0) ?? []);
-      const textContent = extractUserTextContent(body);
-      expect(textContent).toContain("Shadow Merge");
+      expect(mockGenerateText).toHaveBeenCalledWith(
+        expect.objectContaining({
+          prompt: expect.stringContaining("Shadow Merge"),
+        })
+      );
     });
 
-    it("should return null when no content in response", async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          choices: [{ message: { content: null } }],
-        }),
-      });
+    it("should return null when generateText returns null", async () => {
+      mockGenerateText.mockResolvedValue(null);
 
       const context = createLoreContext();
 
@@ -174,73 +120,18 @@ describe("Lore Generation", () => {
       expect(result).toBeNull();
     });
 
-    it("should return null when API fails", async () => {
-      mockFetch.mockResolvedValue({
-        ok: false,
-        status: 500,
-        text: async () => "Internal Server Error",
-      });
+    it("should return null when generateText throws an error", async () => {
+      mockGenerateText.mockRejectedValue(new Error("API error"));
 
       const context = createLoreContext();
 
       const result = await generateLoreNarrative(context);
 
       expect(result).toBeNull();
-    });
-
-    it("should return null when OPENROUTER_API_KEY is not set", async () => {
-      delete process.env.OPENROUTER_API_KEY;
-
-      const context = createLoreContext();
-
-      const result = await generateLoreNarrative(context);
-
-      expect(result).toBeNull();
-    });
-
-    it("should use correct model from environment", async () => {
-      process.env.OPENROUTER_MODEL = "openai/gpt-4";
-
-      const mockResponse = createChatResponse("Response from GPT-4...");
-
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => mockResponse,
-      });
-
-      const context = createLoreContext();
-
-      await generateLoreNarrative(context);
-
-      const body = getRequestBody(mockFetch.mock.calls.at(0) ?? []);
-      expect(body.model).toBe("openai/gpt-4");
-    });
-
-    it("should use default model when not specified", async () => {
-      delete process.env.OPENROUTER_MODEL;
-
-      const mockResponse = createChatResponse("Response from default model...");
-
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => mockResponse,
-      });
-
-      const context = createLoreContext();
-
-      await generateLoreNarrative(context);
-
-      const body = getRequestBody(mockFetch.mock.calls.at(0) ?? []);
-      expect(body.model).toBe("anthropic/claude-sonnet-4");
     });
 
     it("should include mission details in prompt", async () => {
-      const mockResponse = createChatResponse("Mission-focused narrative...");
-
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => mockResponse,
-      });
+      mockGenerateText.mockResolvedValue("Mission-focused narrative...");
 
       const context: LoreContext = {
         artifact: REAL_ARTIFACT,
@@ -250,27 +141,27 @@ describe("Lore Generation", () => {
 
       await generateLoreNarrative(context);
 
-      const body = getRequestBody(mockFetch.mock.calls.at(0) ?? []);
-      const textContent = extractUserTextContent(body);
-      expect(textContent).toContain(
-        "Bypass 8 security scanners to reach central data vault"
+      expect(mockGenerateText).toHaveBeenCalledWith(
+        expect.objectContaining({
+          prompt: expect.stringContaining(
+            "Bypass 8 security scanners to reach central data vault"
+          ),
+        })
       );
     });
 
     it("should set appropriate temperature for creative output", async () => {
-      const mockResponse = createChatResponse("Creative narrative...");
-
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => mockResponse,
-      });
+      mockGenerateText.mockResolvedValue("Creative narrative...");
 
       const context = createLoreContext();
 
       await generateLoreNarrative(context);
 
-      const body = getRequestBody(mockFetch.mock.calls.at(0) ?? []);
-      expect(body.temperature).toBe(0.8);
+      expect(mockGenerateText).toHaveBeenCalledWith(
+        expect.objectContaining({
+          temperature: 0.8,
+        })
+      );
     });
   });
 });

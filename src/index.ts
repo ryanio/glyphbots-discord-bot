@@ -1,8 +1,18 @@
 import "dotenv/config";
 
 import { Client, Events, GatewayIntentBits } from "discord.js";
+import { handleArenaButton, handleArenaSelectMenu } from "./arena/interactions";
+import { initArenaChannel } from "./channels/arena";
 import { initLoreChannel } from "./channels/lore";
-import { logger } from "./lib/logger";
+import { initPlaygroundChannel } from "./channels/playground";
+import { handleArena } from "./commands/arena";
+import { handleHelp } from "./commands/help";
+import { handleInfo } from "./commands/info";
+import { handleRandom } from "./commands/random";
+import { handleSpotlight } from "./commands/spotlight";
+import { handleStats } from "./commands/stats";
+import { handleTips } from "./commands/tips";
+import { prefixedLogger } from "./lib/logger";
 import {
   type ChannelType,
   DEFAULT_STATE_DIR,
@@ -11,6 +21,9 @@ import {
 } from "./lib/state";
 import type { Config } from "./lib/types";
 import { formatReadableDate, formatUnixTimeAgo, loadConfig } from "./lib/utils";
+import { handlePlaygroundButton } from "./playground/interactions";
+
+const logger = prefixedLogger("Main");
 
 /**
  * Print startup banner
@@ -84,9 +97,12 @@ const formatChannelState = (
 const printConfig = async (client: Client, config: Config): Promise<void> => {
   // Load last post info for active channels
   const loreInfo = await resolveLastPostInfo("lore");
-  // Future channels:
-  // const arenaInfo = await resolveLastPostInfo("arena");
-  // const playgroundInfo = await resolveLastPostInfo("playground");
+  const arenaInfo = config.arenaChannelId
+    ? await resolveLastPostInfo("arena")
+    : null;
+  const playgroundInfo = config.playgroundChannelId
+    ? await resolveLastPostInfo("playground")
+    : null;
 
   // Fetch lore channel name
   let loreChannelDisplay = config.loreChannelId;
@@ -103,7 +119,7 @@ const printConfig = async (client: Client, config: Config): Promise<void> => {
   logger.info("┌─ 📋 CONFIGURATION");
   logger.info("│");
   logger.info(`│  🔗  GlyphBots API: ${config.glyphbotsApiUrl}`);
-  logger.info(`│  🤖  AI Model: ${config.openRouterModel}`);
+  logger.info("│  🤖  AI: Google Gemini");
   logger.info(`│  📝  Log Level: ${config.logLevel}`);
   logger.info("│");
   logger.info("├─ 📁 STATE");
@@ -113,17 +129,149 @@ const printConfig = async (client: Client, config: Config): Promise<void> => {
   );
   logger.info("│");
   formatChannelState("lore", loreInfo);
-  // Future channels:
-  // formatChannelState("arena", arenaInfo);
-  // formatChannelState("playground", playgroundInfo);
+  if (config.arenaChannelId) {
+    formatChannelState("arena", arenaInfo);
+  }
+  if (config.playgroundChannelId) {
+    formatChannelState("playground", playgroundInfo);
+  }
   logger.info("│");
   logger.info("├─ 📖 LORE CHANNEL");
   logger.info("│");
   logger.info(`│  📢 Channel: ${loreChannelDisplay}`);
-  logger.info(`│  ⏱️  Interval: ${config.loreIntervalMinutes} minutes`);
+  logger.info(
+    `│  ⏱️  Interval: ${config.loreMinIntervalMinutes}-${config.loreMaxIntervalMinutes} minutes (${Math.round(config.loreMinIntervalMinutes / 60)}-${Math.round(config.loreMaxIntervalMinutes / 60)} hours)`
+  );
   logger.info("│");
   logger.info("└─");
   logger.info("");
+};
+
+/**
+ * Handle slash command interactions
+ */
+const handleSlashCommand = async (
+  interaction: import("discord.js").ChatInputCommandInteraction,
+  config: Config
+): Promise<void> => {
+  const { commandName } = interaction;
+
+  try {
+    switch (commandName) {
+      case "help":
+        await handleHelp(interaction, config);
+        break;
+      case "info":
+        await handleInfo(interaction);
+        break;
+      case "arena":
+        await handleArena(interaction, config);
+        break;
+      case "spotlight":
+        await handleSpotlight(interaction);
+        break;
+      case "random":
+        await handleRandom(interaction);
+        break;
+      case "tips":
+        await handleTips(interaction);
+        break;
+      case "stats":
+        await handleStats(interaction);
+        break;
+      default:
+        await interaction.reply({
+          content: "Unknown command.",
+          ephemeral: true,
+        });
+    }
+  } catch (error) {
+    logger.error(`Error handling command ${commandName}:`, error);
+    const errorReply = {
+      content: "An error occurred while processing this command.",
+      ephemeral: true,
+    };
+    if (interaction.replied || interaction.deferred) {
+      await interaction.followUp(errorReply);
+    } else {
+      await interaction.reply(errorReply);
+    }
+  }
+};
+
+/**
+ * Handle button interactions
+ */
+const handleButtonInteraction = async (
+  interaction: import("discord.js").ButtonInteraction,
+  config: Config
+): Promise<void> => {
+  const { customId } = interaction;
+
+  try {
+    // Arena buttons
+    if (
+      customId.startsWith("arena_") ||
+      customId.startsWith("stance_") ||
+      customId.startsWith("cheer_") ||
+      customId.startsWith("bloodlust_") ||
+      customId.startsWith("surge_")
+    ) {
+      await handleArenaButton(interaction, config);
+      return;
+    }
+
+    // Playground buttons
+    if (customId.startsWith("playground_")) {
+      await handlePlaygroundButton(interaction);
+      return;
+    }
+
+    // Other buttons (help, etc.)
+    await interaction.reply({
+      content: "Unknown button.",
+      ephemeral: true,
+    });
+  } catch (error) {
+    logger.error(`Error handling button ${customId}:`, error);
+    if (!(interaction.replied || interaction.deferred)) {
+      await interaction.reply({
+        content: "An error occurred.",
+        ephemeral: true,
+      });
+    }
+  }
+};
+
+/**
+ * Handle select menu interactions
+ */
+const handleSelectMenuInteraction = async (
+  interaction: import("discord.js").StringSelectMenuInteraction,
+  config: Config
+): Promise<void> => {
+  const { customId } = interaction;
+
+  try {
+    // Arena select menus
+    if (customId.startsWith("select_bot_") || customId.startsWith("ability_")) {
+      await handleArenaSelectMenu(interaction, config);
+      return;
+    }
+
+    await interaction.reply({
+      content: "Unknown select menu.",
+      ephemeral: true,
+    });
+  } catch (error) {
+    logger.error(`Error handling select menu ${customId}:`, error);
+    if (!(interaction.replied || interaction.deferred)) {
+      await interaction.reply({
+        content: "An error occurred.",
+        ephemeral: true,
+      });
+    }
+  }
 };
 
 /**
@@ -135,9 +283,9 @@ async function main(): Promise<void> {
   // Load and validate configuration
   const config = loadConfig();
 
-  // Create Discord client
+  // Create Discord client with necessary intents
   const client = new Client({
-    intents: [GatewayIntentBits.Guilds],
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
   });
 
   // Handle ready event
@@ -150,11 +298,26 @@ async function main(): Promise<void> {
     logger.info("════════════════════════════════════════════════════════════");
 
     try {
-      // Initialize lore channel
+      // Initialize channels
       await initLoreChannel(client, config);
+      await initArenaChannel(client, config);
+      await initPlaygroundChannel(client, config);
+
+      logger.info("All channels initialized successfully");
     } catch (error) {
       logger.error("Failed to initialize channels:", error);
       process.exit(1);
+    }
+  });
+
+  // Handle interactions (slash commands, buttons, etc.)
+  client.on(Events.InteractionCreate, async (interaction) => {
+    if (interaction.isChatInputCommand()) {
+      await handleSlashCommand(interaction, config);
+    } else if (interaction.isButton()) {
+      await handleButtonInteraction(interaction, config);
+    } else if (interaction.isStringSelectMenu()) {
+      await handleSelectMenuInteraction(interaction, config);
     }
   });
 

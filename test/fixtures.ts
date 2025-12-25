@@ -317,10 +317,19 @@ export const createArtifactsSummaryResponse = (
  */
 export const TEST_CONFIG: Config = {
   discordToken: "test-token",
+  discordClientId: "test-client-id",
+  discordGuildId: null,
   loreChannelId: "123456789",
-  loreIntervalMinutes: 30,
-  openRouterApiKey: "test-api-key",
-  openRouterModel: "anthropic/claude-sonnet-4",
+  loreMinIntervalMinutes: 240,
+  loreMaxIntervalMinutes: 720,
+  arenaChannelId: null,
+  arenaChallengeTimeoutSeconds: 120,
+  arenaRoundTimeoutSeconds: 60,
+  arenaMaxRounds: 10,
+  playgroundChannelId: null,
+  playgroundMinIntervalMinutes: 240,
+  playgroundMaxIntervalMinutes: 720,
+  googleAiApiKey: "test-google-ai-key",
   glyphbotsApiUrl: "https://glyphbots.com",
   logLevel: "info",
 };
@@ -425,9 +434,9 @@ export const setupOpenRouterMock = (
  */
 export const setupTestEnv = () => {
   process.env.DISCORD_TOKEN = "test-token";
+  process.env.DISCORD_CLIENT_ID = "test-client-id";
   process.env.LORE_CHANNEL_ID = "123456789";
-  process.env.OPENROUTER_API_KEY = "test-api-key";
-  process.env.OPENROUTER_MODEL = "anthropic/claude-sonnet-4";
+  process.env.GOOGLE_AI_API_KEY = "test-google-ai-key";
   process.env.GLYPHBOTS_API_URL = "https://glyphbots.com";
   process.env.LOG_LEVEL = "info";
 };
@@ -437,9 +446,9 @@ export const setupTestEnv = () => {
  */
 export const clearTestEnv = () => {
   delete process.env.DISCORD_TOKEN;
+  delete process.env.DISCORD_CLIENT_ID;
   delete process.env.LORE_CHANNEL_ID;
-  delete process.env.OPENROUTER_API_KEY;
-  delete process.env.OPENROUTER_MODEL;
+  delete process.env.GOOGLE_AI_API_KEY;
   delete process.env.GLYPHBOTS_API_URL;
   delete process.env.LOG_LEVEL;
 };

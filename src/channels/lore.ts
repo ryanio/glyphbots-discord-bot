@@ -11,6 +11,7 @@ import {
   getArtifactUrl,
   getBotUrl,
 } from "../api/glyphbots";
+import { MS_PER_SECOND, SECONDS_PER_MINUTE } from "../lib/constants";
 import { prefixedLogger } from "../lib/logger";
 import { recordLorePost, resolveLastPostInfo } from "../lib/state";
 import type {
@@ -19,12 +20,7 @@ import type {
   GeneratedLore,
   LoreContext,
 } from "../lib/types";
-import {
-  getErrorMessage,
-  MS_PER_SECOND,
-  SECONDS_PER_MINUTE,
-  weightedRandomIndex,
-} from "../lib/utils";
+import { getErrorMessage, weightedRandomIndex } from "../lib/utils";
 import { generateLoreNarrative } from "../lore/generate";
 
 const log = prefixedLogger("Lore");
@@ -154,13 +150,13 @@ const buildLoreEmbed = (lore: GeneratedLore): EmbedBuilder => {
   // Artifact first
   if (artifact.contractTokenId) {
     fields.push({
-      name: "Artifact",
+      name: "◈ Artifact ◈",
       value: `[${artifact.title} #${artifact.contractTokenId}](${getArtifactUrl(artifact.contractTokenId)})`,
       inline: true,
     });
   } else {
     fields.push({
-      name: "Artifact",
+      name: "◈ Artifact ◈",
       value: artifact.title,
       inline: true,
     });
@@ -168,7 +164,7 @@ const buildLoreEmbed = (lore: GeneratedLore): EmbedBuilder => {
 
   // Bot second, ID at end
   fields.push({
-    name: "Bot",
+    name: "◈ Bot ◈",
     value: `[${bot.name} #${bot.tokenId}](${getBotUrl(bot.tokenId)})`,
     inline: true,
   });
@@ -179,7 +175,7 @@ const buildLoreEmbed = (lore: GeneratedLore): EmbedBuilder => {
     const year = mintDate.getFullYear();
     const shortYear = `'${year.toString().slice(-2)}`;
     fields.push({
-      name: "Minted",
+      name: "◉ Minted ◉",
       value: `${mintDate.toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",
@@ -272,10 +268,13 @@ export const initLoreChannel = async (
   client: Client,
   config: Config
 ): Promise<void> => {
-  const { loreChannelId, loreIntervalMinutes } = config;
+  const { loreChannelId, loreMinIntervalMinutes, loreMaxIntervalMinutes } =
+    config;
 
   log.info(`Initializing lore channel: ${loreChannelId}`);
-  log.info(`Posting interval: ${loreIntervalMinutes} minutes`);
+  log.info(
+    `Posting interval: ${loreMinIntervalMinutes}-${loreMaxIntervalMinutes} minutes`
+  );
 
   // Fetch the channel
   const channel = await client.channels.fetch(loreChannelId);
@@ -287,17 +286,42 @@ export const initLoreChannel = async (
   const channelName = "name" in channel ? channel.name : loreChannelId;
   log.info(`Connected to lore channel: #${channelName}`);
 
+  // Calculate random interval between min and max
+  const getRandomInterval = (): number => {
+    const minMs = loreMinIntervalMinutes * SECONDS_PER_MINUTE * MS_PER_SECOND;
+    const maxMs = loreMaxIntervalMinutes * SECONDS_PER_MINUTE * MS_PER_SECOND;
+    return Math.floor(Math.random() * (maxMs - minMs + 1)) + minMs;
+  };
+
+  // Set up interval for recurring posts with random intervals
+  const scheduleNextPost = (): void => {
+    const nextIntervalMs = getRandomInterval();
+    const nextIntervalMinutes = Math.round(
+      nextIntervalMs / (SECONDS_PER_MINUTE * MS_PER_SECOND)
+    );
+    log.info(
+      `Scheduling next lore post in ${nextIntervalMinutes} minutes (${Math.round(nextIntervalMinutes / 60)} hours)`
+    );
+    setTimeout(async () => {
+      log.info("Scheduled lore post triggered");
+      await postLoreEntry(channel);
+      scheduleNextPost();
+    }, nextIntervalMs);
+  };
+
   // Check last post time from state
   const lastPost = await resolveLastPostInfo("lore");
-  const intervalMs = loreIntervalMinutes * SECONDS_PER_MINUTE * MS_PER_SECOND;
   const nowMs = Date.now();
 
   if (lastPost) {
     const lastPostMs = lastPost.timestamp * MS_PER_SECOND;
     const timeSinceLastPost = nowMs - lastPostMs;
-    const timeUntilNextPost = intervalMs - timeSinceLastPost;
+    const minIntervalMs =
+      loreMinIntervalMinutes * SECONDS_PER_MINUTE * MS_PER_SECOND;
 
-    if (timeUntilNextPost > 0) {
+    // If less than minimum interval has passed, wait for the remainder
+    if (timeSinceLastPost < minIntervalMs) {
+      const timeUntilNextPost = minIntervalMs - timeSinceLastPost;
       const minutesUntilNext = Math.ceil(
         timeUntilNextPost / (SECONDS_PER_MINUTE * MS_PER_SECOND)
       );
@@ -309,6 +333,7 @@ export const initLoreChannel = async (
       setTimeout(async () => {
         log.info("Scheduled lore post triggered (initial delay)");
         await postLoreEntry(channel);
+        scheduleNextPost();
       }, timeUntilNextPost);
     } else {
       // Enough time has passed, post now
@@ -317,6 +342,7 @@ export const initLoreChannel = async (
       if (!success) {
         log.warn("Initial lore post failed, will retry on next interval");
       }
+      scheduleNextPost();
     }
   } else {
     // No previous post, post now
@@ -325,15 +351,10 @@ export const initLoreChannel = async (
     if (!success) {
       log.warn("Initial lore post failed, will retry on next interval");
     }
+    scheduleNextPost();
   }
 
-  // Set up interval for recurring posts
-  setInterval(async () => {
-    log.info("Scheduled lore post triggered");
-    await postLoreEntry(channel);
-  }, intervalMs);
-
   log.info(
-    `Lore scheduler active: posting every ${loreIntervalMinutes} minutes`
+    `Lore scheduler active: posting every ${loreMinIntervalMinutes}-${loreMaxIntervalMinutes} minutes (${Math.round(loreMinIntervalMinutes / 60)}-${Math.round(loreMaxIntervalMinutes / 60)} hours)`
   );
 };

@@ -25,25 +25,27 @@ describe("utils", () => {
 
       expect(config.discordToken).toBe(TEST_CONFIG.discordToken);
       expect(config.loreChannelId).toBe(TEST_CONFIG.loreChannelId);
-      expect(config.openRouterApiKey).toBe(TEST_CONFIG.openRouterApiKey);
+      expect(config.googleAiApiKey).toBe(TEST_CONFIG.googleAiApiKey);
     });
 
     it("should use default values when optional env vars not set", () => {
-      delete process.env.LORE_INTERVAL_MINUTES;
-      delete process.env.OPENROUTER_MODEL;
+      delete process.env.LORE_MIN_INTERVAL_MINUTES;
+      delete process.env.LORE_MAX_INTERVAL_MINUTES;
 
       const config = loadConfig();
 
-      expect(config.loreIntervalMinutes).toBe(30);
-      expect(config.openRouterModel).toBe("anthropic/claude-sonnet-4");
+      expect(config.loreMinIntervalMinutes).toBe(240);
+      expect(config.loreMaxIntervalMinutes).toBe(720);
     });
 
-    it("should parse LORE_INTERVAL_MINUTES as number", () => {
-      process.env.LORE_INTERVAL_MINUTES = "60";
+    it("should parse LORE_MIN_INTERVAL_MINUTES and LORE_MAX_INTERVAL_MINUTES as numbers", () => {
+      process.env.LORE_MIN_INTERVAL_MINUTES = "120";
+      process.env.LORE_MAX_INTERVAL_MINUTES = "480";
 
       const config = loadConfig();
 
-      expect(config.loreIntervalMinutes).toBe(60);
+      expect(config.loreMinIntervalMinutes).toBe(120);
+      expect(config.loreMaxIntervalMinutes).toBe(480);
     });
 
     it("should throw when DISCORD_TOKEN is missing", () => {
@@ -58,10 +60,10 @@ describe("utils", () => {
       expect(() => loadConfig()).toThrow("LORE_CHANNEL_ID");
     });
 
-    it("should throw when OPENROUTER_API_KEY is missing", () => {
-      delete process.env.OPENROUTER_API_KEY;
+    it("should throw when GOOGLE_AI_API_KEY is missing", () => {
+      delete process.env.GOOGLE_AI_API_KEY;
 
-      expect(() => loadConfig()).toThrow("OPENROUTER_API_KEY");
+      expect(() => loadConfig()).toThrow("GOOGLE_AI_API_KEY");
     });
 
     it("should use custom GLYPHBOTS_API_URL when set", () => {

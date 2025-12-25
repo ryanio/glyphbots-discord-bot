@@ -1,13 +1,13 @@
 /**
  * Lore Generation
  *
- * Generates narrative lore for GlyphBots artifacts using AI.
+ * Generates narrative lore for GlyphBots artifacts using Google AI.
  */
 
-import { type ContentPart, generateText } from "../api/openrouter";
+import { generateText } from "../api/google-ai";
 import { prefixedLogger } from "../lib/logger";
 import type { GeneratedLore, LoreContext } from "../lib/types";
-import { DEFAULT_OPENROUTER_MODEL, truncate } from "../lib/utils";
+import { truncate } from "../lib/utils";
 import { buildUserPrompt, getNextStyle } from "./prompts";
 
 const log = prefixedLogger("LoreGen");
@@ -16,48 +16,25 @@ const log = prefixedLogger("LoreGen");
 const MAX_NARRATIVE_LENGTH = 4000;
 
 /**
- * Build user message content, including artifact image if available
- */
-const buildMessageContent = (
-  context: LoreContext,
-  textPrompt: string
-): string | ContentPart[] => {
-  if (context.artifact.imageUrl) {
-    return [
-      { type: "text", text: textPrompt },
-      { type: "image_url", image_url: { url: context.artifact.imageUrl } },
-    ];
-  }
-  return textPrompt;
-};
-
-/**
  * Generate a lore narrative for the given context
  */
 export const generateLoreNarrative = async (
   context: LoreContext
 ): Promise<GeneratedLore | null> => {
-  const model = process.env.OPENROUTER_MODEL ?? DEFAULT_OPENROUTER_MODEL;
   const style = getNextStyle();
 
-  log.info(
-    `Generating lore for ${context.bot.name} using ${model} (style: ${style.name})`
-  );
+  log.info(`Generating lore for ${context.bot.name} (style: ${style.name})`);
 
   const userPrompt = buildUserPrompt(context, style);
-  const userContent = buildMessageContent(context, userPrompt);
-  const hasImage = Array.isArray(userContent);
 
-  if (hasImage) {
+  if (context.artifact.imageUrl) {
     log.debug("Including artifact image in request");
   }
 
   const narrative = await generateText({
-    model,
-    messages: [
-      { role: "system", content: style.systemPrompt },
-      { role: "user", content: userContent },
-    ],
+    systemPrompt: style.systemPrompt,
+    userPrompt,
+    imageUrl: context.artifact.imageUrl,
     maxTokens: 2000,
     temperature: 0.8,
   });

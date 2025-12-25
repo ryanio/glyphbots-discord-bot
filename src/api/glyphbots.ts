@@ -1,3 +1,4 @@
+import { DEFAULT_GLYPHBOTS_API_URL } from "../lib/constants";
 import { prefixedLogger } from "../lib/logger";
 import type {
   Artifact,
@@ -9,7 +10,7 @@ import type {
   BotStory,
   BotStoryResponse,
 } from "../lib/types";
-import { DEFAULT_GLYPHBOTS_API_URL, getErrorMessage } from "../lib/utils";
+import { getErrorMessage } from "../lib/utils";
 
 const log = prefixedLogger("GlyphBots API");
 
@@ -191,3 +192,45 @@ export const getBotUrl = (tokenId: number): string =>
  */
 export const getArtifactUrl = (contractTokenId: number): string =>
   `${API_BASE_URL}/artifact/${contractTokenId}`;
+
+/**
+ * Get the PNG image URL for a bot
+ */
+export const getBotPngUrl = (tokenId: number): string =>
+  `${API_BASE_URL}/bots/pngs/${tokenId}.png`;
+
+/**
+ * Fetch artifacts for a bot
+ */
+export const fetchBotArtifacts = async (
+  tokenId: number
+): Promise<Artifact[]> => {
+  const url = `${API_BASE_URL}/api/artifacts/list/${tokenId}`;
+  log.debug(`Fetching artifacts for bot ${tokenId} from ${url}`);
+
+  try {
+    const response = await fetch(url, fetchOptions);
+
+    if (!response.ok) {
+      log.error(
+        `Failed to fetch artifacts for bot ${tokenId}: ${response.status}`
+      );
+      return [];
+    }
+
+    const data = (await response.json()) as ArtifactsListResponse;
+
+    if (!data.ok) {
+      log.error(`API error for bot ${tokenId} artifacts: ${data.error}`);
+      return [];
+    }
+
+    log.debug(`Fetched ${data.items.length} artifacts for bot ${tokenId}`);
+    return data.items;
+  } catch (error) {
+    log.error(
+      `Error fetching artifacts for bot ${tokenId}: ${getErrorMessage(error)}`
+    );
+    return [];
+  }
+};

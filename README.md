@@ -1,14 +1,16 @@
 # glyphbots-discord-bot
 
-An AI-enabled Discord bot for the GlyphBots community featuring automated storytelling based on minted artifacts.
+An AI-enabled Discord bot for the GlyphBots community featuring automated storytelling, interactive arena battles, and community playground content.
 
 ## Features
 
 - 📖 **Lore Channel** - Automated AI-generated stories based on GlyphBots artifacts
-- 🎨 **5 Narrative Styles** - Rotating styles for variety (cinematic, transmission, first-person, poetic, log entries)
-- 🖼️ **Vision-Enabled** - AI sees artifact images for more contextual storytelling
+- ⚔️ **Arena Battles** - Interactive PvP battles between GlyphBots with spectator mechanics
+- 🎮 **Playground** - Community showcase with bot spotlights, world postcards, and arena recaps
+- 🎨 **9 Narrative Styles** - Rotating styles for variety (cinematic, transmission, first-person, poetic, log entries, myth, noir, broadcast, memory)
+- 🖼️ **AI Image Generation** - 2K images for epic moments (victories, critical hits, spotlights)
 - 🎲 **Weighted Selection** - Favors recently minted artifacts for fresh content
-- 🤖 **AI-Powered** - Uses OpenRouter for flexible model selection (Claude, GPT, Gemini, etc.)
+- 🤖 **Google AI Integration** - Uses Gemini models for text and image generation
 - ⏱️ **Configurable Intervals** - Customize posting frequency via environment
 - 🛡️ **Type-Safe** - Full TypeScript implementation
 
@@ -19,7 +21,8 @@ An AI-enabled Discord bot for the GlyphBots community featuring automated storyt
 - [Installation](#installation)
 - [Configuration](#configuration)
 - [Environment Variables](#environment-variables)
-- [Narrative Styles](#narrative-styles)
+- [Arena Battles](#arena-battles)
+- [Slash Commands](#slash-commands)
 - [Usage](#usage)
 - [Development](#development)
 - [Testing](#testing)
@@ -32,7 +35,7 @@ An AI-enabled Discord bot for the GlyphBots community featuring automated storyt
 - Node.js 18+
 - Yarn package manager
 - Discord bot token
-- OpenRouter API key ([get one here](https://openrouter.ai/keys))
+- Google AI API key ([get one here](https://aistudio.google.com/app/apikey))
 
 ## Installation
 
@@ -55,12 +58,26 @@ Create a `.env` file in the root directory with your configuration:
 ```env
 # Required
 DISCORD_TOKEN=your_discord_bot_token
-LORE_CHANNEL_ID=your_channel_id
-OPENROUTER_API_KEY=your_openrouter_api_key
+DISCORD_CLIENT_ID=your_discord_client_id
+LORE_CHANNEL_ID=your_lore_channel_id
+GOOGLE_AI_API_KEY=your_google_ai_api_key
 
-# Optional
-LORE_INTERVAL_MINUTES=30
-OPENROUTER_MODEL=anthropic/claude-sonnet-4
+# Optional - Channel IDs
+ARENA_CHANNEL_ID=your_arena_channel_id
+PLAYGROUND_CHANNEL_ID=your_playground_channel_id
+
+# Optional - Intervals (in minutes)
+LORE_MIN_INTERVAL_MINUTES=240
+LORE_MAX_INTERVAL_MINUTES=720
+PLAYGROUND_MIN_INTERVAL_MINUTES=240
+PLAYGROUND_MAX_INTERVAL_MINUTES=720
+
+# Optional - Arena Settings
+ARENA_CHALLENGE_TIMEOUT_SECONDS=120
+ARENA_ROUND_TIMEOUT_SECONDS=30
+ARENA_MAX_ROUNDS=5
+
+# Optional - Other
 GLYPHBOTS_API_URL=https://glyphbots.com
 STATE_DIR=.state
 LOG_LEVEL=info
@@ -73,62 +90,119 @@ LOG_LEVEL=info
 | Variable | Description | Example |
 |----------|-------------|---------|
 | `DISCORD_TOKEN` | Discord bot token | Get from [Discord Developer Portal](https://discord.com/developers/applications) |
+| `DISCORD_CLIENT_ID` | Discord application client ID | Get from [Discord Developer Portal](https://discord.com/developers/applications) |
 | `LORE_CHANNEL_ID` | Channel ID for lore posts | `1234567890123456789` |
-| `OPENROUTER_API_KEY` | OpenRouter API key | Get from [OpenRouter](https://openrouter.ai/keys) |
+| `GOOGLE_AI_API_KEY` | Google AI API key | Get from [Google AI Studio](https://aistudio.google.com/app/apikey) |
 
 ### Discord Setup
 
 1. [Create a Discord application](https://discord.com/developers/applications)
 2. Go to the **Bot** tab and click "Add Bot"
 3. Copy the bot token to `DISCORD_TOKEN`
-4. **Invite bot to your server:**
+4. Copy the application ID to `DISCORD_CLIENT_ID`
+5. **Invite bot to your server:**
    - Go to **OAuth2** → **URL Generator**
-   - Under **Scopes**, select `bot`
-   - Under **Bot Permissions**, select `Send Messages` and `Embed Links`
+   - Under **Scopes**, select `bot` and `applications.commands`
+   - Under **Bot Permissions**, select:
+     - Send Messages
+     - Embed Links
+     - Use Slash Commands
+     - Create Public Threads
+     - Send Messages in Threads
+     - Manage Threads
    - Copy the generated URL and open it in your browser
    - Select your server and authorize
 
 **Quick Invite URL** (replace `YOUR_CLIENT_ID`):
 ```
-https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=18432&scope=bot
+https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=326417591360&scope=bot%20applications.commands
 ```
 
 ### Optional Configuration
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `LORE_INTERVAL_MINUTES` | Minutes between lore posts | `30` |
-| `OPENROUTER_MODEL` | AI model for story generation | `anthropic/claude-sonnet-4` |
+| `LORE_MIN_INTERVAL_MINUTES` | Minimum minutes between lore posts | `240` (4 hours) |
+| `LORE_MAX_INTERVAL_MINUTES` | Maximum minutes between lore posts | `720` (12 hours) |
+| `PLAYGROUND_MIN_INTERVAL_MINUTES` | Minimum minutes between playground posts | `240` (4 hours) |
+| `PLAYGROUND_MAX_INTERVAL_MINUTES` | Maximum minutes between playground posts | `720` (12 hours) |
+| `ARENA_CHALLENGE_TIMEOUT_SECONDS` | Challenge acceptance timeout | `120` |
+| `ARENA_ROUND_TIMEOUT_SECONDS` | Round action timeout | `30` |
+| `ARENA_MAX_ROUNDS` | Maximum rounds per battle | `5` |
 | `GLYPHBOTS_API_URL` | GlyphBots API base URL | `https://glyphbots.com` |
 | `STATE_DIR` | Directory for state persistence | `.state` |
 | `LOG_LEVEL` | Log verbosity | `info` |
 
-### Supported AI Models
+## Arena Battles
 
-Any model on [OpenRouter](https://openrouter.ai/models) works. **Vision-capable models** are recommended for best results (the bot sends artifact images to the AI):
+The Arena channel features interactive PvP battles between GlyphBots with strategic gameplay and spectator participation.
 
-| Model | Value | Vision |
-|-------|-------|--------|
-| Gemini 2.5 Pro | `google/gemini-2.5-pro-preview` | ✅ |
-| Claude Sonnet 4 | `anthropic/claude-sonnet-4` | ✅ |
-| GPT-4o | `openai/gpt-4o` | ✅ |
-| GPT-4o Mini | `openai/gpt-4o-mini` | ✅ |
-| Claude 3.5 Sonnet | `anthropic/claude-3.5-sonnet` | ✅ |
-| Llama 3.2 90B Vision | `meta-llama/llama-3.2-90b-vision-instruct` | ✅ |
+### Battle Flow
 
-## Narrative Styles
+1. **Challenge Phase** - A player challenges with `/arena challenge bot:<id>`
+2. **Pre-Battle** - Opponent accepts and both fighters choose opening stance
+3. **Combat Rounds** - 3-5 rounds where fighters select abilities
+4. **Victory** - Winner declared with AI-generated narrative
 
-The bot rotates through 5 distinct narrative styles for variety:
+### Spectator Mechanics
 
-| Style | Description |
-|-------|-------------|
-| **Cinematic** | Short punchy lines with breaks, movie trailer feel |
-| **Transmission** | Fragmented intercepted signal with `[...]` breaks |
-| **First Person** | Bot's raw inner thoughts, stream of consciousness |
-| **Poetic** | Minimal 4-6 line verse, haiku-adjacent |
-| **Log Entry** | Terse mission log with `[CYCLE-XXX]` timestamps |
+Spectators can influence battles through crowd actions:
 
-All styles keep content short and readable (60-100 words max).
+- **🔴 Cheer Red** - +5% damage to red fighter next round
+- **🔵 Cheer Blue** - +5% damage to blue fighter next round
+- **💀 Bloodlust** - Both fighters get +10% damage, -10% defense
+- **⚡ Surge** - +15 crowd energy
+
+### Arena Events
+
+When crowd energy reaches 100%, random arena events trigger:
+
+- **Power Surge** - Random fighter gains +20% all stats for 2 rounds
+- **Chaos Field** - Both fighters get random bonus effects
+- **Arena Hazard** - Environmental damage to both (favors higher endurance)
+
+### Thread-Based Battles
+
+Each battle runs in its own public thread to keep the main channel clean. Threads auto-archive after 24 hours of inactivity.
+
+## Slash Commands
+
+### Global Commands
+
+| Command | Description |
+|---------|-------------|
+| `/help [topic]` | Get help with GlyphBots features |
+| `/info bot id:<number>` | Look up a specific bot |
+| `/info artifact id:<number>` | Look up a specific artifact |
+| `/info stats` | Bot statistics and uptime |
+| `/tips` | Show a random helpful tip |
+
+### Arena Commands
+
+| Command | Description |
+|---------|-------------|
+| `/arena challenge bot:<id>` | Start a challenge with your bot |
+| `/arena stats [user]` | View arena battle record |
+| `/arena leaderboard` | Top fighters this season |
+| `/arena history` | Recent battle results |
+
+### Playground Commands
+
+| Command | Description |
+|---------|-------------|
+| `/spotlight` | Show current featured bot |
+| `/random bot` | Get a random bot spotlight |
+| `/random artifact` | Get a random artifact showcase |
+| `/random world` | Get a random world postcard |
+
+### Stats Commands
+
+| Command | Description |
+|---------|-------------|
+| `/stats me` | Your personal stats overview |
+| `/stats arena [user]` | Arena battle record |
+| `/stats server` | Server-wide activity stats |
+| `/stats bot id:<number>` | Combat stats for a specific bot |
 
 ## Usage
 
@@ -138,6 +212,9 @@ yarn start
 
 # Development mode (with hot reload)
 yarn start:dev
+
+# Deploy slash commands
+yarn commands:deploy
 ```
 
 ## Development
@@ -168,17 +245,47 @@ src/
 ├── index.ts              # Main entry point
 ├── api/
 │   ├── glyphbots.ts      # GlyphBots API client
-│   └── openrouter.ts     # OpenRouter API client (generic)
+│   └── google-ai.ts      # Google AI client (text + image)
 ├── channels/
-│   └── lore.ts           # Discord lore channel handler
+│   ├── lore.ts           # Lore channel handler
+│   ├── arena.ts          # Arena channel handler
+│   └── playground.ts     # Playground channel handler
+├── commands/
+│   ├── index.ts          # Command definitions
+│   ├── deploy.ts         # Command deployment
+│   ├── help.ts           # /help handler
+│   ├── info.ts           # /info handler
+│   ├── arena.ts          # /arena handler
+│   ├── spotlight.ts      # /spotlight handler
+│   ├── random.ts         # /random handler
+│   ├── stats.ts          # /stats handler
+│   └── tips.ts           # /tips handler
+├── arena/
+│   ├── state.ts          # Battle state machine
+│   ├── combat.ts         # Combat resolution
+│   ├── interactions.ts   # Button/menu handlers
+│   ├── spectators.ts     # Spectator mechanics
+│   ├── threads.ts        # Thread management
+│   ├── narrative.ts      # AI battle narration
+│   └── prompts.ts        # Battle prompts
+├── playground/
+│   ├── rotation.ts       # Content rotation
+│   ├── spotlight.ts      # Bot spotlight
+│   ├── postcard.ts       # World postcard
+│   ├── discovery.ts      # Item discovery
+│   └── recap.ts          # Arena recap
 ├── lore/
-│   ├── generate.ts       # Lore generation logic
-│   └── prompts.ts        # Narrative styles & prompts
+│   ├── generate.ts       # Lore generation
+│   └── prompts.ts        # Narrative styles
+├── help/
+│   ├── embeds.ts         # Help embeds
+│   └── scheduler.ts      # Help posting
 └── lib/
     ├── logger.ts         # Logging utilities
     ├── state.ts          # State persistence
-    ├── types.ts          # TypeScript type definitions
-    └── utils.ts          # General utilities
+    ├── types.ts          # TypeScript types
+    ├── utils.ts          # General utilities
+    └── constants.ts      # Application constants
 ```
 
 ## Testing
@@ -194,6 +301,13 @@ yarn test:coverage
 yarn test:ci
 ```
 
+### Test Coverage Goals
+
+- Arena combat logic: 90%+
+- Arena state management: 85%+
+- Spectator actions: 80%+
+- API clients: 80%+
+
 ## Deployment
 
 ### Recommended: DigitalOcean
@@ -205,7 +319,8 @@ yarn test:ci
 3. Clone repository and install dependencies
 4. Install PM2 for process management
 5. Configure environment variables
-6. Start with PM2
+6. Deploy slash commands: `yarn commands:deploy`
+7. Start with PM2
 
 ```bash
 # Install PM2 globally
@@ -243,14 +358,19 @@ CMD ["yarn", "start"]
 ### Common Issues
 
 **Bot not posting messages:**
-- Verify Discord bot has `Send Messages` and `Embed Links` permissions
-- Check that bot is added to the lore channel
+- Verify Discord bot has required permissions
+- Check that bot is added to the channels
 - Ensure `DISCORD_TOKEN` is correct
 
 **AI generation failing:**
-- Verify `OPENROUTER_API_KEY` is valid
-- Check OpenRouter account has credits
-- Try a different model if current one is unavailable
+- Verify `GOOGLE_AI_API_KEY` is valid
+- Check Google AI account has credits/quota
+- Check API key has proper permissions
+
+**Slash commands not appearing:**
+- Run `yarn commands:deploy` to register commands
+- Wait up to 1 hour for global command propagation
+- Use `--guild` flag for instant guild-only commands
 
 **No artifacts being selected:**
 - Ensure GlyphBots API is accessible
@@ -296,4 +416,3 @@ The bot provides structured logging with different levels:
 ---
 
 Built for the [GlyphBots](https://glyphbots.com) community.
-
