@@ -473,6 +473,76 @@ export const handleAbilitySelection = async (
 };
 
 /**
+ * Extract action type from custom ID
+ */
+const extractSpectatorAction = (
+  customId: string
+): { action: CrowdAction; battleId: string } | null => {
+  if (customId.startsWith("cheer_red_")) {
+    return {
+      action: "cheer_red",
+      battleId: customId.replace("cheer_red_", ""),
+    };
+  }
+  if (customId.startsWith("cheer_blue_")) {
+    return {
+      action: "cheer_blue",
+      battleId: customId.replace("cheer_blue_", ""),
+    };
+  }
+  if (customId.startsWith("bloodlust_")) {
+    return {
+      action: "bloodlust",
+      battleId: customId.replace("bloodlust_", ""),
+    };
+  }
+  if (customId.startsWith("surge_")) {
+    return { action: "surge", battleId: customId.replace("surge_", "") };
+  }
+  return null;
+};
+
+/**
+ * Build arena event embed
+ */
+const buildArenaEventEmbed = (
+  event: NonNullable<
+    Awaited<ReturnType<typeof applyCrowdAction>>["triggeredEvent"]
+  >
+): EmbedBuilder => {
+  const embed = new EmbedBuilder()
+    .setColor(ARENA_COLOR)
+    .setTitle("⚡ ARENA EVENT ⚡")
+    .setDescription(event.description);
+
+  if (event.redEffect) {
+    embed.addFields({
+      name: "🔴 Red Fighter Effect",
+      value: `${event.redEffect.type}: +${event.redEffect.value}% (${event.redEffect.duration} rounds)`,
+      inline: true,
+    });
+  }
+
+  if (event.blueEffect) {
+    embed.addFields({
+      name: "🔵 Blue Fighter Effect",
+      value: `${event.blueEffect.type}: +${event.blueEffect.value}% (${event.blueEffect.duration} rounds)`,
+      inline: true,
+    });
+  }
+
+  if (event.redDamage !== undefined) {
+    embed.addFields({
+      name: "Damage Dealt",
+      value: `🔴 Red: ${event.redDamage} | 🔵 Blue: ${event.blueDamage ?? 0}`,
+      inline: false,
+    });
+  }
+
+  return embed;
+};
+
+/**
  * Handle spectator action button
  */
 export const handleSpectatorAction = async (
@@ -482,29 +552,16 @@ export const handleSpectatorAction = async (
   const userId = interaction.user.id;
 
   // Extract action type and battle ID from customId
-  // Format: cheer_red_${battleId}, cheer_blue_${battleId}, bloodlust_${battleId}, surge_${battleId}
-  let action: CrowdAction;
-  let _battleId: string;
-
-  if (customId.startsWith("cheer_red_")) {
-    action = "cheer_red";
-    _battleId = customId.replace("cheer_red_", "");
-  } else if (customId.startsWith("cheer_blue_")) {
-    action = "cheer_blue";
-    _battleId = customId.replace("cheer_blue_", "");
-  } else if (customId.startsWith("bloodlust_")) {
-    action = "bloodlust";
-    _battleId = customId.replace("bloodlust_", "");
-  } else if (customId.startsWith("surge_")) {
-    action = "surge";
-    _battleId = customId.replace("surge_", "");
-  } else {
+  const actionData = extractSpectatorAction(customId);
+  if (!actionData) {
     await interaction.reply({
       content: "◉ Unknown spectator action.",
       ephemeral: true,
     });
     return;
   }
+
+  const { action } = actionData;
 
   // Get battle from thread ID
   const threadId = interaction.channelId;
@@ -551,35 +608,7 @@ export const handleSpectatorAction = async (
     interaction.channel &&
     interaction.channel.type === ChannelType.PublicThread
   ) {
-    const eventEmbed = new EmbedBuilder()
-      .setColor(ARENA_COLOR)
-      .setTitle("⚡ ARENA EVENT ⚡")
-      .setDescription(result.triggeredEvent.description);
-
-    if (result.triggeredEvent.redEffect) {
-      eventEmbed.addFields({
-        name: "🔴 Red Fighter Effect",
-        value: `${result.triggeredEvent.redEffect.type}: +${result.triggeredEvent.redEffect.value}% (${result.triggeredEvent.redEffect.duration} rounds)`,
-        inline: true,
-      });
-    }
-
-    if (result.triggeredEvent.blueEffect) {
-      eventEmbed.addFields({
-        name: "🔵 Blue Fighter Effect",
-        value: `${result.triggeredEvent.blueEffect.type}: +${result.triggeredEvent.blueEffect.value}% (${result.triggeredEvent.blueEffect.duration} rounds)`,
-        inline: true,
-      });
-    }
-
-    if (result.triggeredEvent.redDamage !== undefined) {
-      eventEmbed.addFields({
-        name: "Damage Dealt",
-        value: `🔴 Red: ${result.triggeredEvent.redDamage} | 🔵 Blue: ${result.triggeredEvent.blueDamage ?? 0}`,
-        inline: false,
-      });
-    }
-
+    const eventEmbed = buildArenaEventEmbed(result.triggeredEvent);
     await interaction.channel.send({ embeds: [eventEmbed] });
   }
 

@@ -12,6 +12,10 @@ import { handleRandom } from "./commands/random";
 import { handleSpotlight } from "./commands/spotlight";
 import { handleStats } from "./commands/stats";
 import { handleTips } from "./commands/tips";
+import {
+  handleInteractionError,
+  replyWithUnknownError,
+} from "./lib/discord/errors";
 import { prefixedLogger } from "./lib/logger";
 import {
   type ChannelType,
@@ -228,18 +232,14 @@ const handleButtonInteraction = async (
     }
 
     // Other buttons (help, etc.)
-    await interaction.reply({
-      content: "Unknown button.",
-      ephemeral: true,
-    });
+    await replyWithUnknownError(interaction, "button");
   } catch (error) {
-    logger.error(`Error handling button ${customId}:`, error);
-    if (!(interaction.replied || interaction.deferred)) {
-      await interaction.reply({
-        content: "An error occurred.",
-        ephemeral: true,
-      });
-    }
+    await handleInteractionError(
+      interaction,
+      error,
+      logger,
+      `button ${customId}`
+    );
   }
 };
 
@@ -259,18 +259,14 @@ const handleSelectMenuInteraction = async (
       return;
     }
 
-    await interaction.reply({
-      content: "Unknown select menu.",
-      ephemeral: true,
-    });
+    await replyWithUnknownError(interaction, "menu");
   } catch (error) {
-    logger.error(`Error handling select menu ${customId}:`, error);
-    if (!(interaction.replied || interaction.deferred)) {
-      await interaction.reply({
-        content: "An error occurred.",
-        ephemeral: true,
-      });
-    }
+    await handleInteractionError(
+      interaction,
+      error,
+      logger,
+      `select menu ${customId}`
+    );
   }
 };
 

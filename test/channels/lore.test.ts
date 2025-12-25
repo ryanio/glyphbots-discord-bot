@@ -154,8 +154,10 @@ describe("lore channel", () => {
       mockChannel.send.mockClear();
 
       // Advance 3 intervals (30 minutes total)
-      jest.advanceTimersByTime(30 * 60 * 1000);
-      await jest.runOnlyPendingTimersAsync();
+      for (let i = 0; i < 3; i++) {
+        jest.advanceTimersByTime(10 * 60 * 1000);
+        await jest.runOnlyPendingTimersAsync();
+      }
 
       // At least 3 posts should have been triggered
       expect(mockChannel.send.mock.calls.length).toBeGreaterThanOrEqual(3);

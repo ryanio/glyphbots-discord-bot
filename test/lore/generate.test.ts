@@ -87,7 +87,7 @@ describe("Lore Generation", () => {
       expect(result).not.toBeNull();
       expect(mockGenerateText).toHaveBeenCalledWith(
         expect.objectContaining({
-          prompt: expect.stringContaining("Background: Cosmic"),
+          userPrompt: expect.stringContaining("Background: Cosmic"),
         })
       );
     });
@@ -105,7 +105,7 @@ describe("Lore Generation", () => {
 
       expect(mockGenerateText).toHaveBeenCalledWith(
         expect.objectContaining({
-          prompt: expect.stringContaining("Shadow Merge"),
+          userPrompt: expect.stringContaining("Shadow Merge"),
         })
       );
     });
@@ -143,7 +143,7 @@ describe("Lore Generation", () => {
 
       expect(mockGenerateText).toHaveBeenCalledWith(
         expect.objectContaining({
-          prompt: expect.stringContaining(
+          userPrompt: expect.stringContaining(
             "Bypass 8 security scanners to reach central data vault"
           ),
         })

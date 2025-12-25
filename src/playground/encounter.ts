@@ -5,14 +5,17 @@
  */
 
 import {
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
+  type ActionRowBuilder,
+  type ButtonBuilder,
   EmbedBuilder,
   type HexColorString,
 } from "discord.js";
 import { fetchBot, fetchBotStory, getBotUrl } from "../api/glyphbots";
 import { generateText } from "../api/google-ai";
+import {
+  createBotLinkButton,
+  createButtonRowWithButtons,
+} from "../lib/discord/buttons";
 import { prefixedLogger } from "../lib/logger";
 
 const log = prefixedLogger("Encounter");
@@ -106,17 +109,17 @@ export const generateEncounter = async (): Promise<{
   });
 
   // Build buttons
-  const buttons = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`playground_view_bot_${tokenId1}`)
-      .setLabel(`View ${bot1.name}`)
-      .setStyle(ButtonStyle.Link)
-      .setURL(getBotUrl(tokenId1)),
-    new ButtonBuilder()
-      .setCustomId(`playground_view_bot_${tokenId2}`)
-      .setLabel(`View ${bot2.name}`)
-      .setStyle(ButtonStyle.Link)
-      .setURL(getBotUrl(tokenId2))
+  const buttons = createButtonRowWithButtons(
+    createBotLinkButton(
+      tokenId1,
+      `View ${bot1.name}`,
+      `playground_view_bot_${tokenId1}`
+    ),
+    createBotLinkButton(
+      tokenId2,
+      `View ${bot2.name}`,
+      `playground_view_bot_${tokenId2}`
+    )
   );
 
   return { embed, components: [buttons] };

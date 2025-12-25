@@ -20,13 +20,16 @@ export const handleSpotlight = async (
 
   log.info(`Spotlight requested by ${interaction.user.username}`);
 
-  const embed = await generateSpotlight();
-  if (!embed) {
+  const spotlight = await generateSpotlight();
+  if (!spotlight) {
     await interaction.editReply({
       content: "❌ Failed to generate spotlight. Please try again later.",
     });
     return;
   }
 
-  await interaction.editReply({ embeds: [embed] });
+  await interaction.editReply({
+    embeds: [spotlight.embed],
+    components: spotlight.components,
+  });
 };

@@ -1,5 +1,3 @@
-import { imageToBuffer, imageToDataUrl } from "../../src/api/google-ai";
-
 // Mock @google/genai
 const mockGenerateContent = jest.fn();
 jest.mock("@google/genai", () => ({
@@ -10,9 +8,12 @@ jest.mock("@google/genai", () => ({
   })),
 }));
 
+import { imageToBuffer, imageToDataUrl } from "../../src/api/google-ai";
+
 describe("Google AI Client", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGenerateContent.mockClear();
     process.env.GOOGLE_AI_API_KEY = "test-api-key";
   });
 
@@ -70,8 +71,10 @@ describe("Google AI Client", () => {
         ],
       };
 
-      mockGenerateContent.mockResolvedValueOnce(mockResponse);
+      mockGenerateContent.mockResolvedValue(mockResponse);
 
+      // Clear module cache to ensure fresh import
+      jest.resetModules();
       const { generateText } = await import("../../src/api/google-ai");
 
       const result = await generateText({
@@ -89,6 +92,7 @@ describe("Google AI Client", () => {
         .mockRejectedValueOnce(new Error("API error 2"))
         .mockRejectedValueOnce(new Error("API error 3"));
 
+      jest.resetModules();
       const { generateText } = await import("../../src/api/google-ai");
 
       const result = await generateText({
@@ -102,6 +106,7 @@ describe("Google AI Client", () => {
     it("should handle missing API key", async () => {
       delete process.env.GOOGLE_AI_API_KEY;
 
+      jest.resetModules();
       const { generateText } = await import("../../src/api/google-ai");
 
       const result = await generateText({
@@ -131,8 +136,9 @@ describe("Google AI Client", () => {
         ],
       };
 
-      mockGenerateContent.mockResolvedValueOnce(mockResponse);
+      mockGenerateContent.mockResolvedValue(mockResponse);
 
+      jest.resetModules();
       const { generateImage } = await import("../../src/api/google-ai");
 
       const result = await generateImage({
@@ -156,8 +162,9 @@ describe("Google AI Client", () => {
         ],
       };
 
-      mockGenerateContent.mockResolvedValueOnce(mockResponse);
+      mockGenerateContent.mockResolvedValue(mockResponse);
 
+      jest.resetModules();
       const { generateImage } = await import("../../src/api/google-ai");
 
       const result = await generateImage({

@@ -5,6 +5,7 @@
  */
 
 import type { ButtonInteraction } from "discord.js";
+import { handleInteractionError, replyWithError } from "../lib/discord/errors";
 import { prefixedLogger } from "../lib/logger";
 import { generateSpotlight } from "./spotlight";
 
@@ -21,10 +22,7 @@ export const handleNewSpotlight = async (
   try {
     const result = await generateSpotlight();
     if (!result) {
-      await interaction.followUp({
-        content: "◉ Failed to generate new spotlight.",
-        ephemeral: true,
-      });
+      await replyWithError(interaction, "◉ Failed to generate new spotlight.");
       return;
     }
 
@@ -33,11 +31,16 @@ export const handleNewSpotlight = async (
       components: result.components,
     });
   } catch (error) {
-    log.error("Error generating new spotlight:", error);
-    await interaction.followUp({
-      content: "◉ An error occurred while generating spotlight.",
-      ephemeral: true,
-    });
+    await handleInteractionError(
+      interaction,
+      error,
+      log,
+      "generating new spotlight"
+    );
+    await replyWithError(
+      interaction,
+      "◉ An error occurred while generating spotlight."
+    );
   }
 };
 
@@ -47,10 +50,10 @@ export const handleNewSpotlight = async (
 export const handleArenaChallenge = async (
   interaction: ButtonInteraction
 ): Promise<void> => {
-  await interaction.reply({
-    content: "◉ Use `/arena challenge` to start a battle!",
-    ephemeral: true,
-  });
+  await replyWithError(
+    interaction,
+    "◉ Use `/arena challenge` to start a battle!"
+  );
 };
 
 /**
@@ -72,23 +75,11 @@ export const handlePlaygroundButton = async (
     ) {
       // Link buttons don't need handlers - they open URLs directly
       // But we can acknowledge if needed
-      await interaction.reply({
-        content: "◉ Opening link...",
-        ephemeral: true,
-      });
+      await replyWithError(interaction, "◉ Opening link...");
     } else {
-      await interaction.reply({
-        content: "◉ Unknown playground action.",
-        ephemeral: true,
-      });
+      await replyWithError(interaction, "◉ Unknown playground action.");
     }
   } catch (error) {
-    log.error(`Error handling playground button ${customId}:`, error);
-    if (!(interaction.replied || interaction.deferred)) {
-      await interaction.reply({
-        content: "◉ An error occurred.",
-        ephemeral: true,
-      });
-    }
+    await handleInteractionError(interaction, error, log, `button ${customId}`);
   }
 };

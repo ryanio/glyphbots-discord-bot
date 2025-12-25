@@ -21,35 +21,40 @@ const MAX_NARRATIVE_LENGTH = 4000;
 export const generateLoreNarrative = async (
   context: LoreContext
 ): Promise<GeneratedLore | null> => {
-  const style = getNextStyle();
+  try {
+    const style = getNextStyle();
 
-  log.info(`Generating lore for ${context.bot.name} (style: ${style.name})`);
+    log.info(`Generating lore for ${context.bot.name} (style: ${style.name})`);
 
-  const userPrompt = buildUserPrompt(context, style);
+    const userPrompt = buildUserPrompt(context, style);
 
-  if (context.artifact.imageUrl) {
-    log.debug("Including artifact image in request");
-  }
+    if (context.artifact.imageUrl) {
+      log.debug("Including artifact image in request");
+    }
 
-  const narrative = await generateText({
-    systemPrompt: style.systemPrompt,
-    userPrompt,
-    imageUrl: context.artifact.imageUrl,
-    maxTokens: 2000,
-    temperature: 0.8,
-  });
+    const narrative = await generateText({
+      systemPrompt: style.systemPrompt,
+      userPrompt,
+      imageUrl: context.artifact.imageUrl,
+      maxTokens: 2000,
+      temperature: 0.8,
+    });
 
-  if (!narrative) {
-    log.error("Failed to generate narrative");
+    if (!narrative) {
+      log.error("Failed to generate narrative");
+      return null;
+    }
+
+    log.debug(`Generated narrative (${narrative.length} chars)`);
+
+    return {
+      title: `${context.bot.name}: ${context.artifact.title}`,
+      narrative: truncate(narrative, MAX_NARRATIVE_LENGTH),
+      artifact: context.artifact,
+      bot: context.bot,
+    };
+  } catch (error) {
+    log.error("Failed to generate narrative", error);
     return null;
   }
-
-  log.debug(`Generated narrative (${narrative.length} chars)`);
-
-  return {
-    title: `${context.bot.name}: ${context.artifact.title}`,
-    narrative: truncate(narrative, MAX_NARRATIVE_LENGTH),
-    artifact: context.artifact,
-    bot: context.bot,
-  };
 };

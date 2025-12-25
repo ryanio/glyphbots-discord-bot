@@ -5,9 +5,8 @@
  */
 
 import {
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
+  type ActionRowBuilder,
+  type ButtonBuilder,
   EmbedBuilder,
   type HexColorString,
 } from "discord.js";
@@ -17,6 +16,11 @@ import {
   getBotUrl,
 } from "../api/glyphbots";
 import { generateText } from "../api/google-ai";
+import {
+  createArtifactLinkButton,
+  createBotLinkButton,
+  createButtonRowWithButtons,
+} from "../lib/discord/buttons";
 import { prefixedLogger } from "../lib/logger";
 
 const log = prefixedLogger("Postcard");
@@ -91,25 +95,28 @@ export const generatePostcard = async (): Promise<{
   });
 
   // Build buttons
-  const buttons = new ActionRowBuilder<ButtonBuilder>();
+  const buttonComponents: ButtonBuilder[] = [];
   if (artifact.contractTokenId) {
-    buttons.addComponents(
-      new ButtonBuilder()
-        .setCustomId(`playground_view_artifact_${artifact.contractTokenId}`)
-        .setLabel("View World")
-        .setStyle(ButtonStyle.Link)
-        .setURL(getArtifactUrl(artifact.contractTokenId))
+    buttonComponents.push(
+      createArtifactLinkButton(
+        artifact.contractTokenId,
+        "View World",
+        `playground_view_artifact_${artifact.contractTokenId}`
+      )
     );
   }
-  buttons.addComponents(
-    new ButtonBuilder()
-      .setCustomId(`playground_view_bot_${artifact.botTokenId}`)
-      .setLabel("View Creator")
-      .setStyle(ButtonStyle.Link)
-      .setURL(getBotUrl(artifact.botTokenId))
+  buttonComponents.push(
+    createBotLinkButton(
+      artifact.botTokenId,
+      "View Creator",
+      `playground_view_bot_${artifact.botTokenId}`
+    )
   );
 
-  return { embed, components: [buttons] };
+  return {
+    embed,
+    components: [createButtonRowWithButtons(...buttonComponents)],
+  };
 };
 
 /**

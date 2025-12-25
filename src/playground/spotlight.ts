@@ -5,14 +5,19 @@
  */
 
 import {
-  ActionRowBuilder,
-  ButtonBuilder,
+  type ActionRowBuilder,
+  type ButtonBuilder,
   ButtonStyle,
   EmbedBuilder,
   type HexColorString,
 } from "discord.js";
 import { fetchBot, fetchBotStory, getBotUrl } from "../api/glyphbots";
 import { generateText } from "../api/google-ai";
+import {
+  createBotLinkButton,
+  createButton,
+  createButtonRowWithButtons,
+} from "../lib/discord/buttons";
 import { prefixedLogger } from "../lib/logger";
 import type { BotStory } from "../lib/types";
 
@@ -134,17 +139,14 @@ export const generateSpotlight = async (): Promise<{
   });
 
   // Build buttons
-  const buttons = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`playground_view_bot_${tokenId}`)
-      .setLabel("View Bot")
-      .setStyle(ButtonStyle.Link)
-      .setURL(getBotUrl(tokenId)),
-    new ButtonBuilder()
-      .setCustomId("playground_new_spotlight")
-      .setLabel("New Spotlight")
-      .setStyle(ButtonStyle.Secondary)
-      .setEmoji("✨")
+  const buttons = createButtonRowWithButtons(
+    createBotLinkButton(tokenId, "View Bot", `playground_view_bot_${tokenId}`),
+    createButton(
+      "playground_new_spotlight",
+      "New Spotlight",
+      ButtonStyle.Secondary,
+      "✨"
+    )
   );
 
   return { embed, components: [buttons] };

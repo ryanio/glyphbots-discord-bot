@@ -5,8 +5,8 @@
  */
 
 import {
-  ActionRowBuilder,
-  ButtonBuilder,
+  type ActionRowBuilder,
+  type ButtonBuilder,
   ButtonStyle,
   EmbedBuilder,
   type HexColorString,
@@ -16,6 +16,10 @@ import {
   getRecentBattles,
   getServerStats,
 } from "../arena/tracking";
+import {
+  createButton,
+  createButtonRowWithButtons,
+} from "../lib/discord/buttons";
 import { prefixedLogger } from "../lib/logger";
 
 const log = prefixedLogger("Recap");
@@ -108,12 +112,13 @@ export const generateRecap = async (): Promise<{
   });
 
   // Build buttons
-  const buttons = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId("playground_arena_challenge")
-      .setLabel("Challenge Someone")
-      .setStyle(ButtonStyle.Primary)
-      .setEmoji("⚔️")
+  const buttons = createButtonRowWithButtons(
+    createButton(
+      "playground_arena_challenge",
+      "Challenge Someone",
+      ButtonStyle.Primary,
+      "⚔️"
+    )
   );
 
   return { embed, components: [buttons] };
