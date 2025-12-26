@@ -101,9 +101,43 @@ const getMimeTypeFromUrl = (url: string): string => {
 };
 
 /**
- * Process a single image URL and add to parts array
+ * Download an image from a URL and convert to base64
  */
-const processImageUrl = (url: string, parts: ContentPart[]): void => {
+const downloadImageAsBase64 = async (
+  url: string
+): Promise<{ mimeType: string; data: string } | null> => {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      log.warn(`Failed to download image from ${url}: ${response.status}`);
+      return null;
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const base64 = buffer.toString("base64");
+
+    // Try to get MIME type from Content-Type header, fallback to URL extension
+    const contentType = response.headers.get("content-type");
+    const mimeType = contentType?.startsWith("image/")
+      ? contentType
+      : getMimeTypeFromUrl(url);
+
+    return { mimeType, data: base64 };
+  } catch (error) {
+    log.warn(`Error downloading image from ${url}: ${getErrorMessage(error)}`);
+    return null;
+  }
+};
+
+/**
+ * Process a single image URL and add to parts array
+ * Downloads HTTP/HTTPS URLs and converts to base64 inline data
+ */
+const processImageUrl = async (
+  url: string,
+  parts: ContentPart[]
+): Promise<void> => {
   if (url.startsWith("data:")) {
     const match = url.match(DATA_URL_BASE64_REGEX);
     if (match) {
@@ -112,21 +146,30 @@ const processImageUrl = (url: string, parts: ContentPart[]): void => {
       });
     }
   } else if (url.startsWith("http://") || url.startsWith("https://")) {
-    const mimeType = getMimeTypeFromUrl(url);
-    parts.push({ fileData: { fileUri: url, mimeType } });
+    const imageData = await downloadImageAsBase64(url);
+    if (imageData) {
+      parts.push({
+        inlineData: { mimeType: imageData.mimeType, data: imageData.data },
+      });
+    } else {
+      log.warn(`Skipping image URL ${url} due to download failure`);
+    }
   }
 };
 
 /**
  * Build contents array with text and optional images
- * Uses fileUri for HTTP URLs to avoid base64 encoding
+ * Downloads HTTP/HTTPS URLs and converts to base64 inline data
  */
-const buildContents = (prompt: string, imageUrls?: string[]): ContentPart[] => {
+const buildContents = async (
+  prompt: string,
+  imageUrls?: string[]
+): Promise<ContentPart[]> => {
   const parts: ContentPart[] = [{ text: prompt }];
 
   if (imageUrls && imageUrls.length > 0) {
     for (const url of imageUrls) {
-      processImageUrl(url, parts);
+      await processImageUrl(url, parts);
     }
 
     log.debug(`Added ${imageUrls.length} image(s) to request`);
@@ -216,7 +259,7 @@ export const generateText = async (
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       const ai = createClient();
-      const contents = buildContents(
+      const contents = await buildContents(
         userPrompt,
         imageUrl ? [imageUrl] : undefined
       );
@@ -277,7 +320,7 @@ export const generateImage = async (
       const ai = createClient();
       const contents =
         imageUrls && imageUrls.length > 0
-          ? buildContents(prompt, imageUrls)
+          ? await buildContents(prompt, imageUrls)
           : prompt;
 
       const response = await ai.models.generateContent({
