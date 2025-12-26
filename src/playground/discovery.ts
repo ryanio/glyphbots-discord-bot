@@ -39,15 +39,21 @@ export const generateDiscovery = async (): Promise<{
 } | null> => {
   log.info("Generating item discovery");
 
-  // Get recent artifacts and pick one of the newest
-  const artifacts = await fetchRecentArtifacts(20);
-  if (artifacts.length === 0) {
-    log.warn("No recent artifacts for discovery");
+  // Get recent artifacts and filter for "item" type
+  const artifacts = await fetchRecentArtifacts(50);
+  const itemArtifacts = artifacts.filter(
+    (a) => a.type?.toLowerCase() === "item"
+  );
+
+  // Use item artifacts if available, otherwise use all artifacts
+  const pool = itemArtifacts.length > 0 ? itemArtifacts : artifacts;
+  if (pool.length === 0) {
+    log.warn("No artifacts available for discovery");
     return null;
   }
 
   // Pick from top 5 most recent
-  const recentSlice = artifacts.slice(0, 5);
+  const recentSlice = pool.slice(0, 5);
   const artifact = recentSlice[Math.floor(Math.random() * recentSlice.length)];
 
   // Generate item lore

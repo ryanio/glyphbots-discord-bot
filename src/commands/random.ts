@@ -171,10 +171,7 @@ const handleRandomWorld = async (
 
   const artifacts = await fetchRecentArtifacts(100);
   const worldArtifacts = artifacts.filter(
-    (a) =>
-      a.title.toLowerCase().includes("world") ||
-      a.title.toLowerCase().includes("realm") ||
-      a.title.toLowerCase().includes("domain")
+    (a) => a.type?.toLowerCase() === "world"
   );
 
   const pool = worldArtifacts.length > 0 ? worldArtifacts : artifacts;

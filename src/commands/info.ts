@@ -119,6 +119,7 @@ const buildArtifactEmbed = (artifact: {
   imageUrl: string;
   mintedAt: string | null;
   botTokenId: number;
+  type: string | null;
 }): EmbedBuilder => {
   const embed = new EmbedBuilder()
     .setColor(GLYPHBOTS_COLOR)
@@ -129,6 +130,14 @@ const buildArtifactEmbed = (artifact: {
     embed.addFields({
       name: "Token ID",
       value: `#${artifact.contractTokenId}`,
+      inline: true,
+    });
+  }
+
+  if (artifact.type) {
+    embed.addFields({
+      name: "Type",
+      value: artifact.type.charAt(0).toUpperCase() + artifact.type.slice(1),
       inline: true,
     });
   }

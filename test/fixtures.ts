@@ -30,6 +30,7 @@ export const REAL_ARTIFACT: Artifact = {
   contractTokenId: 137,
   mintQuantity: 2,
   minter: "0x4A301A07e220BF6663D965bb1B4E80AB87508734",
+  type: "character",
 };
 
 /**
@@ -47,6 +48,7 @@ export const REAL_ARTIFACT_2: Artifact = {
   contractTokenId: 136,
   mintQuantity: 1,
   minter: "0x00A839dE7922491683f547a67795204763ff8237",
+  type: "world",
 };
 
 /**
@@ -196,6 +198,7 @@ export const createArtifact = (overrides?: Partial<Artifact>): Artifact => ({
   contractTokenId: 456,
   mintQuantity: 1,
   minter: "0x1234567890123456789012345678901234567890",
+  type: null,
   ...overrides,
 });
 

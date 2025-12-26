@@ -90,6 +90,7 @@ export type Artifact = {
   mintTxHash?: string;
   sourceBotIds?: number[];
   durationMs?: number;
+  type: string | null;
 };
 
 export type ArtifactsListResponse = {

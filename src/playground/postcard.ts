@@ -31,6 +31,22 @@ const log = prefixedLogger("Postcard");
 const POSTCARD_COLOR: HexColorString = "#66ccff";
 
 /**
+ * Get display title for an artifact, using fallback if title is empty
+ */
+const getArtifactDisplayTitle = (artifact: {
+  title: string;
+  contractTokenId: number | null;
+}): string => {
+  if (artifact.title) {
+    return artifact.title;
+  }
+  if (artifact.contractTokenId !== null) {
+    return `Artifact #${artifact.contractTokenId}`;
+  }
+  return "Artifact";
+};
+
+/**
  * Generate a world postcard embed with buttons
  */
 export const generatePostcard = async (): Promise<{
@@ -42,11 +58,7 @@ export const generatePostcard = async (): Promise<{
   // Get recent artifacts and filter for "world" type
   const artifacts = await fetchRecentArtifacts(100);
   const worldArtifacts = artifacts.filter(
-    (a) =>
-      a.title.toLowerCase().includes("world") ||
-      a.title.toLowerCase().includes("realm") ||
-      a.title.toLowerCase().includes("domain") ||
-      a.title.toLowerCase().includes("land")
+    (a) => a.type?.toLowerCase() === "world"
   );
 
   // If no world artifacts, pick a random artifact
@@ -60,13 +72,15 @@ export const generatePostcard = async (): Promise<{
     return null;
   }
 
+  const displayTitle = getArtifactDisplayTitle(artifact);
+
   // Generate atmospheric description
-  const description = await generateWorldDescription(artifact.title);
+  const description = await generateWorldDescription(displayTitle);
 
   const embed = new EmbedBuilder()
     .setColor(POSTCARD_COLOR)
     .setTitle("🌍 WORLD POSTCARD")
-    .setDescription(`*A transmission from ${artifact.title}*`);
+    .setDescription(`*A transmission from ${displayTitle}*`);
 
   if (description) {
     embed.addFields({
@@ -78,7 +92,7 @@ export const generatePostcard = async (): Promise<{
   embed.addFields(
     {
       name: "📍 Origin",
-      value: `[${artifact.title}](${artifact.contractTokenId ? getArtifactUrl(artifact.contractTokenId) : "#"})`,
+      value: `[${displayTitle}](${artifact.contractTokenId ? getArtifactUrl(artifact.contractTokenId) : "#"})`,
       inline: true,
     },
     {
