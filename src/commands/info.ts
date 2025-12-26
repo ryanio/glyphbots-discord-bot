@@ -55,21 +55,21 @@ const formatStatsBlock = (stats: BotStory["storyStats"]): string => {
 /** Add story info to embed */
 const addStoryToEmbed = (embed: EmbedBuilder, story: BotStory): void => {
   embed.addFields({
-    name: "⚔ Role ⚔",
+    name: "⚔ Role",
     value: `${story.arc.faction}\n${story.arc.role}`,
     inline: true,
   });
 
   if (story.storyStats) {
     embed.addFields({
-      name: "◉ Stats ◉",
+      name: "◉ Stats",
       value: formatStatsBlock(story.storyStats),
     });
   }
 
   if (story.storyPowers && story.storyPowers.length > 0) {
     embed.addFields({
-      name: "⚡ Powers ⚡",
+      name: "⚡ Powers",
       value: story.storyPowers.slice(0, 3).join(" • "),
     });
   }
@@ -99,7 +99,7 @@ const buildBotEmbed = (bot: Bot, story: BotStory | null): EmbedBuilder => {
   }
 
   embed.addFields({
-    name: "✦ Rarity ✦",
+    name: "✦ Rarity",
     value: `#${bot.rarityRank} of 11,111`,
     inline: true,
   });

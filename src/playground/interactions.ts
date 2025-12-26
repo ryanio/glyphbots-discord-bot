@@ -147,13 +147,6 @@ export const handlePlaygroundButton = async (
       await handleUserAction(interaction, "request_help", "help");
     } else if (customId === "playground_arena_challenge") {
       await handleArenaChallenge(interaction);
-    } else if (
-      customId.startsWith("playground_view_bot_") ||
-      customId.startsWith("playground_view_artifact_")
-    ) {
-      // Link buttons don't need handlers - they open URLs directly
-      // But we can acknowledge if needed
-      await replyWithError(interaction, "◉ Opening link...");
     } else {
       await replyWithError(interaction, "◉ Unknown playground action.");
     }

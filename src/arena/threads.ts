@@ -103,7 +103,7 @@ export const buildPreBattleEmbed = (battle: BattleState): EmbedBuilder => {
 
   const embed = new EmbedBuilder()
     .setColor(ARENA_COLOR)
-    .setTitle("⚔️ ═══ FIGHTERS LOCKED IN ═══ ⚔️")
+    .setTitle("⚔️ ═══ FIGHTERS LOCKED IN ═══")
     .setDescription(
       `<@${battle.redFighter.userId}> **⟷** <@${battle.blueFighter.userId}>`
     )
@@ -141,7 +141,7 @@ export const buildRoundEmbed = (battle: BattleState): EmbedBuilder => {
 
   const embed = new EmbedBuilder()
     .setColor(ARENA_COLOR)
-    .setTitle(`⚔️ ━━━ ROUND ${battle.round} OF ${battle.maxRounds} ━━━ ⚔️`)
+    .setTitle(`⚔️ ━━━ ROUND ${battle.round} OF ${battle.maxRounds} ━━━`)
     .addFields(
       {
         name: `▸ ${battle.redFighter.bot.name}`,
@@ -160,7 +160,7 @@ export const buildRoundEmbed = (battle: BattleState): EmbedBuilder => {
     const lastRound = battle.roundLog.at(-1);
     if (lastRound) {
       embed.addFields({
-        name: `✦ Round ${lastRound.round} Recap ✦`,
+        name: `✦ Round ${lastRound.round} Recap`,
         value: lastRound.narrative.slice(0, 1024),
       });
     }
@@ -194,7 +194,7 @@ export const buildVictoryEmbed = (
 
   const embed = new EmbedBuilder()
     .setColor(ARENA_COLOR)
-    .setTitle(isEpic ? "✦ ═══ EPIC VICTORY ═══ ✦" : "✦ ═══ VICTORY ═══ ✦")
+    .setTitle(isEpic ? "✦ ═══ EPIC VICTORY ═══" : "✦ ═══ VICTORY ═══")
     .setDescription(`**▸ ${winner.bot.name} CLAIMS GLORY!**`)
     .addFields(
       {
@@ -205,7 +205,7 @@ export const buildVictoryEmbed = (
         ].join("\n"),
       },
       {
-        name: "⚔ Battle Stats ⚔",
+        name: "⚔ Battle Stats",
         value: [
           `**Rounds:** ${battle.round}`,
           `**Crowd Energy:** ${battle.crowdEnergy}%`,
@@ -299,7 +299,7 @@ export const updateChallengeAnnouncement = async (
 
     const embed = new EmbedBuilder()
       .setColor(ARENA_COLOR)
-      .setTitle("⚔ ═══ BATTLE STARTED ═══ ⚔")
+      .setTitle("⚔ ═══ BATTLE STARTED ═══")
       .setDescription(
         [
           `▸ <@${battle.redFighter.userId}> (${battle.redFighter.bot.name})`,

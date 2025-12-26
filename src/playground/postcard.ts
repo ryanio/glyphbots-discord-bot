@@ -100,19 +100,11 @@ export const generatePostcard = async (): Promise<{
   const buttonComponents: ButtonBuilder[] = [];
   if (artifact.contractTokenId) {
     buttonComponents.push(
-      createArtifactLinkButton(
-        artifact.contractTokenId,
-        "View World",
-        `playground_view_artifact_${artifact.contractTokenId}`
-      )
+      createArtifactLinkButton(artifact.contractTokenId, "View World")
     );
   }
   buttonComponents.push(
-    createBotLinkButton(
-      artifact.botTokenId,
-      "View Creator",
-      `playground_view_bot_${artifact.botTokenId}`
-    )
+    createBotLinkButton(artifact.botTokenId, "View Creator")
   );
 
   const actionButtons = [

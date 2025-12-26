@@ -54,7 +54,7 @@ const buildChallengeEmbed = (opts: ChallengeEmbedOpts): EmbedBuilder => {
   const { userId, botName, tokenId, faction, role, stats } = opts;
   const embed = new EmbedBuilder()
     .setColor(ARENA_COLOR)
-    .setTitle("⚔ ═══ ARENA CHALLENGE ═══ ⚔")
+    .setTitle("⚔ ═══ ARENA CHALLENGE ═══")
     .setDescription(
       [
         "",
@@ -70,7 +70,7 @@ const buildChallengeEmbed = (opts: ChallengeEmbedOpts): EmbedBuilder => {
 
   if (stats) {
     embed.addFields({
-      name: "◉ Stats ◉",
+      name: "◉ Stats",
       value: `STR ${stats.strength ?? 0} │ AGI ${stats.agility ?? 0} │ INT ${stats.intellect ?? 0}`,
       inline: true,
     });
@@ -202,7 +202,7 @@ const handleStats = async (
     .setTitle(`⚔ Arena Stats: ${targetUser.username}`)
     .addFields(
       {
-        name: "◉ Overall ◉",
+        name: "◉ Overall",
         value: [
           "**Total Battles:** 0",
           "**Wins:** 0 │ **Losses:** 0",
@@ -211,7 +211,7 @@ const handleStats = async (
         inline: true,
       },
       {
-        name: "✦ Streaks ✦",
+        name: "✦ Streaks",
         value: ["**Current:** 0 wins", "**Best Ever:** 0 wins"].join("\n"),
         inline: true,
       }
@@ -230,10 +230,10 @@ const handleLeaderboard = async (
   // Placeholder leaderboard - will be implemented in Phase 3
   const embed = new EmbedBuilder()
     .setColor(ARENA_COLOR)
-    .setTitle("✦ ═══ Arena Leaderboard ═══ ✦")
+    .setTitle("✦ ═══ Arena Leaderboard ═══")
     .setDescription("Top fighters this season")
     .addFields({
-      name: "◉ Rankings ◉",
+      name: "◉ Rankings",
       value:
         "No battles recorded yet.\n\nStart a fight with `/arena challenge` to be the first on the leaderboard.",
     })
@@ -253,7 +253,7 @@ const handleHistory = async (
 
   const embed = new EmbedBuilder()
     .setColor(ARENA_COLOR)
-    .setTitle("✦ Arena History ✦")
+    .setTitle("✦ Arena History")
     .setDescription("Recent battles in the arena");
 
   if (activeBattles.length === 0) {

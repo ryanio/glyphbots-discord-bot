@@ -29,7 +29,7 @@ const TIPS_COLOR: HexColorString = "#ffaa00";
  */
 export const arenaQuickstart = new EmbedBuilder()
   .setColor(ARENA_COLOR)
-  .setTitle("⚔ ═══ Arena Quick Start ═══ ⚔")
+  .setTitle("⚔ ═══ Arena Quick Start ═══")
   .setDescription("Ready to prove your bot's worth? Here's how:")
   .addFields(
     {
@@ -99,7 +99,7 @@ export const embedBotSyntax = new EmbedBuilder()
  */
 export const spectatorGuide = new EmbedBuilder()
   .setColor(SPECTATOR_COLOR)
-  .setTitle("◉ Spectator Mode ◉")
+  .setTitle("◉ Spectator Mode")
   .setDescription("Not fighting? You can still shape the battle!")
   .addFields(
     {
@@ -112,7 +112,7 @@ export const spectatorGuide = new EmbedBuilder()
       ].join("\n"),
     },
     {
-      name: "✦ Arena Events ✦",
+      name: "✦ Arena Events",
       value:
         "When crowd energy hits **100%**, chaos ensues.\nRandom arena events can flip the entire battle.",
     }
@@ -133,13 +133,13 @@ export const slashCommands = new EmbedBuilder()
       inline: true,
     },
     {
-      name: "⚔ Arena ⚔",
+      name: "⚔ Arena",
       value:
         "`/arena challenge` `/arena stats`\n`/arena leaderboard` `/arena history`",
       inline: true,
     },
     {
-      name: "◉ Playground ◉",
+      name: "◉ Playground",
       value: "`/spotlight` `/random bot`\n`/random artifact` `/random world`",
       inline: true,
     }
@@ -158,12 +158,12 @@ export const channelOverview = new EmbedBuilder()
         "AI-generated stories about recently minted artifacts.\n*Just sit back and enjoy.*",
     },
     {
-      name: "⚔ #arena ⚔",
+      name: "⚔ #arena",
       value:
         "Interactive PvP battles between GlyphBots.\nChallenge others, fight in real-time.\n`/arena challenge` `/arena stats`",
     },
     {
-      name: "◉ #playground ◉",
+      name: "◉ #playground",
       value:
         "Community showcase and onboarding.\nBot spotlights, world postcards, arena recaps.\n**Request new content** with buttons on any post!",
     }
@@ -264,7 +264,7 @@ export const TIPS = [
     tip: "Spectators can give fighters +5% damage. Rally your friends.",
   },
   {
-    title: "✦ Arena Events ✦",
+    title: "✦ Arena Events",
     tip: "At 100% crowd energy, random events trigger. Power surges, chaos fields, arena hazards.",
   },
   {
@@ -276,7 +276,7 @@ export const TIPS = [
     tip: "Every week, special bots get featured in #playground.",
   },
   {
-    title: "⚡ Speed Matters ⚡",
+    title: "⚡ Speed Matters",
     tip: "The bot with higher Agility attacks first each round.",
   },
   {

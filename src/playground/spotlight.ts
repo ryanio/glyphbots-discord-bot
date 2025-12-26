@@ -140,7 +140,7 @@ export const generateSpotlight = async (): Promise<{
 
   // Build buttons
   const buttons = createButtonRowWithButtons(
-    createBotLinkButton(tokenId, "View Bot", `playground_view_bot_${tokenId}`),
+    createBotLinkButton(tokenId, "View Bot"),
     createButton(
       "playground_new_spotlight",
       "New Spotlight",

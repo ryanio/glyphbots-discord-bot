@@ -150,13 +150,13 @@ const buildLoreEmbed = (lore: GeneratedLore): EmbedBuilder => {
   // Artifact first
   if (artifact.contractTokenId) {
     fields.push({
-      name: "◈ Artifact ◈",
+      name: "◈ Artifact",
       value: `[${artifact.title} #${artifact.contractTokenId}](${getArtifactUrl(artifact.contractTokenId)})`,
       inline: true,
     });
   } else {
     fields.push({
-      name: "◈ Artifact ◈",
+      name: "◈ Artifact",
       value: artifact.title,
       inline: true,
     });
@@ -164,7 +164,7 @@ const buildLoreEmbed = (lore: GeneratedLore): EmbedBuilder => {
 
   // Bot second, ID at end
   fields.push({
-    name: "◈ Bot ◈",
+    name: "◈ Bot",
     value: `[${bot.name} #${bot.tokenId}](${getBotUrl(bot.tokenId)})`,
     inline: true,
   });
@@ -175,7 +175,7 @@ const buildLoreEmbed = (lore: GeneratedLore): EmbedBuilder => {
     const year = mintDate.getFullYear();
     const shortYear = `'${year.toString().slice(-2)}`;
     fields.push({
-      name: "◉ Minted ◉",
+      name: "◉ Minted",
       value: `${mintDate.toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",

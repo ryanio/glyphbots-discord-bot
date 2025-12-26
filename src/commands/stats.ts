@@ -34,7 +34,7 @@ const handleStatsMe = async (
 
   const embed = new EmbedBuilder()
     .setColor(STATS_COLOR)
-    .setTitle(`◉ ${interaction.user.username}'s Stats ◉`)
+    .setTitle(`◉ ${interaction.user.username}'s Stats`)
     .setThumbnail(interaction.user.displayAvatarURL());
 
   if (userStats) {
@@ -47,7 +47,7 @@ const handleStatsMe = async (
 
     embed.addFields(
       {
-        name: "⚔ Arena Record ⚔",
+        name: "⚔ Arena Record",
         value: [
           `**Wins:** ${userStats.wins}`,
           `**Losses:** ${userStats.losses}`,
@@ -56,7 +56,7 @@ const handleStatsMe = async (
         inline: true,
       },
       {
-        name: "✦ Streaks ✦",
+        name: "✦ Streaks",
         value: [
           `**Current:** ${userStats.currentStreak} wins`,
           `**Best Ever:** ${userStats.bestStreak} wins`,
@@ -64,7 +64,7 @@ const handleStatsMe = async (
         inline: true,
       },
       {
-        name: "◈ Achievements ◈",
+        name: "◈ Achievements",
         value: [
           `**Epic Victories:** ${userStats.epicVictories}`,
           `**Total Rounds:** ${userStats.totalRounds}`,
@@ -99,7 +99,7 @@ const handleStatsArena = async (
 
   const embed = new EmbedBuilder()
     .setColor(STATS_COLOR)
-    .setTitle(`⚔ Arena Stats: ${targetUser.username} ⚔`)
+    .setTitle(`⚔ Arena Stats: ${targetUser.username}`)
     .setThumbnail(targetUser.displayAvatarURL());
 
   if (userStats) {
@@ -112,7 +112,7 @@ const handleStatsArena = async (
 
     embed.addFields(
       {
-        name: "◉ Overall ◉",
+        name: "◉ Overall",
         value: [
           `**Total Battles:** ${userStats.wins + userStats.losses}`,
           `**Wins:** ${userStats.wins} │ **Losses:** ${userStats.losses}`,
@@ -121,7 +121,7 @@ const handleStatsArena = async (
         inline: true,
       },
       {
-        name: "✦ Streaks ✦",
+        name: "✦ Streaks",
         value: [
           `**Current:** ${userStats.currentStreak} wins`,
           `**Best Ever:** ${userStats.bestStreak} wins`,
@@ -150,10 +150,10 @@ const handleStatsServer = async (
 
   const embed = new EmbedBuilder()
     .setColor(STATS_COLOR)
-    .setTitle("◉ Server Arena Statistics ◉");
+    .setTitle("◉ Server Arena Statistics");
 
   embed.addFields({
-    name: "◉ Overall ◉",
+    name: "◉ Overall",
     value: [
       `**Total Battles:** ${serverStats.totalBattles}`,
       `**Total Rounds:** ${serverStats.totalRounds}`,
@@ -180,7 +180,7 @@ const handleStatsServer = async (
       .join("\n");
 
     embed.addFields({
-      name: "✦ Top Fighters ✦",
+      name: "✦ Top Fighters",
       value: leaderboardText,
       inline: true,
     });
@@ -235,7 +235,7 @@ const handleStatsBot = async (
 
     embed.addFields(
       {
-        name: "⚔ Battle Record ⚔",
+        name: "⚔ Battle Record",
         value: [
           `**Wins:** ${botStats.wins}`,
           `**Losses:** ${botStats.losses}`,
@@ -244,7 +244,7 @@ const handleStatsBot = async (
         inline: true,
       },
       {
-        name: "◉ Combat Stats ◉",
+        name: "◉ Combat Stats",
         value: [
           `**Avg Damage/Battle:** ${avgDamageDealt}`,
           `**Avg Taken/Battle:** ${avgDamageTaken}`,

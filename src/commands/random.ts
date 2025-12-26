@@ -63,12 +63,12 @@ const handleRandomBot = async (
       .slice(0, 4)
       .map((t) => `**${t.trait_type}:** ${t.value}`)
       .join("\n");
-    embed.addFields({ name: "◉ Traits ◉", value: traitList, inline: true });
+    embed.addFields({ name: "◉ Traits", value: traitList, inline: true });
   }
 
   if (story) {
     embed.addFields({
-      name: "⚔ Role ⚔",
+      name: "⚔ Role",
       value: `${story.arc.faction}\n${story.arc.role}`,
       inline: true,
     });
@@ -81,14 +81,14 @@ const handleRandomBot = async (
         `INT ${statsBar(stats.intellect ?? 0)} ${stats.intellect ?? 0}`,
       ];
       embed.addFields({
-        name: "◉ Stats ◉",
+        name: "◉ Stats",
         value: `\`\`\`\n${statLines.join("\n")}\n\`\`\``,
       });
     }
   }
 
   embed.addFields({
-    name: "✦ Rarity ✦",
+    name: "✦ Rarity",
     value: `#${bot.rarityRank} of 11,111`,
     inline: true,
   });

@@ -12,11 +12,9 @@ import { getArtifactUrl, getBotUrl } from "../../api/glyphbots";
  */
 export function createBotLinkButton(
   tokenId: number,
-  label?: string,
-  customId?: string
+  label?: string
 ): ButtonBuilder {
   return new ButtonBuilder()
-    .setCustomId(customId ?? `view_bot_${tokenId}`)
     .setLabel(label ?? `View Bot #${tokenId}`)
     .setStyle(ButtonStyle.Link)
     .setURL(getBotUrl(tokenId));
@@ -27,11 +25,9 @@ export function createBotLinkButton(
  */
 export function createArtifactLinkButton(
   contractTokenId: number,
-  label?: string,
-  customId?: string
+  label?: string
 ): ButtonBuilder {
   return new ButtonBuilder()
-    .setCustomId(customId ?? `view_artifact_${contractTokenId}`)
     .setLabel(label ?? "View Artifact")
     .setStyle(ButtonStyle.Link)
     .setURL(getArtifactUrl(contractTokenId));

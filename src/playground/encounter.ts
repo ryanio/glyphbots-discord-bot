@@ -112,16 +112,8 @@ export const generateEncounter = async (): Promise<{
 
   // Build buttons
   const buttons = createButtonRowWithButtons(
-    createBotLinkButton(
-      tokenId1,
-      `View ${bot1.name}`,
-      `playground_view_bot_${tokenId1}`
-    ),
-    createBotLinkButton(
-      tokenId2,
-      `View ${bot2.name}`,
-      `playground_view_bot_${tokenId2}`
-    )
+    createBotLinkButton(tokenId1, `View ${bot1.name}`),
+    createBotLinkButton(tokenId2, `View ${bot2.name}`)
   );
 
   const actionButtons = createButtonRowWithButtons(

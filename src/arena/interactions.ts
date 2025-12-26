@@ -512,7 +512,7 @@ const buildArenaEventEmbed = (
 ): EmbedBuilder => {
   const embed = new EmbedBuilder()
     .setColor(ARENA_COLOR)
-    .setTitle("⚡ ARENA EVENT ⚡")
+    .setTitle("⚡ ARENA EVENT")
     .setDescription(event.description);
 
   if (event.redEffect) {
@@ -631,7 +631,7 @@ const handleArenaMyStats = async (
 
   const embed = new EmbedBuilder()
     .setColor(STATS_COLOR)
-    .setTitle(`◉ ${interaction.user.username}'s Stats ◉`)
+    .setTitle(`◉ ${interaction.user.username}'s Stats`)
     .setThumbnail(interaction.user.displayAvatarURL());
 
   if (userStats) {
@@ -644,7 +644,7 @@ const handleArenaMyStats = async (
 
     embed.addFields(
       {
-        name: "⚔ Arena Record ⚔",
+        name: "⚔ Arena Record",
         value: [
           `**Wins:** ${userStats.wins}`,
           `**Losses:** ${userStats.losses}`,
@@ -653,7 +653,7 @@ const handleArenaMyStats = async (
         inline: true,
       },
       {
-        name: "✦ Streaks ✦",
+        name: "✦ Streaks",
         value: [
           `**Current:** ${userStats.currentStreak} wins`,
           `**Best Ever:** ${userStats.bestStreak} wins`,
@@ -661,7 +661,7 @@ const handleArenaMyStats = async (
         inline: true,
       },
       {
-        name: "◈ Achievements ◈",
+        name: "◈ Achievements",
         value: [
           `**Epic Victories:** ${userStats.epicVictories}`,
           `**Total Rounds:** ${userStats.totalRounds}`,
@@ -701,11 +701,11 @@ const handleArenaLeaderboard = async (
 
   const embed = new EmbedBuilder()
     .setColor(ARENA_COLOR)
-    .setTitle("✦ ═══ Arena Leaderboard ═══ ✦")
+    .setTitle("✦ ═══ Arena Leaderboard ═══")
     .setDescription("Top fighters this season");
 
   embed.addFields({
-    name: "◉ Server Stats ◉",
+    name: "◉ Server Stats",
     value: [
       `**Total Battles:** ${serverStats.totalBattles}`,
       `**Total Rounds:** ${serverStats.totalRounds}`,
