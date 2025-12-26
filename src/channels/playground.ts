@@ -21,6 +21,8 @@ import { generateRecap } from "../playground/recap";
 import {
   type ContentType,
   calculateNextInterval,
+  canPostContent,
+  getRotationState,
   recordContentPost,
   selectNextContentType,
 } from "../playground/rotation";
@@ -204,12 +206,45 @@ export const initPlaygroundChannel = async (
       isActive: true,
     };
 
-    // Calculate next interval for status
-    const nextInterval = calculateNextInterval(
-      config.playgroundMinIntervalMinutes,
-      config.playgroundMaxIntervalMinutes
-    );
-    const nextPostMinutes = Math.round(nextInterval / 60_000);
+    // Check if we should post immediately on startup
+    const shouldPostNow = canPostContent(config.playgroundMinIntervalMinutes);
+
+    let status: string;
+    let nextPostMinutes: number;
+
+    if (shouldPostNow) {
+      // Post immediately, then start the loop
+      log.info("Posting initial playground content on startup");
+      postContent()
+        .then((success) => {
+          if (success) {
+            log.info("Initial playground post successful");
+          } else {
+            log.warn(
+              "Initial playground post failed, will retry on next interval"
+            );
+          }
+        })
+        .catch((error) => {
+          log.error("Error posting initial playground content:", error);
+        });
+
+      // Calculate next interval for status
+      const nextInterval = calculateNextInterval(
+        config.playgroundMinIntervalMinutes,
+        config.playgroundMaxIntervalMinutes
+      );
+      nextPostMinutes = Math.round(nextInterval / 60_000);
+      status = "Posted initial content, loop active";
+    } else {
+      // Calculate time until we can post
+      const minIntervalMs = config.playgroundMinIntervalMinutes * 60 * 1000;
+      const rotationState = getRotationState();
+      const elapsed = Date.now() - rotationState.lastPostTimestamp;
+      const timeUntilNextPost = minIntervalMs - elapsed;
+      nextPostMinutes = Math.ceil(timeUntilNextPost / 60_000);
+      status = `Waiting ${nextPostMinutes} min before first post`;
+    }
 
     // Start the content loop
     contentLoop().catch((error) => {
@@ -219,7 +254,7 @@ export const initPlaygroundChannel = async (
     return {
       channelName,
       nextPostMinutes,
-      status: "Content loop active",
+      status,
     };
   } catch (error) {
     log.error("Failed to initialize playground channel:", error);

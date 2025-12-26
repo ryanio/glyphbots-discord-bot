@@ -24,7 +24,12 @@ import {
   resolveLastPostInfo,
 } from "./lib/state";
 import type { Config } from "./lib/types";
-import { formatReadableDate, formatUnixTimeAgo, loadConfig } from "./lib/utils";
+import {
+  formatReadableDate,
+  formatUnixTimeAgo,
+  getErrorMessage,
+  loadConfig,
+} from "./lib/utils";
 import { handlePlaygroundButton } from "./playground/interactions";
 
 const logger = prefixedLogger("Main");
@@ -190,7 +195,12 @@ const handleSlashCommand = async (
         });
     }
   } catch (error) {
-    logger.error(`Error handling command ${commandName}:`, error);
+    const errorMessage = getErrorMessage(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    logger.error(
+      `Error handling command ${commandName}: ${errorMessage}`,
+      errorStack ? `\n${errorStack}` : ""
+    );
     const errorReply = {
       content: "An error occurred while processing this command.",
       ephemeral: true,
