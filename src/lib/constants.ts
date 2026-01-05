@@ -27,11 +27,11 @@ export const DEFAULT_LORE_MAX_INTERVAL_MINUTES = 720;
 /** Default GlyphBots API URL */
 export const DEFAULT_GLYPHBOTS_API_URL = "https://glyphbots.com";
 
-/** Default arena challenge timeout in seconds */
-export const DEFAULT_ARENA_CHALLENGE_TIMEOUT_SECONDS = 120;
+/** Default arena challenge timeout in seconds (24 hours) */
+export const DEFAULT_ARENA_CHALLENGE_TIMEOUT_SECONDS = 86_400;
 
-/** Default arena round timeout in seconds */
-export const DEFAULT_ARENA_ROUND_TIMEOUT_SECONDS = 30;
+/** Default arena round timeout in seconds (24 hours) */
+export const DEFAULT_ARENA_ROUND_TIMEOUT_SECONDS = 86_400;
 
 /** Default arena max rounds */
 export const DEFAULT_ARENA_MAX_ROUNDS = 5;

@@ -90,11 +90,11 @@ export type BattleState = {
 /** Default HP for all fighters */
 const DEFAULT_MAX_HP = 100;
 
-/** Challenge timeout in milliseconds */
-const CHALLENGE_TIMEOUT_MS = 2 * 60 * 1000;
+/** Challenge timeout in milliseconds (configurable) */
+let CHALLENGE_TIMEOUT_MS = 86_400 * 1000; // Default: 24 hours
 
-/** Round timeout in milliseconds */
-const ROUND_TIMEOUT_MS = 30 * 1000;
+/** Round timeout in milliseconds (configurable) */
+let ROUND_TIMEOUT_MS = 86_400 * 1000; // Default: 24 hours
 
 /** Default max rounds */
 const DEFAULT_MAX_ROUNDS = 5;
@@ -107,6 +107,20 @@ const userBattles = new Map<string, string>();
 
 /** Battles by thread ID (for quick lookup) */
 const threadBattles = new Map<string, string>();
+
+/**
+ * Initialize arena state with config values
+ */
+export const initArenaState = (
+  challengeTimeoutSeconds: number,
+  roundTimeoutSeconds: number
+): void => {
+  CHALLENGE_TIMEOUT_MS = challengeTimeoutSeconds * 1000;
+  ROUND_TIMEOUT_MS = roundTimeoutSeconds * 1000;
+  log.info(
+    `Arena state initialized: challenge timeout=${challengeTimeoutSeconds}s, round timeout=${roundTimeoutSeconds}s`
+  );
+};
 
 /**
  * Generate a unique battle ID

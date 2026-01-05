@@ -9,6 +9,7 @@ import {
   cleanupBattle,
   getAllBattles,
   getExpiredBattles,
+  initArenaState,
 } from "../arena/state";
 import { prefixedLogger } from "../lib/logger";
 import type { Config } from "../lib/types";
@@ -127,6 +128,12 @@ export const initArenaChannel = async (
       config,
       isActive: true,
     };
+
+    // Initialize arena state with config timeout values
+    initArenaState(
+      config.arenaChallengeTimeoutSeconds,
+      config.arenaRoundTimeoutSeconds
+    );
 
     // Start the expiry check loop
     expiryCheckLoop().catch((error) => {
