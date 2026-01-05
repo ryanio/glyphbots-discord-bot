@@ -45,13 +45,41 @@ type ChallengeEmbedOpts = {
   faction: string | null;
   role: string | null;
   stats: Record<string, number> | null;
+  challengeTimeoutSeconds: number;
+};
+
+/**
+ * Format timeout duration in a human-readable way
+ */
+const formatTimeout = (seconds: number): string => {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+
+  if (hours > 0) {
+    if (minutes === 0) {
+      return `${hours}hrs`;
+    }
+    return `${hours}hrs ${minutes}mins`;
+  }
+  if (minutes > 0) {
+    return `${minutes}mins`;
+  }
+  return `${seconds}s`;
 };
 
 /**
  * Build challenge announcement embed
  */
 const buildChallengeEmbed = (opts: ChallengeEmbedOpts): EmbedBuilder => {
-  const { userId, botName, tokenId, faction, role, stats } = opts;
+  const {
+    userId,
+    botName,
+    tokenId,
+    faction,
+    role,
+    stats,
+    challengeTimeoutSeconds,
+  } = opts;
   const embed = new EmbedBuilder()
     .setColor(ARENA_COLOR)
     .setTitle("⚔ ═══ ARENA CHALLENGE ═══")
@@ -78,7 +106,7 @@ const buildChallengeEmbed = (opts: ChallengeEmbedOpts): EmbedBuilder => {
 
   embed.addFields({
     name: "⏱ Time Remaining",
-    value: "Accepting challengers for **2:00**...",
+    value: `Accepting challengers for **${formatTimeout(challengeTimeoutSeconds)}**...`,
     inline: true,
   });
 
@@ -172,6 +200,7 @@ const handleChallenge = async (
     faction: story?.arc?.faction ?? null,
     role: story?.arc?.role ?? null,
     stats: story?.storyStats ?? null,
+    challengeTimeoutSeconds: config.arenaChallengeTimeoutSeconds,
   });
 
   const buttons = buildChallengeButtons(battle.id);
