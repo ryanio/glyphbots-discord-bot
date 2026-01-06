@@ -125,8 +125,8 @@ The following settings can be changed in `src/lib/constants.ts`:
 | `LORE_MAX_INTERVAL_MINUTES` | Maximum minutes between lore posts | `720` (12 hours) |
 | `PLAYGROUND_MIN_INTERVAL_MINUTES` | Minimum minutes between playground posts | `240` (4 hours) |
 | `PLAYGROUND_MAX_INTERVAL_MINUTES` | Maximum minutes between playground posts | `720` (12 hours) |
-| `ARENA_CHALLENGE_TIMEOUT_SECONDS` | Challenge acceptance timeout | `120` (2 minutes) |
-| `ARENA_ROUND_TIMEOUT_SECONDS` | Round action timeout | `30` seconds |
+| `ARENA_CHALLENGE_TIMEOUT_SECONDS` | Challenge acceptance timeout | `86400` (24 hours) |
+| `ARENA_ROUND_TIMEOUT_SECONDS` | Round action timeout | `86400` (24 hours) |
 | `ARENA_MAX_ROUNDS` | Maximum rounds per battle | `5` |
 
 ## Arena Battles

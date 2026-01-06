@@ -10,6 +10,103 @@ import { SlashCommandBuilder } from "discord.js";
 const MAX_BOT_TOKEN_ID = 11_111;
 
 /**
+ * /wallet <subcommand> - Manage your Ethereum wallet connection
+ */
+export const walletCommand = new SlashCommandBuilder()
+  .setName("wallet")
+  .setDescription("Manage your Ethereum wallet connection")
+  .addSubcommand((sub) =>
+    sub
+      .setName("set")
+      .setDescription("Connect your Ethereum wallet")
+      .addStringOption((opt) =>
+        opt
+          .setName("address")
+          .setDescription("Your Ethereum address (e.g., 0x...)")
+          .setRequired(true)
+      )
+  )
+  .addSubcommand((sub) =>
+    sub.setName("view").setDescription("View your connected wallet")
+  )
+  .addSubcommand((sub) =>
+    sub.setName("clear").setDescription("Disconnect your wallet")
+  );
+
+/**
+ * /mybots - View your owned GlyphBots
+ */
+export const mybotsCommand = new SlashCommandBuilder()
+  .setName("mybots")
+  .setDescription("View your owned GlyphBots (requires wallet connection)");
+
+/**
+ * /floor - View GlyphBots collection stats and floor price
+ */
+export const floorCommand = new SlashCommandBuilder()
+  .setName("floor")
+  .setDescription("View GlyphBots collection stats and floor price");
+
+/**
+ * /owner <bot> - Check who owns a specific GlyphBot
+ */
+export const ownerCommand = new SlashCommandBuilder()
+  .setName("owner")
+  .setDescription("Check who owns a specific GlyphBot")
+  .addIntegerOption((opt) =>
+    opt
+      .setName("bot")
+      .setDescription("Bot token ID (1-11111)")
+      .setRequired(true)
+      .setMinValue(1)
+      .setMaxValue(MAX_BOT_TOKEN_ID)
+  );
+
+/**
+ * /sales - View recent GlyphBots sales
+ */
+export const salesCommand = new SlashCommandBuilder()
+  .setName("sales")
+  .setDescription("View recent GlyphBots sales on OpenSea");
+
+/**
+ * /listings - View cheapest GlyphBots for sale
+ */
+export const listingsCommand = new SlashCommandBuilder()
+  .setName("listings")
+  .setDescription("View cheapest GlyphBots currently listed for sale");
+
+/**
+ * /rarity <bot> - Check a bot's rarity and traits
+ */
+export const rarityCommand = new SlashCommandBuilder()
+  .setName("rarity")
+  .setDescription("Check a GlyphBot's rarity rank and traits")
+  .addIntegerOption((opt) =>
+    opt
+      .setName("bot")
+      .setDescription("Bot token ID (1-11111)")
+      .setRequired(true)
+      .setMinValue(1)
+      .setMaxValue(MAX_BOT_TOKEN_ID)
+  );
+
+/**
+ * /activity <bot> - View recent activity for a specific bot
+ */
+export const activityCommand = new SlashCommandBuilder()
+  .setName("activity")
+  .setDescription("View recent activity for a specific GlyphBot")
+  .addIntegerOption((opt) =>
+    opt
+      .setName("bot")
+      .setDescription("Bot token ID (1-11111)")
+      .setRequired(true)
+      .setMinValue(1)
+      .setMaxValue(MAX_BOT_TOKEN_ID)
+  );
+
+/**
  * /help [topic] - Get help with GlyphBots features
  */
 export const helpCommand = new SlashCommandBuilder()
@@ -78,8 +175,8 @@ export const arenaCommand = new SlashCommandBuilder()
       .addIntegerOption((opt) =>
         opt
           .setName("bot")
-          .setDescription("Your bot's token ID")
-          .setRequired(true)
+          .setDescription("Bot token ID (optional if wallet connected)")
+          .setRequired(false)
           .setMinValue(1)
           .setMaxValue(MAX_BOT_TOKEN_ID)
       )
@@ -191,6 +288,14 @@ export const commands = [
   randomCommand,
   tipsCommand,
   statsCommand,
+  walletCommand,
+  mybotsCommand,
+  floorCommand,
+  ownerCommand,
+  salesCommand,
+  listingsCommand,
+  rarityCommand,
+  activityCommand,
 ];
 
 /**

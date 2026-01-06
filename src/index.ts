@@ -2,16 +2,25 @@ import "dotenv/config";
 
 import { Client, Events, GatewayIntentBits } from "discord.js";
 import { handleArenaButton, handleArenaSelectMenu } from "./arena/interactions";
+import { saveArenaStateNow } from "./arena/state";
 import { initArenaChannel } from "./channels/arena";
 import { initLoreChannel } from "./channels/lore";
 import { initPlaygroundChannel } from "./channels/playground";
+import { handleActivity } from "./commands/activity";
 import { handleArena } from "./commands/arena";
+import { handleFloor } from "./commands/floor";
 import { handleHelp } from "./commands/help";
 import { handleInfo } from "./commands/info";
+import { handleListings } from "./commands/listings";
+import { handleMyBots } from "./commands/mybots";
+import { handleOwner } from "./commands/owner";
 import { handleRandom } from "./commands/random";
+import { handleRarity } from "./commands/rarity";
+import { handleSales } from "./commands/sales";
 import { handleSpotlight } from "./commands/spotlight";
 import { handleStats } from "./commands/stats";
 import { handleTips } from "./commands/tips";
+import { handleWallet } from "./commands/wallet";
 import {
   handleInteractionError,
   replyWithUnknownError,
@@ -188,6 +197,30 @@ const handleSlashCommand = async (
       case "stats":
         await handleStats(interaction);
         break;
+      case "wallet":
+        await handleWallet(interaction);
+        break;
+      case "mybots":
+        await handleMyBots(interaction);
+        break;
+      case "floor":
+        await handleFloor(interaction);
+        break;
+      case "owner":
+        await handleOwner(interaction);
+        break;
+      case "sales":
+        await handleSales(interaction);
+        break;
+      case "listings":
+        await handleListings(interaction);
+        break;
+      case "rarity":
+        await handleRarity(interaction);
+        break;
+      case "activity":
+        await handleActivity(interaction);
+        break;
       default:
         await interaction.reply({
           content: "Unknown command.",
@@ -361,19 +394,35 @@ async function main(): Promise<void> {
   });
 
   // Graceful shutdown
-  process.on("SIGINT", () => {
+  process.on("SIGINT", async () => {
     logger.info("");
     logger.info("⚠️ Interrupt signal received (SIGINT)");
     logger.info("🛑 Shutting down gracefully...");
+
+    try {
+      await saveArenaStateNow();
+      logger.info("💾 Arena state saved");
+    } catch (error) {
+      logger.error("Failed to save arena state on shutdown:", error);
+    }
+
     client.destroy();
     logger.info("✅ Bot stopped successfully");
     process.exit(0);
   });
 
-  process.on("SIGTERM", () => {
+  process.on("SIGTERM", async () => {
     logger.info("");
     logger.info("⚠️ Terminate signal received (SIGTERM)");
     logger.info("🛑 Shutting down gracefully...");
+
+    try {
+      await saveArenaStateNow();
+      logger.info("💾 Arena state saved");
+    } catch (error) {
+      logger.error("Failed to save arena state on shutdown:", error);
+    }
+
     client.destroy();
     logger.info("✅ Bot stopped successfully");
     process.exit(0);

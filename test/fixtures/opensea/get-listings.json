@@ -1,0 +1,39 @@
+{
+  "listings": [
+    {
+      "order_hash": "0xabc123",
+      "chain": "ethereum",
+      "price": {
+        "current": {
+          "currency": "ETH",
+          "decimals": 18,
+          "value": "297990000000000"
+        }
+      },
+      "protocol_data": {
+        "parameters": {
+          "offerer": "0x00a839de7922491683f547a67795204763ff8237"
+        }
+      },
+      "protocol_address": "0x00000000000000adc04c56bf30ac9d3c0aaf14dc"
+    },
+    {
+      "order_hash": "0xdef456",
+      "chain": "ethereum",
+      "price": {
+        "current": {
+          "currency": "ETH",
+          "decimals": 18,
+          "value": "350000000000000"
+        }
+      },
+      "protocol_data": {
+        "parameters": {
+          "offerer": "0xc9f8a67e34ea5e6e4aabd7f4c7771061585de9bf"
+        }
+      },
+      "protocol_address": "0x00000000000000adc04c56bf30ac9d3c0aaf14dc"
+    }
+  ],
+  "next": null
+}

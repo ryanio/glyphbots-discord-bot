@@ -124,6 +124,13 @@ const persistBattles = async (): Promise<void> => {
 };
 
 /**
+ * Force save all active battles to disk (for shutdown)
+ */
+export const saveArenaStateNow = async (): Promise<void> => {
+  await persistBattles();
+};
+
+/**
  * Restore a battle from persistence
  */
 const restoreBattle = (battle: BattleState): void => {

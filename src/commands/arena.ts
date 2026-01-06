@@ -13,6 +13,7 @@ import {
   type HexColorString,
 } from "discord.js";
 import { fetchBot, fetchBotStory, getBotUrl } from "../api/glyphbots";
+import { fetchRandomUserNFT } from "../api/opensea";
 import {
   cancelChallenge,
   createBattle,
@@ -26,6 +27,7 @@ import {
 import { arenaQuickstart } from "../help/embeds";
 import { prefixedLogger } from "../lib/logger";
 import type { Config } from "../lib/types";
+import { getUserWallet } from "../lib/wallet-state";
 
 const log = prefixedLogger("ArenaCmd");
 
@@ -141,6 +143,69 @@ const buildChallengeButtons = (
       .setEmoji("❌")
   );
 
+type BotSelectionResult =
+  | { success: true; tokenId: number; deferred: boolean }
+  | { success: false };
+
+const selectBotForChallenge = async (
+  interaction: ChatInputCommandInteraction
+): Promise<BotSelectionResult> => {
+  const tokenIdOption = interaction.options.getInteger("bot");
+  const userId = interaction.user.id;
+
+  if (tokenIdOption) {
+    return { success: true, tokenId: tokenIdOption, deferred: false };
+  }
+
+  const wallet = await getUserWallet(userId);
+  if (!wallet) {
+    const embed = new EmbedBuilder()
+      .setColor(ERROR_COLOR)
+      .setTitle("🎯 Choose Your Fighter")
+      .setDescription(
+        [
+          "You didn't specify a bot to fight with!",
+          "",
+          "**Option 1:** Specify a bot ID",
+          "Use `/arena challenge bot:1234` with any bot ID",
+          "",
+          "**Option 2:** Connect your wallet",
+          "Use `/wallet set` with your Ethereum address to pick from your owned GlyphBots!",
+        ].join("\n")
+      )
+      .setFooter({ text: "Tip: Owning a bot makes battles more personal!" });
+
+    await interaction.reply({ embeds: [embed], ephemeral: true });
+    return { success: false };
+  }
+
+  await interaction.deferReply();
+
+  const randomNft = await fetchRandomUserNFT(wallet);
+  if (!randomNft) {
+    const embed = new EmbedBuilder()
+      .setColor(ERROR_COLOR)
+      .setTitle("🤖 No GlyphBots Found")
+      .setDescription(
+        [
+          "No GlyphBots found in your connected wallet.",
+          "",
+          "Either specify a bot ID with `/arena challenge bot:1234`",
+          "or [get a GlyphBot on OpenSea](https://opensea.io/collection/glyphbots)!",
+        ].join("\n")
+      );
+
+    await interaction.editReply({ embeds: [embed] });
+    return { success: false };
+  }
+
+  const tokenId = Number(randomNft.identifier);
+  log.info(
+    `Selected random owned bot #${tokenId} for ${interaction.user.username}`
+  );
+  return { success: true, tokenId, deferred: true };
+};
+
 /**
  * Handle /arena challenge
  */
@@ -148,9 +213,15 @@ const handleChallenge = async (
   interaction: ChatInputCommandInteraction,
   config: Config
 ): Promise<void> => {
-  const tokenId = interaction.options.getInteger("bot", true);
   const userId = interaction.user.id;
   const username = interaction.user.username;
+
+  const selection = await selectBotForChallenge(interaction);
+  if (!selection.success) {
+    return;
+  }
+
+  const { tokenId } = selection;
 
   // Check if arena channel is configured
   if (!config.arenaChannelId) {
@@ -163,15 +234,19 @@ const handleChallenge = async (
 
   // Check if user is already in a battle
   if (isUserInBattle(userId)) {
-    await interaction.reply({
-      content:
-        "◈ You are already in an active battle. Use `/arena forfeit` to surrender.",
-      ephemeral: true,
-    });
+    const errorContent =
+      "◈ You are already in an active battle. Use `/arena forfeit` to surrender.";
+    if (selection.deferred) {
+      await interaction.editReply({ content: errorContent });
+    } else {
+      await interaction.reply({ content: errorContent, ephemeral: true });
+    }
     return;
   }
 
-  await interaction.deferReply();
+  if (!selection.deferred) {
+    await interaction.deferReply();
+  }
 
   // Fetch bot data
   const bot = await fetchBot(tokenId);

@@ -455,3 +455,185 @@ export const clearTestEnv = () => {
   delete process.env.GLYPHBOTS_API_URL;
   delete process.env.LOG_LEVEL;
 };
+
+// ============================================================================
+// OpenSea Mock Data
+// ============================================================================
+
+import type {
+  AccountNFT,
+  OpenSeaAccount,
+  OpenSeaCollectionStats,
+  OpenSeaNFT,
+} from "../src/lib/types";
+
+/**
+ * Real OpenSea collection stats from live API
+ */
+export const OPENSEA_COLLECTION_STATS: OpenSeaCollectionStats = {
+  total: {
+    volume: 6.737_515_090_193_118,
+    sales: 7223,
+    num_owners: 827,
+    market_cap: 107_330_000,
+    floor_price: 0.000_297_99,
+    floor_price_symbol: "ETH",
+    average_price: 0.000_932_786_250_892_028,
+  },
+  intervals: [
+    {
+      interval: "one_day",
+      volume: 0,
+      volume_diff: 0,
+      volume_change: 0,
+      sales: 0,
+      sales_diff: 0,
+      average_price: 0,
+    },
+    {
+      interval: "seven_day",
+      volume: 0.000_300_000_000_000_000_03,
+      volume_diff: 0,
+      volume_change: 0,
+      sales: 3,
+      sales_diff: 0,
+      average_price: 0.0001,
+    },
+    {
+      interval: "thirty_day",
+      volume: 0.019_615,
+      volume_diff: 0,
+      volume_change: 0,
+      sales: 149,
+      sales_diff: 0,
+      average_price: 0.000_131_644_295_302_013_44,
+    },
+  ],
+};
+
+/**
+ * Real OpenSea account from live API
+ */
+export const OPENSEA_ACCOUNT: OpenSeaAccount = {
+  address: "0x00a839de7922491683f547a67795204763ff8237",
+  username: "ralx_z",
+  profile_image_url:
+    "https://raw2.seadn.io/profiles/0x00a839de7922491683f547a67795204763ff8237/avatar/cda9efca23f7e35d8382209bdf6b17/b7cda9efca23f7e35d8382209bdf6b17.svg",
+  bio: "coding, making, collecting ❤️",
+  joined_date: "2019-12-05",
+};
+
+/**
+ * Real OpenSea NFT from live API
+ */
+export const OPENSEA_NFT: OpenSeaNFT = {
+  identifier: "1234",
+  collection: "glyphbots",
+  contract: "0xb6c2c2d2999c1b532e089a7ad4cb7f8c91cf5075",
+  token_standard: "erc721",
+  name: "GlyphBot #1234 - Jumpy the Noble",
+  description:
+    "Onchain text robots assembled from Unicode glyphs. Deterministic per tokenId.",
+  image_url:
+    "https://raw2.seadn.io/ethereum/0xb6c2c2d2999c1b532e089a7ad4cb7f8c91cf5075/2c1445d206c855f77d463111d3edc4/fb2c1445d206c855f77d463111d3edc4.svg",
+  display_image_url:
+    "https://raw2.seadn.io/ethereum/0xb6c2c2d2999c1b532e089a7ad4cb7f8c91cf5075/2c1445d206c855f77d463111d3edc4/fb2c1445d206c855f77d463111d3edc4.svg",
+  opensea_url:
+    "https://opensea.io/assets/ethereum/0xb6c2c2d2999c1b532e089a7ad4cb7f8c91cf5075/1234",
+  updated_at: "2026-01-06T18:45:24.704661",
+  is_disabled: false,
+  is_nsfw: false,
+  owners: [
+    {
+      address: "0xc9f8a67e34ea5e6e4aabd7f4c7771061585de9bf",
+      quantity: 1,
+    },
+  ],
+  rarity: {
+    strategy_id: "openrarity",
+    strategy_version: "1.0",
+    rank: 3886,
+  },
+};
+
+/**
+ * Real account NFTs from live API
+ */
+export const OPENSEA_ACCOUNT_NFTS: AccountNFT[] = [
+  {
+    identifier: "5220",
+    collection: "glyphbots",
+    contract: "0xb6c2c2d2999c1b532e089a7ad4cb7f8c91cf5075",
+    token_standard: "erc721",
+    name: "GlyphBot #5220 - Jumpy the Brave",
+    description:
+      "Onchain text robots assembled from Unicode glyphs. Deterministic per tokenId.",
+    image_url:
+      "https://raw2.seadn.io/ethereum/0xb6c2c2d2999c1b532e089a7ad4cb7f8c91cf5075/b7643f5757bb4eac0cba6de9d05eb2/90b7643f5757bb4eac0cba6de9d05eb2.svg",
+    display_image_url:
+      "https://raw2.seadn.io/ethereum/0xb6c2c2d2999c1b532e089a7ad4cb7f8c91cf5075/b7643f5757bb4eac0cba6de9d05eb2/90b7643f5757bb4eac0cba6de9d05eb2.svg",
+    opensea_url:
+      "https://opensea.io/assets/ethereum/0xb6c2c2d2999c1b532e089a7ad4cb7f8c91cf5075/5220",
+    updated_at: "2026-01-06T18:45:24.904049",
+    is_disabled: false,
+    is_nsfw: false,
+  },
+  {
+    identifier: "5221",
+    collection: "glyphbots",
+    contract: "0xb6c2c2d2999c1b532e089a7ad4cb7f8c91cf5075",
+    token_standard: "erc721",
+    name: "GlyphBot #5221 - Vectorwave",
+    description:
+      "Onchain text robots assembled from Unicode glyphs. Deterministic per tokenId.",
+    image_url:
+      "https://raw2.seadn.io/ethereum/0xb6c2c2d2999c1b532e089a7ad4cb7f8c91cf5075/96c0cd3e79a90f59b9f7f51fdb0023/1196c0cd3e79a90f59b9f7f51fdb0023.svg",
+    display_image_url:
+      "https://raw2.seadn.io/ethereum/0xb6c2c2d2999c1b532e089a7ad4cb7f8c91cf5075/96c0cd3e79a90f59b9f7f51fdb0023/1196c0cd3e79a90f59b9f7f51fdb0023.svg",
+    opensea_url:
+      "https://opensea.io/assets/ethereum/0xb6c2c2d2999c1b532e089a7ad4cb7f8c91cf5075/5221",
+    updated_at: "2026-01-06T18:45:24.904080",
+    is_disabled: false,
+    is_nsfw: false,
+  },
+  {
+    identifier: "3454",
+    collection: "glyphbots",
+    contract: "0xb6c2c2d2999c1b532e089a7ad4cb7f8c91cf5075",
+    token_standard: "erc721",
+    name: "GlyphBot #3454 - Glitchynexus",
+    description:
+      "Onchain text robots assembled from Unicode glyphs. Deterministic per tokenId.",
+    image_url:
+      "https://raw2.seadn.io/ethereum/0xb6c2c2d2999c1b532e089a7ad4cb7f8c91cf5075/f008f6c6eb12a91d9e1ec370064315/2cf008f6c6eb12a91d9e1ec370064315.svg",
+    display_image_url:
+      "https://raw2.seadn.io/ethereum/0xb6c2c2d2999c1b532e089a7ad4cb7f8c91cf5075/f008f6c6eb12a91d9e1ec370064315/2cf008f6c6eb12a91d9e1ec370064315.svg",
+    opensea_url:
+      "https://opensea.io/assets/ethereum/0xb6c2c2d2999c1b532e089a7ad4cb7f8c91cf5075/3454",
+    updated_at: "2026-01-06T18:45:24.904105",
+    is_disabled: false,
+    is_nsfw: false,
+  },
+];
+
+/**
+ * Create an AccountNFT for testing
+ */
+export const createAccountNFT = (
+  overrides?: Partial<AccountNFT>
+): AccountNFT => ({
+  identifier: "1234",
+  collection: "glyphbots",
+  contract: "0xb6c2c2d2999c1b532e089a7ad4cb7f8c91cf5075",
+  token_standard: "erc721",
+  name: "GlyphBot #1234 - Test Bot",
+  description: "A test GlyphBot",
+  image_url: "https://example.com/bot.svg",
+  display_image_url: "https://example.com/bot.svg",
+  opensea_url:
+    "https://opensea.io/assets/ethereum/0xb6c2c2d2999c1b532e089a7ad4cb7f8c91cf5075/1234",
+  updated_at: "2026-01-06T00:00:00.000000",
+  is_disabled: false,
+  is_nsfw: false,
+  ...overrides,
+});

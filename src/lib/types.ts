@@ -148,3 +148,156 @@ export type Config = {
   glyphbotsApiUrl: string;
   logLevel: string;
 };
+
+/** OpenSea API Types */
+
+export type OpenSeaAccount = {
+  address: string;
+  username?: string;
+  profile_image_url?: string;
+  banner_image_url?: string;
+  website?: string;
+  bio?: string;
+  joined_date?: string;
+  social_media_accounts?: Array<{
+    platform: string;
+    username: string;
+  }>;
+};
+
+export type OpenSeaNFTOwner = {
+  address: string;
+  quantity: number;
+};
+
+export type OpenSeaTrait = {
+  trait_type: string;
+  display_type: string | null;
+  max_value: string | null;
+  value: string;
+};
+
+export type OpenSeaNFT = {
+  identifier: string;
+  collection: string;
+  contract: string;
+  token_standard: string;
+  name?: string;
+  description?: string;
+  image_url?: string;
+  display_image_url?: string;
+  opensea_url: string;
+  updated_at: string;
+  is_disabled: boolean;
+  is_nsfw: boolean;
+  traits?: OpenSeaTrait[];
+  owners?: OpenSeaNFTOwner[];
+  rarity?: {
+    strategy_id: string;
+    strategy_version: string;
+    rank: number;
+  };
+};
+
+export type OpenSeaNFTResponse = {
+  nft: OpenSeaNFT;
+};
+
+export type AccountNFT = {
+  identifier: string;
+  collection: string;
+  contract: string;
+  token_standard: string;
+  name?: string;
+  description?: string;
+  image_url?: string;
+  display_image_url?: string;
+  opensea_url: string;
+  updated_at: string;
+  is_disabled: boolean;
+  is_nsfw: boolean;
+};
+
+export type AccountNFTsResponse = {
+  nfts: AccountNFT[];
+  next?: string;
+};
+
+export type OpenSeaCollectionStatsInterval = {
+  interval: string;
+  volume: number;
+  volume_diff: number;
+  volume_change: number;
+  sales: number;
+  sales_diff: number;
+  average_price: number;
+};
+
+export type OpenSeaCollectionStats = {
+  total: {
+    volume: number;
+    sales: number;
+    num_owners: number;
+    market_cap: number;
+    floor_price: number;
+    floor_price_symbol: string;
+    average_price: number;
+  };
+  intervals: OpenSeaCollectionStatsInterval[];
+};
+
+export type OpenSeaPayment = {
+  quantity: string;
+  token_address: string;
+  decimals: number;
+  symbol: string;
+};
+
+export type OpenSeaEvent = {
+  event_type: string;
+  event_timestamp: number;
+  chain: string;
+  transaction?: string;
+  payment?: OpenSeaPayment;
+  quantity: number;
+  seller?: string;
+  buyer?: string;
+  from_address?: string;
+  to_address?: string;
+  nft?: {
+    identifier: string;
+    name?: string;
+    image_url?: string;
+    opensea_url?: string;
+  };
+};
+
+export type OpenSeaEventsResponse = {
+  asset_events: OpenSeaEvent[];
+  next?: string;
+};
+
+export type OpenSeaListingPrice = {
+  current: {
+    currency: string;
+    decimals: number;
+    value: string;
+  };
+};
+
+export type OpenSeaListing = {
+  order_hash: string;
+  chain: string;
+  price: OpenSeaListingPrice;
+  protocol_data: {
+    parameters: {
+      offerer: string;
+    };
+  };
+  protocol_address: string;
+};
+
+export type OpenSeaListingsResponse = {
+  listings: OpenSeaListing[];
+  next?: string;
+};

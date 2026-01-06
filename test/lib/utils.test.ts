@@ -40,8 +40,8 @@ describe("utils", () => {
     it("should use constants for arena settings", () => {
       const config = loadConfig();
 
-      expect(config.arenaChallengeTimeoutSeconds).toBe(120);
-      expect(config.arenaRoundTimeoutSeconds).toBe(30);
+      expect(config.arenaChallengeTimeoutSeconds).toBe(86_400);
+      expect(config.arenaRoundTimeoutSeconds).toBe(86_400);
       expect(config.arenaMaxRounds).toBe(5);
     });
 

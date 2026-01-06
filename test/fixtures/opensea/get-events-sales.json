@@ -1,0 +1,47 @@
+{
+  "asset_events": [
+    {
+      "event_type": "sale",
+      "event_timestamp": 1736188800,
+      "chain": "ethereum",
+      "transaction": "0x1234567890abcdef",
+      "payment": {
+        "quantity": "500000000000000",
+        "token_address": "0x0000000000000000000000000000000000000000",
+        "decimals": 18,
+        "symbol": "ETH"
+      },
+      "quantity": 1,
+      "seller": "0x00a839de7922491683f547a67795204763ff8237",
+      "buyer": "0xc9f8a67e34ea5e6e4aabd7f4c7771061585de9bf",
+      "nft": {
+        "identifier": "1234",
+        "name": "GlyphBot #1234 - Jumpy the Noble",
+        "image_url": "https://raw2.seadn.io/ethereum/0xb6c2c2d2999c1b532e089a7ad4cb7f8c91cf5075/bot.svg",
+        "opensea_url": "https://opensea.io/assets/ethereum/0xb6c2c2d2999c1b532e089a7ad4cb7f8c91cf5075/1234"
+      }
+    },
+    {
+      "event_type": "sale",
+      "event_timestamp": 1736185200,
+      "chain": "ethereum",
+      "transaction": "0xabcdef1234567890",
+      "payment": {
+        "quantity": "300000000000000",
+        "token_address": "0x0000000000000000000000000000000000000000",
+        "decimals": 18,
+        "symbol": "ETH"
+      },
+      "quantity": 1,
+      "seller": "0xc9f8a67e34ea5e6e4aabd7f4c7771061585de9bf",
+      "buyer": "0x00a839de7922491683f547a67795204763ff8237",
+      "nft": {
+        "identifier": "5678",
+        "name": "GlyphBot #5678 - Speedyflux",
+        "image_url": "https://raw2.seadn.io/ethereum/0xb6c2c2d2999c1b532e089a7ad4cb7f8c91cf5075/bot.svg",
+        "opensea_url": "https://opensea.io/assets/ethereum/0xb6c2c2d2999c1b532e089a7ad4cb7f8c91cf5075/5678"
+      }
+    }
+  ],
+  "next": null
+}

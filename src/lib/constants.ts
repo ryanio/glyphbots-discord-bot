@@ -27,11 +27,11 @@ export const LORE_MAX_INTERVAL_MINUTES = 720;
 /** GlyphBots API URL */
 export const DEFAULT_GLYPHBOTS_API_URL = "https://glyphbots.com";
 
-/** Arena challenge timeout in seconds (2 minutes) */
-export const ARENA_CHALLENGE_TIMEOUT_SECONDS = 120;
+/** Arena challenge timeout in seconds (24 hours) */
+export const ARENA_CHALLENGE_TIMEOUT_SECONDS = 86_400;
 
-/** Arena round timeout in seconds (30 seconds) */
-export const ARENA_ROUND_TIMEOUT_SECONDS = 30;
+/** Arena round timeout in seconds (24 hours) */
+export const ARENA_ROUND_TIMEOUT_SECONDS = 86_400;
 
 /** Arena max rounds per battle */
 export const ARENA_MAX_ROUNDS = 5;
