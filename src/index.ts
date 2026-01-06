@@ -8,6 +8,8 @@ import { initLoreChannel } from "./channels/lore";
 import { initPlaygroundChannel } from "./channels/playground";
 import { handleActivity } from "./commands/activity";
 import { handleArena } from "./commands/arena";
+import { handleArtifact } from "./commands/artifact";
+import { handleBot } from "./commands/bot";
 import { handleFloor } from "./commands/floor";
 import { handleHelp } from "./commands/help";
 import { handleInfo } from "./commands/info";
@@ -220,6 +222,12 @@ const handleSlashCommand = async (
         break;
       case "activity":
         await handleActivity(interaction);
+        break;
+      case "bot":
+        await handleBot(interaction);
+        break;
+      case "artifact":
+        await handleArtifact(interaction);
         break;
       default:
         await interaction.reply({

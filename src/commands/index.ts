@@ -107,6 +107,57 @@ export const activityCommand = new SlashCommandBuilder()
   );
 
 /**
+ * /bot [id] [random] [user] - Display a GlyphBot with OpenSea data
+ */
+export const botCommand = new SlashCommandBuilder()
+  .setName("bot")
+  .setDescription("Display a GlyphBot with full details and OpenSea data")
+  .addIntegerOption((opt) =>
+    opt
+      .setName("id")
+      .setDescription("Bot token ID (1-11111)")
+      .setRequired(false)
+      .setMinValue(1)
+      .setMaxValue(MAX_BOT_TOKEN_ID)
+  )
+  .addBooleanOption((opt) =>
+    opt
+      .setName("random")
+      .setDescription(
+        "Show a random bot (uses your owned bots if wallet connected)"
+      )
+      .setRequired(false)
+  )
+  .addStringOption((opt) =>
+    opt
+      .setName("user")
+      .setDescription(
+        "OpenSea username or wallet address to pick a random bot from"
+      )
+      .setRequired(false)
+  );
+
+/**
+ * /artifact [id] [random] - Display a GlyphBots artifact
+ */
+export const artifactCommand = new SlashCommandBuilder()
+  .setName("artifact")
+  .setDescription("Display a GlyphBots artifact with details")
+  .addIntegerOption((opt) =>
+    opt
+      .setName("id")
+      .setDescription("Artifact contract token ID")
+      .setRequired(false)
+      .setMinValue(1)
+  )
+  .addBooleanOption((opt) =>
+    opt
+      .setName("random")
+      .setDescription("Show a random recent artifact")
+      .setRequired(false)
+  );
+
+/**
  * /help [topic] - Get help with GlyphBots features
  */
 export const helpCommand = new SlashCommandBuilder()
@@ -296,6 +347,8 @@ export const commands = [
   listingsCommand,
   rarityCommand,
   activityCommand,
+  botCommand,
+  artifactCommand,
 ];
 
 /**
