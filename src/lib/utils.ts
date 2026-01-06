@@ -1,24 +1,16 @@
 import {
-  DEFAULT_ARENA_CHALLENGE_TIMEOUT_SECONDS,
-  DEFAULT_ARENA_MAX_ROUNDS,
-  DEFAULT_ARENA_ROUND_TIMEOUT_SECONDS,
+  ARENA_CHALLENGE_TIMEOUT_SECONDS,
+  ARENA_MAX_ROUNDS,
+  ARENA_ROUND_TIMEOUT_SECONDS,
   DEFAULT_GLYPHBOTS_API_URL,
-  DEFAULT_LORE_MAX_INTERVAL_MINUTES,
-  DEFAULT_LORE_MIN_INTERVAL_MINUTES,
-  DEFAULT_PLAYGROUND_MAX_INTERVAL_MINUTES,
-  DEFAULT_PLAYGROUND_MIN_INTERVAL_MINUTES,
+  LORE_MAX_INTERVAL_MINUTES,
+  LORE_MIN_INTERVAL_MINUTES,
   MS_PER_SECOND,
+  PLAYGROUND_MAX_INTERVAL_MINUTES,
+  PLAYGROUND_MIN_INTERVAL_MINUTES,
   SECONDS_PER_MINUTE,
 } from "./constants";
 import type { Config } from "./types";
-
-/**
- * Parse number from environment variable with default fallback
- */
-const parseEnvNumber = (
-  envVar: string | undefined,
-  defaultValue: number
-): number => Number(envVar) || defaultValue;
 
 /**
  * Load and validate configuration from environment variables
@@ -45,44 +37,20 @@ export const loadConfig = (): Config => {
     throw new Error("GOOGLE_AI_API_KEY environment variable is required");
   }
 
-  const loreMinIntervalMinutes = parseEnvNumber(
-    process.env.LORE_MIN_INTERVAL_MINUTES,
-    DEFAULT_LORE_MIN_INTERVAL_MINUTES
-  );
-  const loreMaxIntervalMinutes = parseEnvNumber(
-    process.env.LORE_MAX_INTERVAL_MINUTES,
-    DEFAULT_LORE_MAX_INTERVAL_MINUTES
-  );
-
   return {
     discordToken,
     discordClientId,
     discordGuildId: process.env.DISCORD_GUILD_ID ?? null,
     loreChannelId,
-    loreMinIntervalMinutes,
-    loreMaxIntervalMinutes,
+    loreMinIntervalMinutes: LORE_MIN_INTERVAL_MINUTES,
+    loreMaxIntervalMinutes: LORE_MAX_INTERVAL_MINUTES,
     arenaChannelId: process.env.ARENA_CHANNEL_ID ?? null,
-    arenaChallengeTimeoutSeconds: parseEnvNumber(
-      process.env.ARENA_CHALLENGE_TIMEOUT_SECONDS,
-      DEFAULT_ARENA_CHALLENGE_TIMEOUT_SECONDS
-    ),
-    arenaRoundTimeoutSeconds: parseEnvNumber(
-      process.env.ARENA_ROUND_TIMEOUT_SECONDS,
-      DEFAULT_ARENA_ROUND_TIMEOUT_SECONDS
-    ),
-    arenaMaxRounds: parseEnvNumber(
-      process.env.ARENA_MAX_ROUNDS,
-      DEFAULT_ARENA_MAX_ROUNDS
-    ),
+    arenaChallengeTimeoutSeconds: ARENA_CHALLENGE_TIMEOUT_SECONDS,
+    arenaRoundTimeoutSeconds: ARENA_ROUND_TIMEOUT_SECONDS,
+    arenaMaxRounds: ARENA_MAX_ROUNDS,
     playgroundChannelId: process.env.PLAYGROUND_CHANNEL_ID ?? null,
-    playgroundMinIntervalMinutes: parseEnvNumber(
-      process.env.PLAYGROUND_MIN_INTERVAL_MINUTES,
-      DEFAULT_PLAYGROUND_MIN_INTERVAL_MINUTES
-    ),
-    playgroundMaxIntervalMinutes: parseEnvNumber(
-      process.env.PLAYGROUND_MAX_INTERVAL_MINUTES,
-      DEFAULT_PLAYGROUND_MAX_INTERVAL_MINUTES
-    ),
+    playgroundMinIntervalMinutes: PLAYGROUND_MIN_INTERVAL_MINUTES,
+    playgroundMaxIntervalMinutes: PLAYGROUND_MAX_INTERVAL_MINUTES,
     googleAiApiKey,
     glyphbotsApiUrl: process.env.GLYPHBOTS_API_URL ?? DEFAULT_GLYPHBOTS_API_URL,
     logLevel: process.env.LOG_LEVEL ?? "info",

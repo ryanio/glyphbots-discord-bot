@@ -59,23 +59,12 @@ Create a `.env` file in the root directory with your configuration:
 # Required
 DISCORD_TOKEN=your_discord_bot_token
 DISCORD_CLIENT_ID=your_discord_client_id
-LORE_CHANNEL_ID=your_lore_channel_id
 GOOGLE_AI_API_KEY=your_google_ai_api_key
 
 # Optional - Channel IDs
+LORE_CHANNEL_ID=your_lore_channel_id
 ARENA_CHANNEL_ID=your_arena_channel_id
 PLAYGROUND_CHANNEL_ID=your_playground_channel_id
-
-# Optional - Intervals (in minutes)
-LORE_MIN_INTERVAL_MINUTES=240
-LORE_MAX_INTERVAL_MINUTES=720
-PLAYGROUND_MIN_INTERVAL_MINUTES=240
-PLAYGROUND_MAX_INTERVAL_MINUTES=720
-
-# Optional - Arena Settings
-ARENA_CHALLENGE_TIMEOUT_SECONDS=120
-ARENA_ROUND_TIMEOUT_SECONDS=30
-ARENA_MAX_ROUNDS=5
 
 # Optional - Other
 GLYPHBOTS_API_URL=https://glyphbots.com
@@ -122,16 +111,23 @@ https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=326417
 
 | Variable | Description | Default |
 |----------|-------------|---------|
+| `GLYPHBOTS_API_URL` | GlyphBots API base URL | `https://glyphbots.com` |
+| `STATE_DIR` | Directory for state persistence | `.state` |
+| `LOG_LEVEL` | Log verbosity | `info` |
+
+### Configuration Constants
+
+The following settings can be changed in `src/lib/constants.ts`:
+
+| Setting | Description | Default |
+|---------|-------------|---------|
 | `LORE_MIN_INTERVAL_MINUTES` | Minimum minutes between lore posts | `240` (4 hours) |
 | `LORE_MAX_INTERVAL_MINUTES` | Maximum minutes between lore posts | `720` (12 hours) |
 | `PLAYGROUND_MIN_INTERVAL_MINUTES` | Minimum minutes between playground posts | `240` (4 hours) |
 | `PLAYGROUND_MAX_INTERVAL_MINUTES` | Maximum minutes between playground posts | `720` (12 hours) |
-| `ARENA_CHALLENGE_TIMEOUT_SECONDS` | Challenge acceptance timeout | `120` |
-| `ARENA_ROUND_TIMEOUT_SECONDS` | Round action timeout | `30` |
+| `ARENA_CHALLENGE_TIMEOUT_SECONDS` | Challenge acceptance timeout | `120` (2 minutes) |
+| `ARENA_ROUND_TIMEOUT_SECONDS` | Round action timeout | `30` seconds |
 | `ARENA_MAX_ROUNDS` | Maximum rounds per battle | `5` |
-| `GLYPHBOTS_API_URL` | GlyphBots API base URL | `https://glyphbots.com` |
-| `STATE_DIR` | Directory for state persistence | `.state` |
-| `LOG_LEVEL` | Log verbosity | `info` |
 
 ## Arena Battles
 

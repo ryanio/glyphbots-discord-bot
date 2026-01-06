@@ -15,32 +15,32 @@ export const MS_PER_SECOND = 1000;
 export const SECONDS_PER_MINUTE = 60;
 
 // ============================================================================
-// Configuration Defaults
+// Configuration Constants
 // ============================================================================
 
-/** Default min interval in minutes for lore posts (4 hours) */
-export const DEFAULT_LORE_MIN_INTERVAL_MINUTES = 240;
+/** Min interval in minutes for lore posts (4 hours) */
+export const LORE_MIN_INTERVAL_MINUTES = 240;
 
-/** Default max interval in minutes for lore posts (12 hours) */
-export const DEFAULT_LORE_MAX_INTERVAL_MINUTES = 720;
+/** Max interval in minutes for lore posts (12 hours) */
+export const LORE_MAX_INTERVAL_MINUTES = 720;
 
-/** Default GlyphBots API URL */
+/** GlyphBots API URL */
 export const DEFAULT_GLYPHBOTS_API_URL = "https://glyphbots.com";
 
-/** Default arena challenge timeout in seconds (24 hours) */
-export const DEFAULT_ARENA_CHALLENGE_TIMEOUT_SECONDS = 86_400;
+/** Arena challenge timeout in seconds (2 minutes) */
+export const ARENA_CHALLENGE_TIMEOUT_SECONDS = 120;
 
-/** Default arena round timeout in seconds (24 hours) */
-export const DEFAULT_ARENA_ROUND_TIMEOUT_SECONDS = 86_400;
+/** Arena round timeout in seconds (30 seconds) */
+export const ARENA_ROUND_TIMEOUT_SECONDS = 30;
 
-/** Default arena max rounds */
-export const DEFAULT_ARENA_MAX_ROUNDS = 5;
+/** Arena max rounds per battle */
+export const ARENA_MAX_ROUNDS = 5;
 
-/** Default playground min interval in minutes (4 hours) */
-export const DEFAULT_PLAYGROUND_MIN_INTERVAL_MINUTES = 240;
+/** Playground min interval in minutes (4 hours) */
+export const PLAYGROUND_MIN_INTERVAL_MINUTES = 240;
 
-/** Default playground max interval in minutes (12 hours) */
-export const DEFAULT_PLAYGROUND_MAX_INTERVAL_MINUTES = 720;
+/** Playground max interval in minutes (12 hours) */
+export const PLAYGROUND_MAX_INTERVAL_MINUTES = 720;
 
 // ============================================================================
 // Arena Constants

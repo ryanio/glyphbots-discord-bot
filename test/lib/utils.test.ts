@@ -28,24 +28,21 @@ describe("utils", () => {
       expect(config.googleAiApiKey).toBe(TEST_CONFIG.googleAiApiKey);
     });
 
-    it("should use default values when optional env vars not set", () => {
-      delete process.env.LORE_MIN_INTERVAL_MINUTES;
-      delete process.env.LORE_MAX_INTERVAL_MINUTES;
-
+    it("should use constants for interval values", () => {
       const config = loadConfig();
 
       expect(config.loreMinIntervalMinutes).toBe(240);
       expect(config.loreMaxIntervalMinutes).toBe(720);
+      expect(config.playgroundMinIntervalMinutes).toBe(240);
+      expect(config.playgroundMaxIntervalMinutes).toBe(720);
     });
 
-    it("should parse LORE_MIN_INTERVAL_MINUTES and LORE_MAX_INTERVAL_MINUTES as numbers", () => {
-      process.env.LORE_MIN_INTERVAL_MINUTES = "120";
-      process.env.LORE_MAX_INTERVAL_MINUTES = "480";
-
+    it("should use constants for arena settings", () => {
       const config = loadConfig();
 
-      expect(config.loreMinIntervalMinutes).toBe(120);
-      expect(config.loreMaxIntervalMinutes).toBe(480);
+      expect(config.arenaChallengeTimeoutSeconds).toBe(120);
+      expect(config.arenaRoundTimeoutSeconds).toBe(30);
+      expect(config.arenaMaxRounds).toBe(5);
     });
 
     it("should throw when DISCORD_TOKEN is missing", () => {
