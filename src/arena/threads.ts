@@ -94,9 +94,27 @@ const formatFighterStats = (fighter: FighterState, color: string): string => {
 };
 
 /**
+ * Format timeout duration in a human-readable way
+ */
+const formatTimeout = (seconds: number): string => {
+  if (seconds < 60) {
+    return `${seconds}s`;
+  }
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  if (remainingSeconds === 0) {
+    return `${minutes}min${minutes > 1 ? "s" : ""}`;
+  }
+  return `${minutes}min ${remainingSeconds}s`;
+};
+
+/**
  * Build pre-battle embed showing both fighters
  */
-export const buildPreBattleEmbed = (battle: BattleState): EmbedBuilder => {
+export const buildPreBattleEmbed = (
+  battle: BattleState,
+  roundTimeoutSeconds: number
+): EmbedBuilder => {
   if (!battle.blueFighter) {
     throw new Error("Cannot build pre-battle embed without blue fighter");
   }
@@ -119,7 +137,9 @@ export const buildPreBattleEmbed = (battle: BattleState): EmbedBuilder => {
         inline: true,
       }
     )
-    .setFooter({ text: "⏱ Choose your opening stance. (30 seconds)" });
+    .setFooter({
+      text: `⏱ Choose your opening stance. (${formatTimeout(roundTimeoutSeconds)})`,
+    });
 
   return embed;
 };
@@ -127,7 +147,10 @@ export const buildPreBattleEmbed = (battle: BattleState): EmbedBuilder => {
 /**
  * Build round status embed
  */
-export const buildRoundEmbed = (battle: BattleState): EmbedBuilder => {
+export const buildRoundEmbed = (
+  battle: BattleState,
+  roundTimeoutSeconds: number
+): EmbedBuilder => {
   if (!battle.blueFighter) {
     throw new Error("Cannot build round embed without blue fighter");
   }
@@ -175,7 +198,9 @@ export const buildRoundEmbed = (battle: BattleState): EmbedBuilder => {
     value: `${crowdBar} ${battle.crowdEnergy}%`,
   });
 
-  embed.setFooter({ text: "⏱ Choose your action. (30 seconds)" });
+  embed.setFooter({
+    text: `⏱ Choose your action. (${formatTimeout(roundTimeoutSeconds)})`,
+  });
 
   return embed;
 };
@@ -329,10 +354,11 @@ export const updateChallengeAnnouncement = async (
  */
 export const postPreBattleMessage = async (
   thread: ThreadChannel,
-  battle: BattleState
+  battle: BattleState,
+  roundTimeoutSeconds: number
 ): Promise<Message | null> => {
   try {
-    const embed = buildPreBattleEmbed(battle);
+    const embed = buildPreBattleEmbed(battle, roundTimeoutSeconds);
     const message = await thread.send({ embeds: [embed] });
     return message;
   } catch (error) {
@@ -346,10 +372,11 @@ export const postPreBattleMessage = async (
  */
 export const postRoundMessage = async (
   thread: ThreadChannel,
-  battle: BattleState
+  battle: BattleState,
+  roundTimeoutSeconds: number
 ): Promise<Message | null> => {
   try {
-    const embed = buildRoundEmbed(battle);
+    const embed = buildRoundEmbed(battle, roundTimeoutSeconds);
     const message = await thread.send({ embeds: [embed] });
     return message;
   } catch (error) {

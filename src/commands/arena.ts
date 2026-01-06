@@ -14,6 +14,7 @@ import {
 } from "discord.js";
 import { fetchBot, fetchBotStory, getBotUrl } from "../api/glyphbots";
 import {
+  cancelChallenge,
   createBattle,
   createFighterState,
   forfeitBattle,
@@ -119,7 +120,8 @@ const buildChallengeEmbed = (opts: ChallengeEmbedOpts): EmbedBuilder => {
  * Build challenge buttons
  */
 const buildChallengeButtons = (
-  battleId: string
+  battleId: string,
+  challengerUserId: string
 ): ActionRowBuilder<ButtonBuilder> =>
   new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
@@ -131,7 +133,12 @@ const buildChallengeButtons = (
       .setCustomId(`arena_watch_${battleId}`)
       .setLabel("Watch")
       .setStyle(ButtonStyle.Secondary)
-      .setEmoji("👁️")
+      .setEmoji("👁️"),
+    new ButtonBuilder()
+      .setCustomId(`arena_cancel_${battleId}_${challengerUserId}`)
+      .setLabel("Cancel")
+      .setStyle(ButtonStyle.Secondary)
+      .setEmoji("❌")
   );
 
 /**
@@ -203,7 +210,7 @@ const handleChallenge = async (
     challengeTimeoutSeconds: config.arenaChallengeTimeoutSeconds,
   });
 
-  const buttons = buildChallengeButtons(battle.id);
+  const buttons = buildChallengeButtons(battle.id, userId);
 
   const reply = await interaction.editReply({
     embeds: [embed],
@@ -353,6 +360,83 @@ const handleForfeit = async (
 };
 
 /**
+ * Handle /arena cancel
+ */
+const handleCancel = async (
+  interaction: ChatInputCommandInteraction,
+  config: Config
+): Promise<void> => {
+  const userId = interaction.user.id;
+
+  const battle = getUserBattle(userId);
+  if (!battle) {
+    await interaction.reply({
+      content: "▸ You do not have an active challenge.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  if (battle.phase !== "challenge") {
+    await interaction.reply({
+      content:
+        "▸ Your challenge has already been accepted. Use `/arena forfeit` to surrender.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const success = cancelChallenge(battle, userId);
+  if (!success) {
+    await interaction.reply({
+      content: "▸ Unable to cancel this challenge.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  await interaction.deferReply();
+
+  const embed = new EmbedBuilder()
+    .setColor(SUCCESS_COLOR)
+    .setTitle("▸ Challenge Canceled")
+    .setDescription("Your challenge has been canceled.");
+
+  await interaction.editReply({ embeds: [embed] });
+
+  if (
+    battle.announcementMessageId &&
+    config.arenaChannelId &&
+    interaction.channel
+  ) {
+    try {
+      const channel = await interaction.client.channels.fetch(
+        config.arenaChannelId
+      );
+      if (channel && "messages" in channel) {
+        const message = await channel.messages.fetch(
+          battle.announcementMessageId
+        );
+        const canceledEmbed = new EmbedBuilder()
+          .setColor(ERROR_COLOR)
+          .setTitle("⚔ ═══ CHALLENGE CANCELED ═══")
+          .setDescription(`Challenge by <@${userId}> has been canceled.`)
+          .setFooter({ text: "The challenger withdrew their challenge." });
+
+        await message.edit({
+          embeds: [canceledEmbed],
+          components: [],
+        });
+      }
+    } catch (error) {
+      log.error("Failed to update announcement message:", error);
+    }
+  }
+
+  log.info(`Challenge canceled: ${userId} (${battle.id})`);
+};
+
+/**
  * Handle /arena help
  */
 const handleArenaHelp = async (
@@ -385,6 +469,9 @@ export const handleArena = async (
       break;
     case "forfeit":
       await handleForfeit(interaction);
+      break;
+    case "cancel":
+      await handleCancel(interaction, config);
       break;
     case "help":
       await handleArenaHelp(interaction);

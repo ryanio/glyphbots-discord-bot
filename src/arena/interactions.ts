@@ -26,6 +26,7 @@ import {
   acceptChallenge,
   addPendingSpectator,
   type BattleState,
+  cancelChallenge,
   createFighterState,
   getBattle,
   getBattleByThread,
@@ -44,6 +45,9 @@ const log = prefixedLogger("ArenaInteract");
 
 /** Arena brand color */
 const ARENA_COLOR: HexColorString = "#ff4444";
+
+/** Error color */
+const ERROR_COLOR: HexColorString = "#ff4444";
 
 /**
  * Build stance selection buttons
@@ -236,7 +240,7 @@ export const handleBotSelection = async (
   interaction: StringSelectMenuInteraction,
   battleId: string,
   odwerId: string,
-  _config: Config
+  config: Config
 ): Promise<void> => {
   const tokenId = Number.parseInt(interaction.values[0], 10);
   const username = interaction.user.username;
@@ -309,7 +313,10 @@ export const handleBotSelection = async (
   }
 
   // Post pre-battle message with stance selection
-  const preBattleEmbed = buildPreBattleEmbed(battle);
+  const preBattleEmbed = buildPreBattleEmbed(
+    battle,
+    config.arenaRoundTimeoutSeconds
+  );
 
   const redStanceButtons = buildStanceButtons(battle.redFighter.userId);
   const blueUserId = battle.blueFighter?.userId ?? "";
@@ -358,6 +365,68 @@ export const handleWatch = async (
   });
 
   log.info(`User ${userId} watching battle ${battleId}`);
+};
+
+/**
+ * Handle Cancel Challenge button
+ */
+export const handleCancelChallenge = async (
+  interaction: ButtonInteraction,
+  battleId: string,
+  challengerUserId: string,
+  _config: Config
+): Promise<void> => {
+  const userId = interaction.user.id;
+
+  if (userId !== challengerUserId) {
+    await interaction.reply({
+      content: "◈ Only the challenger can cancel this challenge.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const battle = getBattle(battleId);
+  if (!battle) {
+    await interaction.reply({
+      content: "◈ This challenge no longer exists.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  if (battle.phase !== "challenge") {
+    await interaction.reply({
+      content:
+        "◈ This challenge has already been accepted. Use `/arena forfeit` to surrender.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const success = cancelChallenge(battle, userId);
+  if (!success) {
+    await interaction.reply({
+      content: "◈ Unable to cancel this challenge.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  await interaction.deferUpdate();
+
+  const canceledEmbed = new EmbedBuilder()
+    .setColor(ERROR_COLOR)
+    .setTitle("⚔ ═══ CHALLENGE CANCELED ═══")
+    .setDescription(`Challenge by <@${userId}> has been canceled.`)
+    .setFooter({ text: "The challenger withdrew their challenge." });
+
+  await interaction.editReply({
+    embeds: [canceledEmbed],
+    components: [],
+  });
+
+  log.info(`Challenge canceled via button: ${userId} (${battleId})`);
 };
 
 /**
@@ -763,6 +832,16 @@ export const handleArenaButton = async (
   } else if (customId.startsWith("arena_watch_")) {
     const battleId = customId.replace("arena_watch_", "");
     await handleWatch(interaction, battleId);
+  } else if (customId.startsWith("arena_cancel_")) {
+    const parts = customId.replace("arena_cancel_", "").split("_");
+    const battleId = parts[0];
+    const challengerUserId = parts[1];
+    await handleCancelChallenge(
+      interaction,
+      battleId,
+      challengerUserId,
+      config
+    );
   } else if (customId === "arena_my_stats") {
     await handleArenaMyStats(interaction);
   } else if (customId === "arena_leaderboard") {

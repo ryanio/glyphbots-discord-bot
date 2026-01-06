@@ -45,7 +45,7 @@ export const arenaQuickstart = new EmbedBuilder()
     {
       name: "⚡ Fight!",
       value:
-        "▸ Choose your opening stance\n▸ Select abilities each round (30 sec)\n▸ Watch the AI narrate your clash.",
+        "▸ Choose your opening stance\n▸ Select abilities each round\n▸ Watch the AI narrate your clash.",
     }
   );
 

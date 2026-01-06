@@ -572,6 +572,29 @@ export const forfeitBattle = (
 };
 
 /**
+ * Cancel a challenge (only if in challenge phase and user is the challenger)
+ */
+export const cancelChallenge = (
+  battle: BattleState,
+  userId: string
+): boolean => {
+  if (battle.phase !== "challenge") {
+    log.warn(`Cannot cancel battle ${battle.id}: not in challenge phase`);
+    return false;
+  }
+
+  if (battle.redFighter.userId !== userId) {
+    log.warn(`Cannot cancel battle ${battle.id}: user is not the challenger`);
+    return false;
+  }
+
+  cleanupBattle(battle.id);
+  log.info(`Challenge ${battle.id} canceled by ${userId}`);
+
+  return true;
+};
+
+/**
  * Clean up a finished battle
  */
 export const cleanupBattle = (battleId: string): void => {

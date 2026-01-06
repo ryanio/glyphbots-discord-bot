@@ -105,6 +105,9 @@ export const arenaCommand = new SlashCommandBuilder()
     sub.setName("forfeit").setDescription("Surrender your current battle")
   )
   .addSubcommand((sub) =>
+    sub.setName("cancel").setDescription("Cancel your active challenge")
+  )
+  .addSubcommand((sub) =>
     sub.setName("help").setDescription("Arena quick-start guide")
   );
 
