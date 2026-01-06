@@ -30,6 +30,7 @@ import {
   createFighterState,
   getBattle,
   getBattleByThread,
+  getUserBattle,
   isUserInBattle,
   type Stance,
   setFighterAction,
@@ -184,10 +185,20 @@ export const handleAcceptChallenge = async (
 
   // Check if user is already in a battle
   if (isUserInBattle(userId)) {
-    await interaction.reply({
-      content: "◈ You are already in an active battle!",
-      ephemeral: true,
-    });
+    const userBattle = getUserBattle(userId);
+    if (userBattle?.phase === "challenge") {
+      await interaction.reply({
+        content:
+          "◈ You already have an active challenge! Use `/arena cancel` to cancel it first.",
+        ephemeral: true,
+      });
+    } else {
+      await interaction.reply({
+        content:
+          "◈ You are already in an active battle! Use `/arena forfeit` to surrender.",
+        ephemeral: true,
+      });
+    }
     return;
   }
 

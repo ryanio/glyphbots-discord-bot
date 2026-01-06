@@ -36,6 +36,10 @@ let arenaState: ArenaState | null = null;
 const checkExpiredBattles = async (): Promise<void> => {
   const expiredBattles = getExpiredBattles();
 
+  if (expiredBattles.length === 0) {
+    return;
+  }
+
   for (const battle of expiredBattles) {
     log.info(`Battle ${battle.id} expired, cleaning up`);
 
@@ -60,6 +64,11 @@ const checkExpiredBattles = async (): Promise<void> => {
     // Clean up the battle
     cleanupBattle(battle.id);
   }
+
+  // Persist state after cleanup to remove expired battles from file
+  const { saveArenaState } = await import("../arena/persistence");
+  const activeBattles = getAllBattles();
+  await saveArenaState(activeBattles);
 };
 
 /**
@@ -129,8 +138,8 @@ export const initArenaChannel = async (
       isActive: true,
     };
 
-    // Initialize arena state with config timeout values
-    initArenaState(
+    // Initialize arena state with config timeout values and load persisted battles
+    await initArenaState(
       config.arenaChallengeTimeoutSeconds,
       config.arenaRoundTimeoutSeconds
     );

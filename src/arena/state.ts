@@ -6,6 +6,7 @@
 
 import { prefixedLogger } from "../lib/logger";
 import type { Bot, BotStory } from "../lib/types";
+import { loadArenaState, saveArenaState } from "./persistence";
 
 const log = prefixedLogger("ArenaState");
 
@@ -109,16 +110,62 @@ const userBattles = new Map<string, string>();
 const threadBattles = new Map<string, string>();
 
 /**
- * Initialize arena state with config values
+ * Save current battles to disk (only active, non-expired battles)
  */
-export const initArenaState = (
+const persistBattles = async (): Promise<void> => {
+  const now = Date.now();
+  const activeBattlesList = Array.from(activeBattles.values()).filter(
+    (battle) => {
+      // Only save battles that are not finished and not expired
+      return battle.phase !== "finished" && battle.expiresAt >= now;
+    }
+  );
+  await saveArenaState(activeBattlesList);
+};
+
+/**
+ * Restore a battle from persistence
+ */
+const restoreBattle = (battle: BattleState): void => {
+  activeBattles.set(battle.id, battle);
+  userBattles.set(battle.redFighter.userId, battle.id);
+  if (battle.blueFighter) {
+    userBattles.set(battle.blueFighter.userId, battle.id);
+  }
+  if (battle.threadId) {
+    threadBattles.set(battle.threadId, battle.id);
+  }
+};
+
+/**
+ * Initialize arena state with config values and load persisted battles
+ */
+export const initArenaState = async (
   challengeTimeoutSeconds: number,
   roundTimeoutSeconds: number
-): void => {
+): Promise<void> => {
   CHALLENGE_TIMEOUT_MS = challengeTimeoutSeconds * 1000;
   ROUND_TIMEOUT_MS = roundTimeoutSeconds * 1000;
+
+  const persistedBattles = await loadArenaState();
+  const now = Date.now();
+
+  for (const battle of persistedBattles) {
+    if (battle.phase === "finished") {
+      continue;
+    }
+
+    if (battle.expiresAt < now) {
+      log.info(`Skipping expired battle ${battle.id}`);
+      continue;
+    }
+
+    restoreBattle(battle);
+    log.info(`Restored battle ${battle.id}: ${battle.redFighter.username}`);
+  }
+
   log.info(
-    `Arena state initialized: challenge timeout=${challengeTimeoutSeconds}s, round timeout=${roundTimeoutSeconds}s`
+    `Arena state initialized: challenge timeout=${challengeTimeoutSeconds}s, round timeout=${roundTimeoutSeconds}s, restored ${persistedBattles.length} battles`
   );
 };
 
@@ -211,6 +258,10 @@ export const createBattle = (
     `Created battle ${id}: ${challenger.username} (${challenger.bot.name})`
   );
 
+  persistBattles().catch((error) => {
+    log.error("Failed to persist battle creation:", error);
+  });
+
   return battle;
 };
 
@@ -271,6 +322,10 @@ export const acceptChallenge = (
     `Battle ${battle.id} accepted: ${opponent.username} (${opponent.bot.name})`
   );
 
+  persistBattles().catch((error) => {
+    log.error("Failed to persist battle acceptance:", error);
+  });
+
   return true;
 };
 
@@ -283,6 +338,10 @@ export const setBattleThread = (
 ): void => {
   battle.threadId = threadId;
   threadBattles.set(threadId, battle.id);
+
+  persistBattles().catch((error) => {
+    log.error("Failed to persist battle thread:", error);
+  });
 };
 
 /**
@@ -293,6 +352,10 @@ export const setAnnouncementMessage = (
   messageId: string
 ): void => {
   battle.announcementMessageId = messageId;
+
+  persistBattles().catch((error) => {
+    log.error("Failed to persist announcement message:", error);
+  });
 };
 
 /**
@@ -348,6 +411,10 @@ export const setFighterStance = (
     log.info(`Battle ${battle.id} entering combat phase`);
   }
 
+  persistBattles().catch((error) => {
+    log.error("Failed to persist fighter stance:", error);
+  });
+
   return true;
 };
 
@@ -370,6 +437,10 @@ export const setFighterAction = (
   } else {
     return false;
   }
+
+  persistBattles().catch((error) => {
+    log.error("Failed to persist fighter action:", error);
+  });
 
   return true;
 };
@@ -415,6 +486,10 @@ export const recordRoundResult = (
     battle.roundStartedAt = Date.now();
     battle.expiresAt = Date.now() + ROUND_TIMEOUT_MS;
   }
+
+  persistBattles().catch((error) => {
+    log.error("Failed to persist round result:", error);
+  });
 };
 
 /**
@@ -568,6 +643,10 @@ export const forfeitBattle = (
   battle.phase = "finished";
   log.info(`Battle ${battle.id} forfeited by ${odwerId}`);
 
+  persistBattles().catch((error) => {
+    log.error("Failed to persist battle forfeit:", error);
+  });
+
   return true;
 };
 
@@ -590,6 +669,10 @@ export const cancelChallenge = (
 
   cleanupBattle(battle.id);
   log.info(`Challenge ${battle.id} canceled by ${userId}`);
+
+  persistBattles().catch((error) => {
+    log.error("Failed to persist battle cancellation:", error);
+  });
 
   return true;
 };
@@ -618,6 +701,10 @@ export const cleanupBattle = (battleId: string): void => {
   activeBattles.delete(battleId);
 
   log.info(`Cleaned up battle ${battleId}`);
+
+  persistBattles().catch((error) => {
+    log.error("Failed to persist battle cleanup:", error);
+  });
 };
 
 /**
