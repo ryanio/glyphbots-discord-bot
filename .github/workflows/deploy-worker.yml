@@ -1,0 +1,105 @@
+name: Deploy Worker
+
+# Deploys worker/ to Cloudflare on every push to main that touches it.
+#
+# Secrets are NOT managed here. Runtime secrets (DISCORD_TOKEN,
+# DISCORD_PUBLIC_KEY, DISCORD_APP_ID, OPENSEA_API_TOKEN, ADMIN_TOKEN) live in
+# Cloudflare and are set once with `wrangler secret put`. A deploy leaves them
+# untouched, so nothing here can leak or clobber them.
+#
+# Slash command registration is deliberately absent. It mutates the live guild
+# and is an operator step: `npx tsx scripts/register-commands.ts`.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "worker/**"
+      - ".github/workflows/deploy-worker.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push supersedes an in-flight deploy. Safe here because a deploy is a
+# single atomic upload with no migration step to leave half-applied.
+concurrency:
+  group: deploy-worker
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+
+      - run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Test
+        run: npx vitest run
+
+      # Catches a broken wrangler.jsonc or an unresolvable binding before we
+      # touch production, so a config mistake fails the build rather than
+      # shipping.
+      - name: Validate bindings
+        run: npx wrangler deploy --dry-run
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Deploy
+        id: deploy
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          workingDirectory: worker
+
+      # A deploy replaces the running isolate, so the gateway DO comes back not
+      # live and inline lookups stop until something reopens the socket. Crons
+      # keep working, which is what makes this failure quiet.
+      #
+      # health-tick rather than reconnect, because it is idempotent: it reopens
+      # anything not live (or live but silent past the heartbeat window) and is
+      # a no-op when the socket is healthy. The five minute mint cron runs the
+      # same tick, so this only shortens the gap rather than being the sole
+      # thing standing between a deploy and a working bot.
+      - name: Heal the gateway socket
+        if: success()
+        continue-on-error: true
+        run: |
+          RESPONSE=$(curl -sf --max-time 20 -X POST \
+            "https://glyphbots-worker.ryan-2e8.workers.dev/_admin/gateway/health-tick" \
+            -H "Authorization: Bearer ${{ secrets.WORKER_ADMIN_TOKEN }}" || echo 'FAILED')
+
+          if [ "$RESPONSE" = "FAILED" ]; then
+            echo "### Gateway heal failed" >> "$GITHUB_STEP_SUMMARY"
+            echo "Inline lookups may be down until the next cron tick. Check /health." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### Gateway healed" >> "$GITHUB_STEP_SUMMARY"
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            echo "$RESPONSE" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Report health
+        if: success()
+        continue-on-error: true
+        run: |
+          sleep 5
+          HEALTH=$(curl -sf --max-time 20 "https://glyphbots-worker.ryan-2e8.workers.dev/health" || echo 'FAILED')
+          echo "### Worker health" >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          echo "$HEALTH" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
