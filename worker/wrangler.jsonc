@@ -43,12 +43,10 @@
   // Reserved for per-user wallet state (`wallet:<userId>`), decision 7 in
   // plans/cloudflare-consolidation.md. Provisioned so /wallet and /mybots have
   // somewhere to land later; nothing in the Worker reads or writes it today.
-  // Replace `id` with the real namespace id from
-  // `wrangler kv namespace create GLYPHBOTS_KV` before the first deploy.
   "kv_namespaces": [
     {
       "binding": "GLYPHBOTS_KV",
-      "id": "REPLACE_WITH_KV_NAMESPACE_ID"
+      "id": "0f99111ce7c44f88a27ec34397745f84"
     }
   ]
   // Secrets, set with `wrangler secret put NAME` (the operator's step, not
