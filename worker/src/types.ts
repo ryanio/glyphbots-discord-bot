@@ -11,6 +11,12 @@ export type WorkerEnv = {
   /** Durable Object namespace holding the mint cursor. */
   FEED_STATE: DurableObjectNamespace;
   /**
+   * Durable Object namespace holding the single gateway WebSocket. One
+   * instance, `idFromName("singleton")`, reached through
+   * `src/durable-objects/gateway-client.ts`.
+   */
+  GATEWAY: DurableObjectNamespace;
+  /**
    * Reserved for per-user wallet state (`wallet:<userId>`), decision 7 in
    * plans/cloudflare-consolidation.md. Provisioned and bound, read by nothing
    * in Phase 1. Do not start writing to it without that decision being made.
@@ -34,6 +40,13 @@ export type WorkerEnv = {
   OPENSEA_API_TOKEN?: string;
   /** Override for the GlyphBots API origin. Defaults to production. */
   GLYPHBOTS_API_URL?: string;
+  /**
+   * Shared secret for `/_admin/gateway/*`. Those routes connect, inspect and
+   * force-reconnect the live gateway socket, so they are not public. When this
+   * is unset the routes answer 503 and do nothing: an unset secret must never
+   * read as "no auth required". `wrangler secret put ADMIN_TOKEN`.
+   */
+  ADMIN_TOKEN?: string;
 };
 
 /** Hono app environment. */

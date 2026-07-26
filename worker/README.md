@@ -1,7 +1,7 @@
 # glyphbots-worker
 
 The Cloudflare Worker that the three GlyphBots Discord bots are consolidating
-onto. Phases 1 and 2 of [`plans/cloudflare-consolidation.md`](../plans/cloudflare-consolidation.md).
+onto. Phases 1 to 3 of [`plans/cloudflare-consolidation.md`](../plans/cloudflare-consolidation.md).
 
 **What it does today:**
 
@@ -10,8 +10,13 @@ onto. Phases 1 and 2 of [`plans/cloudflare-consolidation.md`](../plans/cloudflar
 - `POST /discord/interactions` verifies Ed25519 and serves eight slash
   commands: `/bot`, `/artifact`, `/floor`, `/sales`, `/listings`, `/owner`,
   `/rarity`, `/activity`.
+- A Durable Object holds one WebSocket to the Discord gateway and answers
+  inline `b#123` / `a#123` / `#username` lookups, in `#general` and
+  `#show-and-tell` only.
+- A second cron posts one random collection item into `#gallery` every six
+  hours.
 
-No gateway and no OpenSea feed. Those are Phases 3 and 4.
+No OpenSea sales feed yet. That is Phase 4.
 
 `../src` is the Node bot and is untouched. It stays until Phase 5.
 
@@ -25,6 +30,7 @@ src/
   api/glyphbots.ts                GlyphBots client, built per invocation
   api/opensea.ts                  OpenSea client, built per invocation
   api/types.ts                    Artifact, Bot and OpenSea shapes
+  channels/gallery.ts             the six-hourly #gallery post
   channels/mints.ts               cursor logic + one poll
   commands/                       the eight handlers
     context.ts                    what a handler is handed, option reading
@@ -37,13 +43,24 @@ src/
   discord/interactions.ts         the defer helper and the follow-up PATCH
   discord/verify.ts               Ed25519 verification via WebCrypto
   durable-objects/feed-state.ts   FeedStateDO, holds the mint cursor
+  durable-objects/gateway.ts      GatewayDO, the WebSocket to Discord
+  durable-objects/gateway-client.ts      connect / status / reconnect / tick
   durable-objects/mint-cursor-store.ts   the narrow read/write interface
+  lookups/matcher.ts              b#123 / a#123 / #username parsing (pure)
+  lookups/embeds.ts               one embed per match
+  lookups/rate-limit.ts           per-channel window + cooldown
+  lookups/handle.ts               the gates, in order, then the reply
+  routes/admin.ts                 /_admin/gateway/*, ADMIN_TOKEN gated
   routes/interactions.ts          POST /discord/interactions
   utils/logger.ts                 console logger
 scripts/register-commands.ts      operator-run guild registration (see below)
 test/mints.test.ts                mint watcher coverage, ported from ../test
 test/interactions.test.ts         signature, PING/PONG, defer inversion, wiring
 test/commands.test.ts             per-command response shaping
+test/lookups.test.ts              matcher, allowlist, rate limiter, one message
+test/gateway.test.ts              frames, close codes, heartbeats, routing
+test/gallery.test.ts              the #gallery tick
+test/cron.test.ts                 which cron runs which job
 ```
 
 ## Environment
@@ -62,6 +79,7 @@ wrangler secret put DISCORD_TOKEN        # Oracle's bot token, mint watcher
 wrangler secret put DISCORD_APP_ID       # Oracle's application id
 wrangler secret put DISCORD_PUBLIC_KEY   # Ed25519 key from the developer portal
 wrangler secret put OPENSEA_API_TOKEN    # optional, see below
+wrangler secret put ADMIN_TOKEN          # /_admin/gateway/*, see below
 ```
 
 Without `DISCORD_PUBLIC_KEY` the interactions endpoint answers 503 rather than
@@ -77,9 +95,14 @@ Optional var: `GLYPHBOTS_API_URL`, which defaults to `https://www.glyphbots.com`
 The `www` host is deliberate. The apex 307s on every API path, and on Workers
 each redirect costs a subrequest.
 
+`ADMIN_TOKEN` is a shared secret for the four operator routes under
+`/_admin/gateway/`. Those routes can open and force-reconnect the live gateway
+socket, so they are not public. **Unset means 503, never "no auth required."**
+
 ## Bindings
 
 - `FEED_STATE`, the `FeedStateDO` namespace. Durable Objects need Workers Paid.
+- `GATEWAY`, the `GatewayDO` namespace. One instance, `idFromName("singleton")`.
 - `GLYPHBOTS_KV`, reserved for per-user wallet state (`wallet:<userId>`) under
   decision 7 of the plan. Provisioned, bound, and read by nothing. Create it and
   paste the id into `wrangler.jsonc` before the first deploy:
@@ -164,6 +187,199 @@ is removed**, not stubbed. `random:true` picks uniformly across the supply,
 which is exactly what the old handler did whenever no wallet was linked, and
 the option's description no longer mentions wallets. `/bot user:<address-or-name>`
 still gives a random bot from a specific account and needs no stored state.
+
+## The gateway
+
+One Durable Object holds one WebSocket to `wss://gateway.discord.gg`, modelled
+directly on Coral's `packages/worker/src/durable-objects/discord-gateway.ts`.
+That DO has been running this lifecycle in production for months, so the
+differences here are all subtractions.
+
+### It does not hibernate, and that is not a cost oversight
+
+Cloudflare's hibernating WebSocket API takes an **incoming** `WebSocketPair`.
+A socket that came back from an outbound `fetch()` cannot be handed to
+`state.acceptWebSocket()`; it throws "pair has already been accepted or used in
+a Response". A gateway connection is outbound by definition, so hibernation is
+not an option for it at all, whatever it would cost. Coral records the same
+finding in a comment at `discord-gateway.ts:468-477`.
+
+The saving would have been small anyway. Discord's `heartbeat_interval` is
+about 41 seconds, so the DO is woken by its own alarm roughly 2,100 times a day
+regardless of what happens on the socket.
+
+The failure this avoids is worth naming, because it is the worst one available
+here: a socket that is `accept()`ed while the DO is allowed to be evicted loses
+its in-memory reference while Discord still believes the connection is up. The
+bot looks healthy and answers nothing, for hours. Two guards exist for it
+anyway, because "should not happen" is not a monitoring strategy:
+
+- `alarm()` treats a null `liveWs` as "reopen", whatever the stored state says.
+- the `/health-tick` watchdog rides the five minute mint cron and reopens
+  anything that is not live, or that is live but has heard nothing in 90
+  seconds with a heartbeat unacked.
+
+### Intents
+
+`GUILDS | GUILD_MESSAGES | MESSAGE_CONTENT` = `33281`. Oracle also has Presence
+and Server Members granted (application flags `565248`), and both are
+deliberately **not** requested: nothing in scope reads them, and an unused
+intent is a larger `READY` payload plus a stream of events to discard.
+
+If `MESSAGE_CONTENT` is ever turned off in the portal, the gateway closes
+`4014`, which is fatal here: the DO parks in `failed`, logs loudly, and does
+not reconnect. A reconnect loop against a permission a human has to restore is
+just a way to get rate limited.
+
+### Reconnect behavior, by close code
+
+| Code | Disposition | What happens |
+|---|---|---|
+| 4004, 4010, 4011, 4012, 4013, 4014 | fatal | `wsState: failed`, alarm cleared, no reconnect. The watchdog leaves it alone. Only `/_admin/gateway/connect` restarts it. |
+| 4007, 4009 | re-identify | Session, resume URL and sequence are dropped, then reconnect on the backoff. A RESUME into a dead session only earns an INVALID_SESSION and another round trip. |
+| everything else (1000, 1001, 1006, 4000-4003, 4005, 4008, …) | resume | Session and sequence are kept, reconnect on the backoff, RESUME on the next HELLO. |
+
+Backoff is `1s, 2s, 5s, 15s, 60s`, one step per consecutive close, held at 60s,
+reset to the start on READY or RESUMED.
+
+Note the treatment of 1000 and 1001. Discord uses them to end a session for
+good, but they are also what this DO sends itself on an admin reconnect, a
+missed heartbeat ack, and an `op=7`. The two are indistinguishable at that
+layer, so the optimistic branch is taken. If the session really is gone the
+gateway answers `op=9 INVALID_SESSION`, which drops the session and
+re-IDENTIFYs after the protocol's 1 to 5 second wait. The pessimistic case
+costs one extra round trip and self-corrects; the common case keeps its
+session, which is what makes `/reconnect` resume rather than replay.
+
+`op=9` also counts consecutive resume failures, and logs at error level once
+three land in a row. Three means the session is not sticking and something
+structural is wrong.
+
+### Admin routes
+
+All four require `Authorization: Bearer $ADMIN_TOKEN`.
+
+```
+POST /_admin/gateway/connect       open the socket if it is not open
+GET  /_admin/gateway/status        wsState, seq, heartbeat, failure reason
+POST /_admin/gateway/reconnect     close and reopen, resuming the session
+POST /_admin/gateway/health-tick   what the cron calls; open or repair
+```
+
+`GET /health` carries the same status block, unauthenticated, minus anything
+sensitive. The session id is never returned by either, only a `hasSession`
+boolean.
+
+## Inline lookups
+
+`b#123` is a bot, `a#123` is an artifact, `#123` is a bot, `#random` (also
+`#rand`, `#?`) is a random bot, and `#someone` resolves an OpenSea username to
+one bot that account holds.
+
+**Only `#general` and `#show-and-tell`.** The Node bot this came from
+(`discord-nft-embed-bot`) replied in every channel it could see and in DMs. On
+a droplet that was free. On Workers each embed is several sequential API calls
+against a per-invocation subrequest budget, so the surface has to be bounded
+before anything else is. DMs have no channel id in the allowlist, so they drop
+with everything else.
+
+Gates run cheapest-first and nothing touches the network until all of them
+pass: bot author (including itself), then guild, then channel, then whether the
+text parses as a lookup at all, then the rate limit. The parse sits before the
+rate limit on purpose, so ordinary conversation in a busy `#general` never
+spends the channel's lookup budget.
+
+### Cost per lookup
+
+The Node bot fired five calls per embed: the NFT, the collection slug, the last
+sale, the best offer and the best listing (`src/index.ts:174-200`). Six embeds
+was thirty-plus subrequests before the reply. The plan calls for cutting that
+trio, and this does:
+
+```
+b#123      2 subrequests   GlyphBots bot record + one OpenSea read (owner, rank)
+a#123      2 subrequests   artifact + origin bot name
+#username  4 subrequests   account, account NFTs, then the bot lookup's two
+```
+
+Six of the most expensive kind is 24. Price history is still one `/bot`,
+`/sales` or `/listings` away, and those are separate invocations with their own
+budget.
+
+### Rate limiting
+
+Per channel, in the DO's memory, Coral's shape plus a cooldown:
+
+- ten answered lookups per channel per rolling 60 seconds,
+- at least 3 seconds between two answers in the same channel,
+- at most six embeds on one reply (Discord's own limit, and the Node bot's
+  `MAX_EMBEDS_PER_MESSAGE`),
+- repeated matches in one message collapse, so `b#1 b#1 b#1` costs one lookup.
+
+The state resets when the DO is evicted. That is deliberate and matches Coral:
+this is a spend guard, not a security control, and persisting it would put a
+storage write on the hot path of every message in the guild.
+
+## The #gallery cron
+
+`0 */6 * * *` posts one random collection item into `#gallery`, alternating
+bots and artifacts. This is `RANDOM_INTERVALS` from
+`discord-nft-embed-bot/src/index.ts:696-746` with the `setInterval` removed,
+running at the six hour cadence it had before it stopped on 2026-05-02.
+
+`scheduled()` dispatches on `event.cron`, so the two crons never run each
+other's work. The five minute entry runs the mint watcher and pokes the gateway
+watchdog; the six hour entry runs the gallery and nothing else.
+
+Whose turn it is comes from the clock (six hour buckets since the epoch,
+alternating) rather than from storage, so two isolates cannot disagree. The
+recently-posted memory the Node bot kept is dropped: at six hours across 11,111
+bots a repeat is rare enough not to be worth a Durable Object round trip. If it
+ever becomes visible, the fix is a `galleryRecent` key in `FeedStateDO`.
+
+## Smoke testing a deploy
+
+Tests cannot reach a real gateway, so this list is the actual verification.
+
+1. `curl $WORKER/health` and read the `gateway` block. Within five minutes of a
+   deploy it should show `wsState: "live"`, a non-null `selfUserId`, a
+   `lastSeq` that is not null, and `heartbeatAckPending: false`.
+2. Post `b#1` in `#general`. An embed with the PNG image should come back as a
+   reply within a couple of seconds.
+3. Post `b#1` in `#trading-floor`. Nothing should happen. This is the allowlist,
+   and it is the check most worth doing by hand.
+4. Post ten lookups quickly in `#general`. The first answers, the next few are
+   dropped by the cooldown, and the channel stops answering entirely once ten
+   land inside a minute. `wrangler tail` shows `Rate-limited (cooldown)` and
+   `Rate-limited (window)`.
+5. `POST /_admin/gateway/reconnect`, then `GET /_admin/gateway/status`. It
+   should return to `live` within a few seconds with `hasSession: true`, and
+   the channel should not replay old messages. A RESUMED line appears in
+   `wrangler tail`; a READY line instead means the session did not survive,
+   which is worth investigating but not broken.
+6. **Come back the next day.** `wsState` should still be `live` and `lastEventAt`
+   should be recent. The failure this whole design is defending against does
+   not show up in the first ten minutes.
+7. Watch for one `#gallery` post at the next six-hour boundary.
+
+## What is not verified, and cannot be from here
+
+- **Any real gateway connection.** `openGateway` is the one path with no test
+  coverage: `/gateway/bot` discovery, the 101 upgrade over Workers' `fetch`,
+  and whether Discord accepts the IDENTIFY. Everything below it (frames, close
+  codes, heartbeats, routing) is covered with a stub socket.
+- **Whether the connection survives for days.** The heartbeat-ack check, the
+  backoff, and the watchdog are all tested in isolation. Their behavior across
+  a real Discord outage or a DO relocation is not.
+- **RESUME actually resuming.** The RESUME frame is asserted; that Discord
+  accepts it and replays the gap is not.
+- **Discord rendering of the embeds**, including the multi-megabyte artifact
+  images the plan flagged in Phase 1.
+- **Guild permissions.** The bot needs View Channel, Read Message History and
+  Send Messages in `#general`, `#show-and-tell` and `#gallery`. Nothing here
+  checks that, and a missing permission looks exactly like a broken bot.
+- **The 50-subrequest budget under a real burst.** The arithmetic above says it
+  fits; only a live burst proves it.
 
 ## Registering the commands
 

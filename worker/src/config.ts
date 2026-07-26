@@ -15,6 +15,48 @@ export const GENERAL_CHANNEL_ID = "1445933084401864767";
 /** Channel the mint watcher posts into. */
 export const MINTS_CHANNEL_ID = GENERAL_CHANNEL_ID;
 
+/** #show-and-tell. Inline lookups are allowed here too. */
+export const SHOW_AND_TELL_CHANNEL_ID = "1446248716536123502";
+
+/** #gallery. The six-hourly random post lands here. */
+export const GALLERY_CHANNEL_ID = "1445943861263208561";
+
+/**
+ * The only two channels inline `b#123` / `a#123` / `#username` lookups answer
+ * in.
+ *
+ * The Node bot this is ported from replied in every channel it could see and
+ * in DMs (`discord-nft-embed-bot/src/index.ts`, no channel check anywhere).
+ * That is the largest subrequest risk in the migration: one embed is several
+ * sequential OpenSea calls and a single message can carry six of them, so an
+ * unbounded surface is an unbounded bill. Two ids, checked before any network
+ * work happens, and a DM has no channel id in this set so it drops too.
+ */
+export const LOOKUP_CHANNEL_IDS: readonly string[] = [
+  GENERAL_CHANNEL_ID,
+  SHOW_AND_TELL_CHANNEL_ID,
+];
+
+/** Discord's own ceiling, and the Node bot's (`src/config/constants.ts:6`). */
+export const MAX_EMBEDS_PER_MESSAGE = 6;
+
+/**
+ * Per-channel fixed window for inline lookups, matching Coral's shape
+ * (`discord-gateway.ts:156-157`). Ten answered lookups per channel per minute.
+ */
+export const LOOKUP_RATE_LIMIT_WINDOW_MS = 60_000;
+export const LOOKUP_RATE_LIMIT_MAX = 10;
+
+/**
+ * Minimum gap between two answered lookups in the same channel. The window
+ * above caps the total; this stops all ten being spent in one burst, which is
+ * what a copy-pasted list of ids looks like.
+ */
+export const LOOKUP_COOLDOWN_MS = 3000;
+
+/** Highest artifact token id a lookup will even try. The API rejects the rest. */
+export const MAX_ARTIFACT_TOKEN_ID = 100_000;
+
 /**
  * Production GlyphBots API origin.
  *

@@ -7,17 +7,26 @@
   "observability": {
     "enabled": true
   },
-  // Phase 1 runs one cron: the mint watcher, matching
-  // MINTS_POLL_INTERVAL_MINUTES = 5 on the Node bot (src/lib/constants.ts:46).
+  // Two crons, dispatched on `event.cron` in `scheduled()` so neither runs the
+  // other's work:
+  // - `*/5 * * * *` the mint watcher (MINTS_POLL_INTERVAL_MINUTES = 5 on the
+  //   Node bot, src/lib/constants.ts:46), which also pokes the gateway
+  //   watchdog.
+  // - `0 */6 * * *` one random collection item into #gallery, the cadence
+  //   RANDOM_INTERVALS ran at before it stopped on 2026-05-02.
   // Phase 4 adds the one-minute OpenSea tick.
   "triggers": {
-    "crons": ["*/5 * * * *"]
+    "crons": ["*/5 * * * *", "0 */6 * * *"]
   },
   "durable_objects": {
     "bindings": [
       {
         "class_name": "FeedStateDO",
         "name": "FEED_STATE"
+      },
+      {
+        "class_name": "GatewayDO",
+        "name": "GATEWAY"
       }
     ]
   },
@@ -25,6 +34,10 @@
     {
       "new_sqlite_classes": ["FeedStateDO"],
       "tag": "v1"
+    },
+    {
+      "new_sqlite_classes": ["GatewayDO"],
+      "tag": "v2"
     }
   ],
   // Reserved for per-user wallet state (`wallet:<userId>`), decision 7 in
@@ -46,6 +59,10 @@
   //   /discord/interactions answers 503 rather than trusting anything.
   // - OPENSEA_API_TOKEN: optional. Six of the eight commands read OpenSea, and
   //   unkeyed requests work but are rate limited much harder.
+  //
+  // - ADMIN_TOKEN: shared secret for /_admin/gateway/*, which can connect and
+  //   force-reconnect the live gateway socket. Unset means those routes answer
+  //   503 and do nothing; it is never an open door.
   //
   // Phase 4 needs no new secrets.
 }
