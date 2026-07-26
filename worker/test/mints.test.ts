@@ -1,0 +1,371 @@
+/**
+ * Behavioral coverage ported from `test/channels/mints.test.ts` on the Node
+ * bot. The Node suite drives `initMintsChannel` with a mocked discord.js
+ * client; here the same cases drive `pollMints` with an in-memory cursor store
+ * and a recording poster, because a cron tick is one poll and there is no
+ * client to mock.
+ */
+
+import type { RESTPostAPIChannelMessageJSONBody } from "discord-api-types/v10";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  advanceCursor,
+  pollMints,
+  selectNewMints,
+} from "../src/channels/mints";
+import {
+  contentSends,
+  createApi,
+  createArtifact,
+  createMemoryPoster,
+  createMemoryStore,
+  cursor,
+  embedSends,
+  mintedArtifact,
+  pollDeps,
+} from "./fixtures";
+
+type EmbedJson = {
+  title?: string;
+  url?: string;
+  image?: { url: string };
+  fields?: Array<{ name: string; value: string }>;
+};
+
+const firstEmbed = (sends: RESTPostAPIChannelMessageJSONBody[]): EmbedJson =>
+  (embedSends(sends)[0]?.embeds as unknown as EmbedJson[])[0] as EmbedJson;
+
+describe("cold start", () => {
+  it("seeds the cursor and posts nothing", async () => {
+    const api = createApi([
+      mintedArtifact("a", "2025-01-01T00:00:00Z", 1),
+      mintedArtifact("b", "2025-01-02T00:00:00Z", 2),
+      mintedArtifact("c", "2025-01-03T00:00:00Z", 3),
+    ]);
+    const poster = createMemoryPoster();
+    const store = createMemoryStore(null);
+
+    await pollMints(pollDeps(api, poster, store));
+
+    expect(poster.sends).toHaveLength(0);
+    expect(store.current).toEqual({
+      lastMintedAtMs: new Date("2025-01-03T00:00:00Z").getTime(),
+      postedArtifactIds: ["a", "b", "c"],
+    });
+  });
+
+  it("ignores unminted artifacts when seeding", async () => {
+    const api = createApi([
+      mintedArtifact("real", "2025-01-01T00:00:00Z", 1),
+      createArtifact({ id: "pending", mintedAt: null, contractTokenId: null }),
+    ]);
+    const store = createMemoryStore(null);
+
+    await pollMints(pollDeps(api, createMemoryPoster(), store));
+
+    expect(store.current).toEqual({
+      lastMintedAtMs: new Date("2025-01-01T00:00:00Z").getTime(),
+      postedArtifactIds: ["real"],
+    });
+  });
+});
+
+describe("new mint detection", () => {
+  it("posts a newly detected mint exactly once", async () => {
+    const api = createApi([mintedArtifact("new-1", "2025-06-01T00:00:00Z", 10)]);
+    const poster = createMemoryPoster();
+    const store = createMemoryStore(cursor(0));
+
+    const posted = await pollMints(pollDeps(api, poster, store));
+
+    expect(posted).toBe(1);
+    expect(embedSends(poster.sends)).toHaveLength(1);
+    expect(store.current?.postedArtifactIds).toEqual(["new-1"]);
+  });
+
+  it("posts oldest first so the channel reads chronologically", async () => {
+    const api = createApi([
+      mintedArtifact("newest", "2025-06-03T00:00:00Z", 12),
+      mintedArtifact("oldest", "2025-06-01T00:00:00Z", 10),
+      mintedArtifact("middle", "2025-06-02T00:00:00Z", 11),
+    ]);
+    const poster = createMemoryPoster();
+    const store = createMemoryStore(cursor(0));
+
+    await pollMints(pollDeps(api, poster, store));
+
+    expect(store.current?.postedArtifactIds).toEqual([
+      "oldest",
+      "middle",
+      "newest",
+    ]);
+  });
+
+  it("does not repost the same artifact on a second poll", async () => {
+    const api = createApi([mintedArtifact("dupe", "2025-06-01T00:00:00Z", 10)]);
+    const poster = createMemoryPoster();
+    const store = createMemoryStore(cursor(0));
+
+    await pollMints(pollDeps(api, poster, store));
+    expect(embedSends(poster.sends)).toHaveLength(1);
+
+    // Second tick, identical API payload. The inclusive timestamp re-surfaces
+    // the artifact; the id set is what rejects it.
+    await pollMints(pollDeps(api, poster, store));
+
+    expect(embedSends(poster.sends)).toHaveLength(1);
+    expect(store.current?.postedArtifactIds).toContain("dupe");
+  });
+
+  it("posts nothing when the API returns no artifacts", async () => {
+    const poster = createMemoryPoster();
+    const store = createMemoryStore(cursor(0));
+
+    await pollMints(pollDeps(createApi([]), poster, store));
+
+    expect(poster.sends).toHaveLength(0);
+    expect(store.writes).toHaveLength(0);
+  });
+});
+
+describe("unminted artifacts", () => {
+  it("ignores artifacts with a null mintedAt", async () => {
+    const api = createApi([
+      createArtifact({ id: "unminted", mintedAt: null, contractTokenId: 5 }),
+    ]);
+    const poster = createMemoryPoster();
+
+    await pollMints(pollDeps(api, poster, createMemoryStore(cursor(0))));
+
+    expect(poster.sends).toHaveLength(0);
+  });
+
+  it("ignores artifacts with a null contractTokenId", async () => {
+    const api = createApi([
+      createArtifact({
+        id: "no-token",
+        mintedAt: "2025-06-01T00:00:00Z",
+        contractTokenId: null,
+      }),
+    ]);
+    const poster = createMemoryPoster();
+
+    await pollMints(pollDeps(api, poster, createMemoryStore(cursor(0))));
+
+    expect(poster.sends).toHaveLength(0);
+  });
+});
+
+describe("burst guard", () => {
+  const burst = Array.from({ length: 9 }, (_, i) =>
+    mintedArtifact(
+      `burst-${i}`,
+      new Date(Date.UTC(2025, 5, i + 1)).toISOString(),
+      100 + i
+    )
+  );
+
+  it("caps individual posts and summarizes the rest", async () => {
+    const poster = createMemoryPoster();
+
+    await pollMints(
+      pollDeps(createApi(burst), poster, createMemoryStore(cursor(0)))
+    );
+
+    expect(embedSends(poster.sends)).toHaveLength(5);
+    const summaries = contentSends(poster.sends);
+    expect(summaries).toHaveLength(1);
+    expect(summaries[0]?.content).toContain("4");
+  });
+
+  it("advances the cursor past every mint in the burst", async () => {
+    const store = createMemoryStore(cursor(0));
+
+    await pollMints(pollDeps(createApi(burst), createMemoryPoster(), store));
+
+    expect(store.current?.lastMintedAtMs).toBe(Date.UTC(2025, 5, 9));
+    for (let i = 0; i < 9; i++) {
+      expect(store.current?.postedArtifactIds).toContain(`burst-${i}`);
+    }
+  });
+});
+
+describe("embed content", () => {
+  it("includes the artifact image and links", async () => {
+    const artifact = mintedArtifact("embed", "2025-06-01T00:00:00Z", 77);
+    const poster = createMemoryPoster();
+
+    await pollMints(
+      pollDeps(createApi([artifact]), poster, createMemoryStore(cursor(0)))
+    );
+
+    const embed = firstEmbed(poster.sends);
+    expect(embed.image?.url).toBe(artifact.imageUrl);
+    expect(embed.url).toBe("https://glyphbots.com/artifact/77");
+    expect(embed.title).toContain("#77");
+    const values = (embed.fields ?? []).map((f) => f.value).join(" ");
+    expect(values).toContain("https://glyphbots.com/bot/42");
+  });
+
+  it("links the mint transaction on Etherscan when present", async () => {
+    const poster = createMemoryPoster();
+    const api = createApi([
+      createArtifact({
+        id: "tx",
+        mintedAt: "2025-06-01T00:00:00Z",
+        contractTokenId: 88,
+        mintTxHash: "0xdeadbeef",
+      }),
+    ]);
+
+    await pollMints(pollDeps(api, poster, createMemoryStore(cursor(0))));
+
+    const values = (firstEmbed(poster.sends).fields ?? [])
+      .map((f) => f.value)
+      .join(" ");
+    expect(values).toContain("https://etherscan.io/tx/0xdeadbeef");
+  });
+});
+
+describe("retry on send failure", () => {
+  let poster: ReturnType<typeof createMemoryPoster>;
+
+  beforeEach(() => {
+    poster = createMemoryPoster();
+  });
+
+  it("holds the cursor back so a failed mint is retried next poll", async () => {
+    poster.send.mockRejectedValue(new Error("discord 500"));
+    const store = createMemoryStore(cursor(1000));
+    const api = createApi([mintedArtifact("boom", "2025-06-01T00:00:00Z", 1)]);
+
+    await pollMints(pollDeps(api, poster, store));
+
+    // The failed mint must not be recorded as posted, and the timestamp must
+    // not move past it, otherwise it is dropped forever.
+    expect(store.current?.postedArtifactIds).not.toContain("boom");
+    expect(store.current?.lastMintedAtMs).toBeLessThanOrEqual(
+      new Date("2025-06-01T00:00:00Z").getTime()
+    );
+
+    // Next tick with the same payload re-selects it.
+    expect(
+      selectNewMints(
+        [mintedArtifact("boom", "2025-06-01T00:00:00Z", 1)],
+        store.current ?? cursor(null)
+      )
+    ).toHaveLength(1);
+  });
+
+  it("keeps a successful mint recorded even when a sibling fails", async () => {
+    poster.send
+      .mockImplementationOnce(() => Promise.resolve())
+      .mockImplementationOnce(() => Promise.reject(new Error("discord 500")));
+    const store = createMemoryStore(cursor(1000));
+    const api = createApi([
+      mintedArtifact("ok", "2025-06-01T00:00:00Z", 1),
+      mintedArtifact("bad", "2025-06-02T00:00:00Z", 2),
+    ]);
+
+    await pollMints(pollDeps(api, poster, store));
+
+    expect(store.current?.postedArtifactIds).toContain("ok");
+    expect(store.current?.postedArtifactIds).not.toContain("bad");
+  });
+
+  it("does not repost the rewound successes on the next poll", async () => {
+    poster.send
+      .mockImplementationOnce(() => Promise.resolve())
+      .mockImplementationOnce(() => Promise.reject(new Error("discord 500")));
+    const store = createMemoryStore(cursor(1000));
+    const artifacts = [
+      mintedArtifact("ok", "2025-06-01T00:00:00Z", 1),
+      mintedArtifact("bad", "2025-06-02T00:00:00Z", 2),
+    ];
+
+    await pollMints(pollDeps(createApi(artifacts), poster, store));
+
+    poster.send.mockImplementation(() => Promise.resolve());
+    const retryPoster = createMemoryPoster();
+    await pollMints(pollDeps(createApi(artifacts), retryPoster, store));
+
+    // Only the previously failed mint goes out on the retry.
+    expect(embedSends(retryPoster.sends)).toHaveLength(1);
+    expect(store.current?.postedArtifactIds).toContain("bad");
+  });
+});
+
+describe("error handling", () => {
+  it("does not throw when every send fails", async () => {
+    const poster = createMemoryPoster();
+    poster.send.mockRejectedValue(new Error("Discord API error"));
+    const api = createApi([mintedArtifact("fails", "2025-06-01T00:00:00Z", 10)]);
+
+    await expect(
+      pollMints(pollDeps(api, poster, createMemoryStore(cursor(0))))
+    ).resolves.toBe(0);
+  });
+
+  it("propagates an API rejection to the caller's catch", async () => {
+    const api = createApi([]);
+    api.fetchRecentArtifacts.mockRejectedValue(new Error("network down"));
+
+    await expect(
+      pollMints(
+        pollDeps(api, createMemoryPoster(), createMemoryStore(cursor(0)))
+      )
+    ).rejects.toThrow("network down");
+  });
+});
+
+describe("advanceCursor", () => {
+  it("caps the posted id history at 100", () => {
+    const existing = Array.from({ length: 100 }, (_, i) => `old-${i}`);
+    const next = advanceCursor(cursor(0, existing), [
+      mintedArtifact("fresh", "2025-06-01T00:00:00Z", 1) as never,
+    ]);
+
+    expect(next.postedArtifactIds).toHaveLength(100);
+    expect(next.postedArtifactIds).toContain("fresh");
+    expect(next.postedArtifactIds).not.toContain("old-0");
+  });
+
+  it("never derives the timestamp from wall clock", () => {
+    const mintedAt = new Date("2020-01-01T00:00:00Z").getTime();
+    const next = advanceCursor(cursor(null), [
+      mintedArtifact("old", "2020-01-01T00:00:00Z", 1) as never,
+    ]);
+
+    expect(next.lastMintedAtMs).toBe(mintedAt);
+  });
+});
+
+describe("selectNewMints", () => {
+  it("is inclusive on the boundary timestamp", () => {
+    const at = new Date("2025-06-01T00:00:00Z").getTime();
+    const boundary = mintedArtifact("edge", "2025-06-01T00:00:00Z", 1);
+
+    expect(selectNewMints([boundary], cursor(at))).toHaveLength(1);
+    expect(selectNewMints([boundary], cursor(at, ["edge"]))).toHaveLength(0);
+  });
+
+  it("re-admits an artifact the API reordered behind the cursor", () => {
+    const backfilled = mintedArtifact("late", "2025-06-05T00:00:00Z", 2);
+    const cutoff = new Date("2025-06-01T00:00:00Z").getTime();
+
+    expect(selectNewMints([backfilled], cursor(cutoff))).toHaveLength(1);
+  });
+});
+
+vi.mock("../src/utils/logger", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/utils/logger")>();
+  return {
+    ...actual,
+    createLogger: () => ({
+      debug: () => undefined,
+      error: () => undefined,
+      info: () => undefined,
+      warn: () => undefined,
+    }),
+  };
+});

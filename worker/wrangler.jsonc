@@ -1,0 +1,47 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "glyphbots-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-25",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true
+  },
+  // Phase 1 runs one cron: the mint watcher, matching
+  // MINTS_POLL_INTERVAL_MINUTES = 5 on the Node bot (src/lib/constants.ts:46).
+  // Phase 4 adds the one-minute OpenSea tick.
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "class_name": "FeedStateDO",
+        "name": "FEED_STATE"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "new_sqlite_classes": ["FeedStateDO"],
+      "tag": "v1"
+    }
+  ],
+  // Reserved for per-user wallet state (`wallet:<userId>`), decision 7 in
+  // plans/cloudflare-consolidation.md. Provisioned so /wallet and /mybots have
+  // somewhere to land later; nothing in the Worker reads or writes it today.
+  // Replace `id` with the real namespace id from
+  // `wrangler kv namespace create GLYPHBOTS_KV` before the first deploy.
+  "kv_namespaces": [
+    {
+      "binding": "GLYPHBOTS_KV",
+      "id": "REPLACE_WITH_KV_NAMESPACE_ID"
+    }
+  ]
+  // Secrets, set with `wrangler secret put NAME` (the operator's step, not
+  // something this repo configures):
+  // - DISCORD_TOKEN: Oracle's bot token
+  // - DISCORD_APP_ID: Oracle's application id
+  //
+  // Phase 2 adds DISCORD_PUBLIC_KEY, Phase 4 adds OPENSEA_API_TOKEN.
+}
