@@ -1,9 +1,10 @@
 /**
  * GlyphBots Worker.
  *
- * Phase 1 of plans/cloudflare-consolidation.md: a cron posts new artifact
- * mints into #general, and nothing else. The interactions endpoint arrives in
- * Phase 2, the gateway DO in Phase 3, the OpenSea feed in Phase 4.
+ * Phases 1 and 2 of plans/cloudflare-consolidation.md: a cron posts new
+ * artifact mints into #general, and `POST /discord/interactions` serves eight
+ * slash commands. The gateway DO arrives in Phase 3, the OpenSea feed in
+ * Phase 4.
  *
  * Bindings are read off `env` inside the handlers and threaded down as
  * explicit arguments. No module here captures the environment at import time.
@@ -12,9 +13,11 @@
 import { Hono } from "hono";
 import { createGlyphBotsClient } from "./api/glyphbots";
 import { pollMints } from "./channels/mints";
+import { handlers } from "./commands";
 import { MINTS_CHANNEL_ID } from "./config";
 import { createChannelPoster } from "./discord/channel-poster";
 import { createMintCursorStore } from "./durable-objects/mint-cursor-store";
+import { interactions } from "./routes/interactions";
 import type { AppEnv, WorkerEnv } from "./types";
 import { createLogger, getErrorMessage } from "./utils/logger";
 
@@ -27,10 +30,15 @@ const app = new Hono<AppEnv>();
 app.get("/health", (c) =>
   c.json({
     ok: true,
-    phase: 1,
+    phase: 2,
     mintsChannelId: MINTS_CHANNEL_ID,
+    commands: Object.keys(handlers).sort(),
   })
 );
+
+// Discord posts here. The route verifies Ed25519 itself; nothing in front of
+// it may consume the body, because the signature covers the raw bytes.
+app.route("/discord", interactions);
 
 app.all("*", (c) => c.json({ error: "not_found" }, 404));
 

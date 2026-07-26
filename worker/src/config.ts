@@ -42,3 +42,47 @@ export const GLYPHBOTS_COLOR = 0x00ff88;
 
 /** Etherscan transaction base URL. */
 export const ETHERSCAN_TX_URL = "https://etherscan.io/tx/";
+
+/** OpenSea v2 API root (`src/api/opensea.ts:18`). */
+export const OPENSEA_API_BASE = "https://api.opensea.io/api/v2";
+
+/** Bot contract (`src/api/opensea.ts:19`). */
+export const GLYPHBOTS_CONTRACT = "0xb6c2c2d2999c1b532e089a7ad4cb7f8c91cf5075";
+
+/** Artifact contract (`src/commands/artifact.ts:23`). */
+export const ARTIFACTS_CONTRACT = "0x3c64dc415de60ee9a25f67fb48e7c9a234a4b6d1";
+
+/** OpenSea collection slug (`src/api/opensea.ts:20`). */
+export const GLYPHBOTS_COLLECTION_SLUG = "glyphbots";
+
+/** Chain every OpenSea path is scoped to. */
+export const OPENSEA_CHAIN = "ethereum";
+
+/** Highest bot token id, and the denominator on every rarity rank. */
+export const MAX_BOT_TOKEN_ID = 11_111;
+
+/**
+ * Embed colors, ported from the per-command `HexColorString` constants. They
+ * are numbers here because `@discordjs/builders`'s `setColor` takes a number
+ * or an RGB tuple; the `"#rrggbb"` overload is a discord.js addition.
+ */
+export const COLORS = {
+  /** `src/commands/activity.ts:15` */
+  activity: 0xe6_7e_22,
+  /** `src/commands/artifact.ts:21` */
+  artifact: 0x9b_59_b6,
+  /** `src/commands/bot.ts:27` */
+  bot: 0x00_ff_88,
+  /** Shared error red, `src/commands/*.ts` */
+  error: 0xff_44_44,
+  /** `src/commands/owner.ts:20` */
+  info: 0x58_65_f2,
+  /** `src/commands/listings.ts:18` */
+  listing: 0x34_98_db,
+  /** `src/commands/rarity.ts:15` */
+  rarity: 0x9b_59_b6,
+  /** `src/commands/sales.ts:19` */
+  sale: 0x2e_cc_71,
+  /** `src/commands/floor.ts:14` */
+  stats: 0xf5_a6_23,
+} as const;

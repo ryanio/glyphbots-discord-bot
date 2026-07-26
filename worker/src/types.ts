@@ -20,6 +20,18 @@ export type WorkerEnv = {
   DISCORD_TOKEN: string;
   /** Discord application id. `wrangler secret put DISCORD_APP_ID`. */
   DISCORD_APP_ID: string;
+  /**
+   * Ed25519 public key from the Discord developer portal, used to verify every
+   * request to `/discord/interactions`. `wrangler secret put
+   * DISCORD_PUBLIC_KEY`. Without it the endpoint answers 503 rather than
+   * accepting unverified requests.
+   */
+  DISCORD_PUBLIC_KEY?: string;
+  /**
+   * OpenSea API key. Optional: the public tier works at a lower rate limit,
+   * which is what the Node bot fell back to whenever the variable was unset.
+   */
+  OPENSEA_API_TOKEN?: string;
   /** Override for the GlyphBots API origin. Defaults to production. */
   GLYPHBOTS_API_URL?: string;
 };

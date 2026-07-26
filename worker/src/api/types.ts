@@ -1,4 +1,13 @@
-/** GlyphBots API shapes, copied from `src/lib/types.ts`. */
+/**
+ * GlyphBots and OpenSea API shapes, copied from `src/lib/types.ts`.
+ *
+ * One deliberate omission: the OpenSea types below drop `image_url` and
+ * `display_image_url`, which the Node types carry. OpenSea serves
+ * `image/svg+xml` for this contract (verified live on token 1) and Discord
+ * renders nothing for SVG, so an OpenSea image URL must never reach an embed.
+ * Leaving the fields off the type makes that a compile error rather than a
+ * code-review rule. Bot imagery comes from `GlyphBotsClient.getBotPngUrl`.
+ */
 
 export type Artifact = {
   id: string;
@@ -23,4 +32,180 @@ export type ArtifactsListResponse = {
   items: Artifact[];
   nextCursor?: string | null;
   error?: string;
+};
+
+export type Trait = {
+  trait_type: string;
+  value: string;
+};
+
+export type Bot = {
+  id: string;
+  name: string;
+  tokenId: number;
+  traits: Trait[];
+  rarityRank: number;
+  burnedAt: string | null;
+  burnedBy: string | null;
+};
+
+export type StoryArc = {
+  id: string;
+  title: string;
+  role: string;
+  faction: string;
+  snippet: string;
+};
+
+export type BotStory = {
+  arc: StoryArc;
+  storySeed: number;
+  storyPowers: string[];
+  storyStats: Record<string, number>;
+  storySnippet: string;
+  missionBrief: string;
+};
+
+export type BotStoryResponse = {
+  story: BotStory | null;
+  error?: string;
+};
+
+export type BotResponse = {
+  bot: Bot;
+};
+
+export type ArtifactResponse = {
+  ok: boolean;
+  artifact?: Artifact;
+  error?: string;
+};
+
+/** OpenSea API shapes. See the note at the top about the missing image fields. */
+
+export type OpenSeaAccount = {
+  address: string;
+  username?: string;
+  bio?: string;
+};
+
+export type OpenSeaNFTOwner = {
+  address: string;
+  quantity: number;
+};
+
+export type OpenSeaTrait = {
+  trait_type: string;
+  display_type: string | null;
+  max_value: string | null;
+  value: string;
+};
+
+export type OpenSeaNFT = {
+  identifier: string;
+  collection: string;
+  contract: string;
+  token_standard: string;
+  name?: string;
+  description?: string;
+  opensea_url: string;
+  traits?: OpenSeaTrait[];
+  owners?: OpenSeaNFTOwner[];
+  rarity?: {
+    strategy_id: string;
+    strategy_version: string;
+    rank: number;
+  };
+};
+
+export type OpenSeaNFTResponse = {
+  nft: OpenSeaNFT;
+};
+
+export type AccountNFT = {
+  identifier: string;
+  collection: string;
+  contract: string;
+  name?: string;
+};
+
+export type AccountNFTsResponse = {
+  nfts: AccountNFT[];
+  next?: string;
+};
+
+export type OpenSeaCollectionStatsInterval = {
+  interval: string;
+  volume: number;
+  volume_diff: number;
+  volume_change: number;
+  sales: number;
+  sales_diff: number;
+  average_price: number;
+};
+
+export type OpenSeaCollectionStats = {
+  total: {
+    volume: number;
+    sales: number;
+    num_owners: number;
+    market_cap: number;
+    floor_price: number;
+    floor_price_symbol: string;
+    average_price: number;
+  };
+  intervals: OpenSeaCollectionStatsInterval[];
+};
+
+export type OpenSeaPayment = {
+  quantity: string;
+  token_address: string;
+  decimals: number;
+  symbol: string;
+};
+
+export type OpenSeaEvent = {
+  event_type: string;
+  event_timestamp: number;
+  chain: string;
+  transaction?: string;
+  payment?: OpenSeaPayment;
+  quantity: number;
+  seller?: string;
+  buyer?: string;
+  from_address?: string;
+  to_address?: string;
+  nft?: {
+    identifier: string;
+    name?: string;
+    opensea_url?: string;
+  };
+};
+
+export type OpenSeaEventsResponse = {
+  asset_events: OpenSeaEvent[];
+  next?: string;
+};
+
+export type OpenSeaListing = {
+  order_hash: string;
+  chain: string;
+  price: {
+    current: {
+      currency: string;
+      decimals: number;
+      value: string;
+    };
+  };
+  protocol_data: {
+    parameters: {
+      offerer: string;
+    };
+  };
+  protocol_address: string;
+};
+
+export type OpenSeaListingsResponse = {
+  listings: OpenSeaListing[];
+  next?: string;
 };

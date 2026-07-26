@@ -40,8 +40,12 @@
   ]
   // Secrets, set with `wrangler secret put NAME` (the operator's step, not
   // something this repo configures):
-  // - DISCORD_TOKEN: Oracle's bot token
-  // - DISCORD_APP_ID: Oracle's application id
+  // - DISCORD_TOKEN: Oracle's bot token, used by the mint watcher
+  // - DISCORD_APP_ID: Oracle's application id, part of the follow-up webhook path
+  // - DISCORD_PUBLIC_KEY: Ed25519 key from the developer portal. Without it
+  //   /discord/interactions answers 503 rather than trusting anything.
+  // - OPENSEA_API_TOKEN: optional. Six of the eight commands read OpenSea, and
+  //   unkeyed requests work but are rate limited much harder.
   //
-  // Phase 2 adds DISCORD_PUBLIC_KEY, Phase 4 adds OPENSEA_API_TOKEN.
+  // Phase 4 needs no new secrets.
 }
