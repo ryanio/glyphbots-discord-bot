@@ -94,13 +94,21 @@ describe("lore channel", () => {
       );
     });
 
-    it("should throw if channel is not text-based", async () => {
+    it("should disable itself if channel is not text-based", async () => {
       const nonTextChannel = createMockChannel({ isTextBased: () => false });
       mockClient.channels.fetch.mockResolvedValue(nonTextChannel as never);
 
-      await expect(initLoreChannel(mockClient, TEST_CONFIG)).rejects.toThrow(
-        "not a text channel"
-      );
+      await expect(
+        initLoreChannel(mockClient, TEST_CONFIG)
+      ).resolves.toBeNull();
+    });
+
+    it("should disable itself if the channel does not exist", async () => {
+      mockClient.channels.fetch.mockResolvedValue(null as never);
+
+      await expect(
+        initLoreChannel(mockClient, TEST_CONFIG)
+      ).resolves.toBeNull();
     });
 
     it("should post initial lore entry on initialization", async () => {

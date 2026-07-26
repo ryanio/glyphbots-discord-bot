@@ -332,6 +332,7 @@ export const TEST_CONFIG: Config = {
   playgroundChannelId: null,
   playgroundMinIntervalMinutes: 240,
   playgroundMaxIntervalMinutes: 720,
+  mintsChannelId: null,
   googleAiApiKey: "test-google-ai-key",
   glyphbotsApiUrl: "https://glyphbots.com",
   logLevel: "info",

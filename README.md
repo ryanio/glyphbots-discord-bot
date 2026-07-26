@@ -65,6 +65,7 @@ GOOGLE_AI_API_KEY=your_google_ai_api_key
 LORE_CHANNEL_ID=your_lore_channel_id
 ARENA_CHANNEL_ID=your_arena_channel_id
 PLAYGROUND_CHANNEL_ID=your_playground_channel_id
+MINTS_CHANNEL_ID=your_mints_channel_id
 
 # Optional - Other
 GLYPHBOTS_API_URL=https://glyphbots.com

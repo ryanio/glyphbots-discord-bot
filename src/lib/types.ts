@@ -144,6 +144,7 @@ export type Config = {
   playgroundChannelId: string | null;
   playgroundMinIntervalMinutes: number;
   playgroundMaxIntervalMinutes: number;
+  mintsChannelId: string | null;
   googleAiApiKey: string;
   glyphbotsApiUrl: string;
   logLevel: string;

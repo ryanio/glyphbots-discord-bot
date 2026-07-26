@@ -5,6 +5,7 @@ import { handleArenaButton, handleArenaSelectMenu } from "./arena/interactions";
 import { saveArenaStateNow } from "./arena/state";
 import { initArenaChannel } from "./channels/arena";
 import { initLoreChannel } from "./channels/lore";
+import { initMintsChannel } from "./channels/mints";
 import { initPlaygroundChannel } from "./channels/playground";
 import { handleActivity } from "./commands/activity";
 import { handleArena } from "./commands/arena";
@@ -87,6 +88,26 @@ const CHANNEL_DISPLAY: Record<ChannelType, { emoji: string; label: string }> = {
   lore: { emoji: "📖", label: "Lore" },
   arena: { emoji: "⚔️", label: "Arena" },
   playground: { emoji: "🎮", label: "Playground" },
+  mints: { emoji: "🪙", label: "Mints" },
+};
+
+/**
+ * Run a channel initializer, swallowing any error so one broken channel
+ * cannot take down the whole bot. Returns null when initialization failed.
+ */
+const initChannelSafely = async <T>(
+  label: string,
+  init: () => Promise<T | null>
+): Promise<T | null> => {
+  try {
+    return await init();
+  } catch (error) {
+    logger.error(
+      `❌ Failed to initialize ${label} channel: ${getErrorMessage(error)}`
+    );
+    logger.error(`❌ ${label} is disabled; the rest of the bot will continue.`);
+    return null;
+  }
 };
 
 /**
@@ -123,6 +144,9 @@ const printConfig = async (client: Client, config: Config): Promise<void> => {
   const playgroundInfo = config.playgroundChannelId
     ? await resolveLastPostInfo("playground")
     : null;
+  const mintsInfo = config.mintsChannelId
+    ? await resolveLastPostInfo("mints")
+    : null;
 
   // Fetch lore channel name
   let loreChannelDisplay = config.loreChannelId;
@@ -154,6 +178,9 @@ const printConfig = async (client: Client, config: Config): Promise<void> => {
   }
   if (config.playgroundChannelId) {
     formatChannelState("playground", playgroundInfo);
+  }
+  if (config.mintsChannelId) {
+    formatChannelState("mints", mintsInfo);
   }
   logger.info("│");
   logger.info("├─ 📖 LORE CHANNEL");
@@ -344,45 +371,56 @@ async function main(): Promise<void> {
     logger.info(`🤖 Logged in as ${client.user?.tag}`);
     logger.info("════════════════════════════════════════════════════════════");
 
-    try {
-      // Initialize channels and collect status
-      const loreStatus = await initLoreChannel(client, config);
-      const arenaStatus = await initArenaChannel(client, config);
-      const playgroundStatus = await initPlaygroundChannel(client, config);
+    // Each channel initializes independently: a failure disables that one
+    // feature and the rest of the bot keeps running.
+    const loreStatus = await initChannelSafely("Lore", () =>
+      initLoreChannel(client, config)
+    );
+    const arenaStatus = await initChannelSafely("Arena", () =>
+      initArenaChannel(client, config)
+    );
+    const playgroundStatus = await initChannelSafely("Playground", () =>
+      initPlaygroundChannel(client, config)
+    );
+    const mintsStatus = await initChannelSafely("Mints", () =>
+      initMintsChannel(client, config)
+    );
 
-      // Print consolidated channel status
-      logger.info("");
-      logger.info("┌─ 🚀 CHANNELS INITIALIZED");
-      logger.info("│");
+    // Print consolidated channel status
+    logger.info("");
+    logger.info("┌─ 🚀 CHANNELS INITIALIZED");
+    logger.info("│");
 
-      if (loreStatus) {
-        const nextPostInfo = loreStatus.nextPostMinutes
-          ? `Next post in ${loreStatus.nextPostMinutes} min`
-          : "Scheduled";
-        logger.info(
-          `│  📖 Lore: #${loreStatus.channelName} | ${loreStatus.status} | ${nextPostInfo}`
-        );
-      }
-
-      if (arenaStatus) {
-        logger.info(
-          `│  ⚔️  Arena: #${arenaStatus.channelName} | ${arenaStatus.status}`
-        );
-      }
-
-      if (playgroundStatus) {
-        logger.info(
-          `│  🎮 Playground: #${playgroundStatus.channelName} | ${playgroundStatus.status} | Next post in ${playgroundStatus.nextPostMinutes} min`
-        );
-      }
-
-      logger.info("│");
-      logger.info("└─ ✅ All systems ready");
-      logger.info("");
-    } catch (error) {
-      logger.error("Failed to initialize channels:", error);
-      process.exit(1);
+    if (loreStatus) {
+      const nextPostInfo = loreStatus.nextPostMinutes
+        ? `Next post in ${loreStatus.nextPostMinutes} min`
+        : "Scheduled";
+      logger.info(
+        `│  📖 Lore: #${loreStatus.channelName} | ${loreStatus.status} | ${nextPostInfo}`
+      );
     }
+
+    if (arenaStatus) {
+      logger.info(
+        `│  ⚔️  Arena: #${arenaStatus.channelName} | ${arenaStatus.status}`
+      );
+    }
+
+    if (playgroundStatus) {
+      logger.info(
+        `│  🎮 Playground: #${playgroundStatus.channelName} | ${playgroundStatus.status} | Next post in ${playgroundStatus.nextPostMinutes} min`
+      );
+    }
+
+    if (mintsStatus) {
+      logger.info(
+        `│  🪙 Mints: #${mintsStatus.channelName} | ${mintsStatus.status}`
+      );
+    }
+
+    logger.info("│");
+    logger.info("└─ ✅ Startup complete");
+    logger.info("");
   });
 
   // Handle interactions (slash commands, buttons, etc.)

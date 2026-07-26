@@ -51,6 +51,7 @@ export const loadConfig = (): Config => {
     playgroundChannelId: process.env.PLAYGROUND_CHANNEL_ID ?? null,
     playgroundMinIntervalMinutes: PLAYGROUND_MIN_INTERVAL_MINUTES,
     playgroundMaxIntervalMinutes: PLAYGROUND_MAX_INTERVAL_MINUTES,
+    mintsChannelId: process.env.MINTS_CHANNEL_ID ?? null,
     googleAiApiKey,
     glyphbotsApiUrl: process.env.GLYPHBOTS_API_URL ?? DEFAULT_GLYPHBOTS_API_URL,
     logLevel: process.env.LOG_LEVEL ?? "info",

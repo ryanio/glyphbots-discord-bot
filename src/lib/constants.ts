@@ -42,6 +42,15 @@ export const PLAYGROUND_MIN_INTERVAL_MINUTES = 240;
 /** Playground max interval in minutes (12 hours) */
 export const PLAYGROUND_MAX_INTERVAL_MINUTES = 720;
 
+/** How often the mint watcher polls for newly minted artifacts (minutes) */
+export const MINTS_POLL_INTERVAL_MINUTES = 5;
+
+/** Max mints posted individually in one poll before the rest are summarized */
+export const MINTS_MAX_POSTS_PER_POLL = 5;
+
+/** Pause between consecutive mint posts to stay under Discord rate limits (ms) */
+export const MINTS_POST_DELAY_MS = 1500;
+
 // ============================================================================
 // Arena Constants
 // ============================================================================

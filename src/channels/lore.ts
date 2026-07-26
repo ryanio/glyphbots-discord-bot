@@ -12,6 +12,10 @@ import {
   getBotUrl,
 } from "../api/glyphbots";
 import { MS_PER_SECOND, SECONDS_PER_MINUTE } from "../lib/constants";
+import {
+  getChannelDisplayName,
+  resolveTextChannel,
+} from "../lib/discord/channels";
 import { prefixedLogger } from "../lib/logger";
 import { recordLorePost, resolveLastPostInfo } from "../lib/state";
 import type {
@@ -271,19 +275,22 @@ export const initLoreChannel = async (
   channelName: string;
   nextPostMinutes: number | null;
   status: string;
-}> => {
+} | null> => {
   const { loreChannelId, loreMinIntervalMinutes, loreMaxIntervalMinutes } =
     config;
 
-  // Fetch the channel
-  const channel = await client.channels.fetch(loreChannelId);
+  // A missing or unusable channel disables lore only, it is not fatal
+  const channel = await resolveTextChannel(
+    client,
+    loreChannelId,
+    "LORE_CHANNEL_ID"
+  );
 
-  if (!channel?.isTextBased()) {
-    throw new Error(`Channel ${loreChannelId} is not a text channel`);
+  if (!channel) {
+    return null;
   }
 
-  const channelName =
-    "name" in channel && channel.name ? channel.name : String(loreChannelId);
+  const channelName = getChannelDisplayName(channel, loreChannelId);
 
   // Calculate random interval between min and max
   const getRandomInterval = (): number => {

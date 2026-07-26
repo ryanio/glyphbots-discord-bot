@@ -11,7 +11,10 @@ export const DEFAULT_STATE_DIR = ".state";
 const STATE_FILE_NAME = "glyphbots-discord-bot-state.json";
 
 /** Channel types for state tracking */
-export type ChannelType = "lore" | "arena" | "playground";
+export type ChannelType = "lore" | "arena" | "playground" | "mints";
+
+/** Maximum number of posted artifact ids retained for dedupe */
+export const MINTS_POSTED_ID_HISTORY = 100;
 
 /** Source of the last post timestamp */
 export type LastPostSource = "state_file" | "new";
@@ -24,11 +27,26 @@ export type ChannelState = {
   lastPostTitle: string | null;
 };
 
+/**
+ * Mint watcher cursor.
+ *
+ * `lastMintedAtMs` is derived from the artifact's own `mintedAt` value, never
+ * from wall clock time, so a restart or a slow poll can't skip mints. Because
+ * several artifacts can share one `mintedAt` and the API can reorder items,
+ * `postedArtifactIds` acts as a second guard against reposting.
+ */
+export type MintsCursorState = {
+  lastMintedAtMs: number | null;
+  postedArtifactIds: string[];
+};
+
 /** Persisted state structure with keys for each channel */
 export type PersistedState = {
   lore: ChannelState | null;
   arena: ChannelState | null;
   playground: ChannelState | null;
+  mints: ChannelState | null;
+  mintsCursor: MintsCursorState | null;
 };
 
 /** Last post info with source */
@@ -53,6 +71,8 @@ const emptyPersistedState = (): PersistedState => ({
   lore: null,
   arena: null,
   playground: null,
+  mints: null,
+  mintsCursor: null,
 });
 
 /**
@@ -132,6 +152,39 @@ class BotStateStore {
     if (parsed.playground !== undefined) {
       this.state.playground = parsed.playground;
     }
+    if (parsed.mints !== undefined) {
+      this.state.mints = parsed.mints;
+    }
+    if (parsed.mintsCursor !== undefined) {
+      this.state.mintsCursor = parsed.mintsCursor;
+    }
+  }
+
+  /**
+   * Get the mint watcher cursor, or null if never seeded
+   */
+  getMintsCursor(): MintsCursorState | null {
+    const cursor = this.state.mintsCursor;
+    if (!cursor) {
+      return null;
+    }
+    return {
+      lastMintedAtMs: cursor.lastMintedAtMs ?? null,
+      postedArtifactIds: [...(cursor.postedArtifactIds ?? [])],
+    };
+  }
+
+  /**
+   * Replace the mint watcher cursor, trimming the posted id history
+   */
+  setMintsCursor(cursor: MintsCursorState): void {
+    this.state.mintsCursor = {
+      lastMintedAtMs: cursor.lastMintedAtMs,
+      postedArtifactIds: cursor.postedArtifactIds.slice(
+        -MINTS_POSTED_ID_HISTORY
+      ),
+    };
+    this.dirty = true;
   }
 
   /**
@@ -254,6 +307,29 @@ export const recordChannelPost = async (
 ): Promise<void> => {
   const store = getBotStateStore();
   store.recordPost(channel, info);
+  await store.flush();
+};
+
+/**
+ * Read the mint watcher cursor from state.
+ * Returns null when the cursor has never been seeded (cold start).
+ */
+export const resolveMintsCursor =
+  async (): Promise<MintsCursorState | null> => {
+    const store = getBotStateStore();
+    await store.load();
+    return store.getMintsCursor();
+  };
+
+/**
+ * Persist the mint watcher cursor to state
+ */
+export const recordMintsCursor = async (
+  cursor: MintsCursorState
+): Promise<void> => {
+  const store = getBotStateStore();
+  await store.load();
+  store.setMintsCursor(cursor);
   await store.flush();
 };
 
