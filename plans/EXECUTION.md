@@ -62,8 +62,8 @@ them, do not try to resolve them.
 |---|---|---|
 | 0 | Pre-flight: portal toggles, key checks, Cloudflare provisioning | **done**, except confirming Workers Paid |
 | 1 | Lights on: Worker skeleton, `FeedStateDO`, mints to `#general` | **built** (`6356a29`), not deployed |
-| 2 | Slash commands: Ed25519 endpoint, 8 handlers, prune 17 to 8 | in progress |
-| 3 | Gateway DO, inline `b#`/`a#` lookups, `#gallery` cron | not started |
+| 2 | Slash commands: Ed25519 endpoint, 8 handlers, prune 17 to 8 | **built** (`f75b454`), not deployed |
+| 3 | Gateway DO, inline `b#`/`a#` lookups, `#gallery` cron | **built** (`39d3c5b`), not deployed |
 | 4 | OpenSea sale/listing feed to `#trading-floor`, drop `sharp` | not started |
 | 5 | Decommission, archive the other two repos, rewrite the README | not started |
 
@@ -156,6 +156,32 @@ decision 7 says not to build. It needs a stub or removal in Phase 2.
 Not verified and why: bot guild membership and channel permissions (needs
 permission math outside the probe set), the Cloudflare account plan (human portal
 work), and Discord's rendering of multi-megabyte embed images (needs a live post).
+
+## The gateway DO does not hibernate, and this has a cost consequence
+
+Established while building Phase 3, and it corrects an earlier claim in this
+project's own notes.
+
+`state.acceptWebSocket()` takes an **incoming** `WebSocketPair`. It rejects a
+socket returned from an outbound `fetch()` with "pair has already been accepted
+or used in a Response". A Discord gateway connection is outbound by definition,
+so **WebSocket hibernation is not available for it at all**. This is a platform
+constraint, not a tuning choice, and it is why Coral's gateway DO calls
+`accept()` manually and stays resident (`discord-gateway.ts:468-477`).
+
+The consequence: `GatewayDO` is **resident 24/7** and bills Durable Object
+duration continuously, rather than sleeping between frames. `FeedStateDO` is
+unaffected, since it only wakes on the cron.
+
+**Open item, not yet verified.** The plan's cost section cites 400,000 DO GB-s
+per month included with Workers Paid. A single always-resident DO plausibly
+consumes a large fraction of that on its own, and Coral already runs one, so this
+migration adds a second resident DO to the same account. Before deploying, check
+the actual Durable Object duration usage on the Cloudflare dashboard and confirm
+two resident gateway DOs stay inside the included quota. If they do not, the
+migration is still correct, but the "roughly $5/mo either way" line in the plan
+needs revising. Do not treat the resident DO as free just because hibernation was
+originally assumed.
 
 ## Risks worth re-reading before each phase
 
