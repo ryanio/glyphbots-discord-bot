@@ -30,7 +30,7 @@ Do not relitigate these. They came from the operator directly.
 | Arena, playground, lore | Shelved as "coming soon" with a conversion path. |
 | Commands | 8 market and lookup only. 17 registered today, prune to 8. |
 | Twitter in the sales feed | Dropped. Discord only. |
-| Feed events | `sale` and `listing` only. `mint` excluded. |
+| Feed events | **`sale` only.** `listing` dropped 2026-07-25 (see Preflight). `mint` excluded. |
 | Inline lookups | Allowlist `#general` and `#show-and-tell`. No DMs. |
 | `RANDOM_INTERVALS` | Cron into `#gallery`, six hour cadence. |
 | Repo | This one. New `worker/` package. `src/` archived at Phase 5. |
@@ -73,10 +73,12 @@ Definitions of done are per-phase in `cloudflare-consolidation.md`.
 
 These gate real work, so clear them early.
 
-1. **Enable `MESSAGE_CONTENT` on the Oracle application** in the Discord
-   Developer Portal. Embed has it, Oracle does not, and privileged intent
-   approval does not transfer between applications. **Blocks all of Phase 3.**
-   Without it the gateway closes with a 4014.
+1. ~~**Enable `MESSAGE_CONTENT` on the Oracle application.**~~ **Done
+   2026-07-25.** The operator confirms all three privileged intents (Presence,
+   Server Members, Message Content) are enabled on Oracle. Phase 3 is unblocked.
+   The guild is far under the 10,000 user threshold that would require review.
+   Note that Presence and Server Members are enabled but not needed by anything
+   in scope; only Message Content is, and only for the inline lookups.
 2. **Confirm the Cloudflare account is on Workers Paid.** Durable Objects are
    not available on the free plan, and both the gateway DO and `FeedStateDO` are
    load bearing. Blocks Phase 1.
@@ -122,6 +124,30 @@ nothing, so reviving the bot never dumps the backlog.
 
 The same shape applies to the OpenSea feed cursor in Phase 4, with one addition
 noted under Risks: seed it explicitly and log the resolved source every tick.
+
+## Preflight findings (probed live 2026-07-25)
+
+Real numbers, measured against the live APIs. These changed four things.
+
+| What | Measured | Consequence |
+|---|---|---|
+| Mint rate | 0.20/day (50 mints over 249 days); `summary` says 2 in the last 30d | The feed is quiet by nature. `*/5` poll and a burst cap of 5 are both correct: max observed in any 5 minute window over 250 days is 3, so the guard is sized right and will essentially never fire. |
+| Sale rate | 1.24/day (50 events over 40 days), clumped | Feed cron is `*/5`, not `* * * * *`. Per-minute would be 1,161 empty calls per real sale. |
+| Listing rate | ~176/day (24 events in 3.3 hours) | **`listing` dropped from the feed.** A raw feed posts every 8 minutes forever, mostly one relister's wash activity. |
+| OpenSea `image_url` | `image/svg+xml`, confirmed on token 1 | **Hard rule, not a risk:** every OpenSea-sourced embed uses `getBotPngUrl` (`src/api/glyphbots.ts:199`), never `image_url`. Discord renders nothing for SVG. Applies to Phase 3 lookups and Phase 4 sales. |
+| Artifact images | 7 to 8 MB JPEG/PNG | Discord proxies embed images and may fail to thumbnail large sources. **Unverified**, needs one manual post in the Phase 1 smoke test. |
+| `glyphbots.com` | 307s to `www.glyphbots.com` on every API path | Set `DEFAULT_GLYPHBOTS_API_URL` to the `www` host. Undici follows silently today; on Workers it costs a subrequest per call. |
+| Oracle app flags | `565248` = presence + guild members + **`GATEWAY_MESSAGE_CONTENT_LIMITED`** | `MESSAGE_CONTENT` granted. `_LIMITED` is the enabled state under 100 guilds, not pending. |
+| Registered commands | 17, all 8 in-scope names present | Phase 2's single `PUT` prunes 9. |
+| In-scope port surface | 1,076 lines across 8 handlers, 1,664 with direct deps, out of 13,869 in `src/` | 7.8% of the tree. All 8 import the same six discord.js symbols: four builders (Workers-safe) and two type-only. **Zero use of the `Client`/`Channel` object model.** |
+
+One follow-up the port must handle: `src/commands/bot.ts:181` calls `getUserWallet`
+from `src/lib/wallet-state`, the only in-scope dependency on per-user storage that
+decision 7 says not to build. It needs a stub or removal in Phase 2.
+
+Not verified and why: bot guild membership and channel permissions (needs
+permission math outside the probe set), the Cloudflare account plan (human portal
+work), and Discord's rendering of multi-megabyte embed images (needs a live post).
 
 ## Risks worth re-reading before each phase
 

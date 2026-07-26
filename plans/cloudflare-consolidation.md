@@ -659,7 +659,7 @@ All seven open questions are answered. Nothing below is still in the air.
 | # | Question | Decision |
 |---|---|---|
 | 1 | Twitter in `opensea-activity-bot` | **Drop.** Discord only. ~980 lines including the queue are not ported. |
-| 2 | OpenSea feed event types | **`sale` and `listing` only.** |
+| 2 | OpenSea feed event types | **`sale` only.** Revised 2026-07-25 after measuring listing volume. |
 | 3 | Mint feed overlap | **`mint` stays out of the OpenSea feed.** |
 | 4 | Inline lookup channels | **Allowlist `#general` and `#show-and-tell`.** No DMs. |
 | 5 | `RANDOM_INTERVALS` | **Port as a cron into `#gallery`.** |
@@ -675,9 +675,22 @@ Workers port. Separately: `womptron` already covers the X presence, and its
 media upload was just repaired against the v2 endpoint, so there is a working
 reference if this is ever revisited.
 
-**2.** With `offer` dropped, `MIN_OFFER_ETH` (`src/utils/utils.ts:71`) becomes
-dead config and should not be carried into the Worker. Do not port the constant
-and then leave it unreferenced.
+**2.** Originally `sale` and `listing`. Revised to **`sale` only** on 2026-07-25
+after probing the live API: listings run at roughly **176 per day** (24 events in
+a 3.3 hour window), which is one operator running a relister. A raw listing feed
+posts to `#trading-floor` about every eight minutes, indefinitely, and the
+`EventGroupManager` settle window batches bursts without reducing daily volume.
+Sales run at **1.24 per day** over a 40 day window, which is a readable cadence.
+The listing path stays available behind config if it is ever wanted with
+floor-undercut gating, but it is not built now.
+
+With both `offer` and `listing` dropped, `MIN_OFFER_ETH`
+(`src/utils/utils.ts:71`) becomes dead config and should not be carried into the
+Worker. Do not port the constant and then leave it unreferenced.
+
+The feed cron is `*/5 * * * *`, not `* * * * *`. At 1.24 sales per day a
+per-minute cron is 1,161 empty OpenSea calls per real event, and five minutes of
+staleness is invisible on an event type that goes a week between clumps.
 
 **3.** The GlyphBots API is the better mint source: it carries the artifact
 title, type, source bot and image, where an OpenSea `mint` event sees only a
