@@ -652,37 +652,58 @@ feature is advertised anywhere a user can see it.
 | Grouped-message state grows unbounded in DO storage | Low | Storage cost, slow ticks | Keep the existing 2,000-entry cap and the `settleMs * 3` stale prune (`event-grouping.ts:340-345`) |
 | Two crons overlap and double-post | Low | Duplicate messages | Cursor read-modify-write happens inside the DO, whose input gate serializes it |
 
-## Open questions
+## Decisions (resolved 2026-07-25)
 
-1. **Twitter.** `opensea-activity-bot` posts to Twitter as well as Discord
-   (`src/platforms/twitter/twitter.ts`, 489 lines). It is absent from the stated
-   scope. Drop it, or port it? `twitter-api-v2` media upload uses Node streams,
-   so porting means rewriting the upload path against the raw v1.1 media
-   endpoint.
-2. **Which OpenSea event types on the feed?** The scope says sales and listings.
-   The current config also carries `offer`, `transfer`, `mint` and `burn`
-   (`opensea-activity-bot/.env`, `DISCORD_EVENTS`). Confirm sales and listings
-   only, and confirm whether the `MIN_OFFER_ETH` floor
-   (`src/utils/utils.ts:71`) has any meaning once offers are dropped.
-3. **Does the mint feed duplicate the OpenSea mint feed?** Phase 1 posts mints
-   from the GlyphBots API to `#general`; Phase 4's OpenSea feed can also emit
-   `mint` events. Keeping `mint` out of `DISCORD_EVENTS` avoids it, but confirm
-   that is intended rather than a gap.
-4. **Inline lookups: which channels?** Embed had no allowlist at all, it replied
-   in every visible channel including DMs
-   (`discord-nft-embed-bot/src/index.ts:978-983`, `:401-410`). Keep that, or
-   restrict to `#general` and `#show-and-tell`? Recommendation: restrict, since
-   the topic of `#show-and-tell` is what advertises the syntax and unrestricted
-   lookups are the largest subrequest risk.
-5. **`RANDOM_INTERVALS`.** Embed's scheduled random posts
-   (`src/index.ts:696-746`) are in the source list but not in the in-scope list.
-   The channel they targeted is presumably one of the dead ids. Port as a cron
-   into `#general`, or shelve with the rest?
-6. **Repo layout.** Does the Worker live in this repo (new `worker/` package,
-   `src/` archived) or a new one? Affects Phase 5 and nothing before it.
-7. **`/wallet` and `/mybots`.** Out of scope now, but they were the only
-   per-user state. If they come back, where does user data live: DO, KV, or D1?
-   Worth deciding before the storage layout hardens.
+All seven open questions are answered. Nothing below is still in the air.
+
+| # | Question | Decision |
+|---|---|---|
+| 1 | Twitter in `opensea-activity-bot` | **Drop.** Discord only. ~980 lines including the queue are not ported. |
+| 2 | OpenSea feed event types | **`sale` and `listing` only.** |
+| 3 | Mint feed overlap | **`mint` stays out of the OpenSea feed.** |
+| 4 | Inline lookup channels | **Allowlist `#general` and `#show-and-tell`.** No DMs. |
+| 5 | `RANDOM_INTERVALS` | **Port as a cron into `#gallery`.** |
+| 6 | Repo layout | **This repo**, new `worker/` package, `src/` archived at Phase 5. |
+| 7 | `/wallet` and `/mybots` storage | **Reserve a KV namespace, build nothing.** |
+
+Notes that follow from these.
+
+**1.** `src/platforms/twitter/**` is not ported. The code survives in the
+archived repo if it is ever wanted, so this is reversible. It also removes the
+Node stream dependency in the media upload path, which was the hard part of a
+Workers port. Separately: `womptron` already covers the X presence, and its
+media upload was just repaired against the v2 endpoint, so there is a working
+reference if this is ever revisited.
+
+**2.** With `offer` dropped, `MIN_OFFER_ETH` (`src/utils/utils.ts:71`) becomes
+dead config and should not be carried into the Worker. Do not port the constant
+and then leave it unreferenced.
+
+**3.** The GlyphBots API is the better mint source: it carries the artifact
+title, type, source bot and image, where an OpenSea `mint` event sees only a
+token transfer. One mint, one post, in `#general`.
+
+**4.** This bounds the largest subrequest risk in the plan. One embed is five or
+more sequential OpenSea calls (`discord-nft-embed-bot/src/index.ts:174-200`) and
+a message can carry six embeds, so an unrestricted allowlist multiplies badly.
+The two chosen channels are the ones whose topics advertise the syntax. Add the
+per-channel rate limit noted in Phase 3 regardless; the allowlist is a bound, not
+a substitute for it.
+
+**5.** `#gallery` (`1445943861263208561`) is where this used to land, on a clean
+six hour cadence, until it stopped on 2026-05-02. Its entire content stream was
+this feature, so reviving it there restores a channel rather than inventing one.
+Keep the cadence at six hours unless there is a reason to change it.
+
+**6.** Keeping the repo preserves the history of the code being ported and the
+shelved arena and playground source stays readable for the conversion path in
+the section above. The name still describes the artifact.
+
+**7.** Per-user keys (`wallet:<userId>`) in KV, provisioned and left empty. Two
+reasons to decide it now rather than later: the storage layout hardens in Phase
+1, and per-key writes fix a real lost-update race that the current whole-file
+rewrite has today (`src/lib/wallet-state.ts:150-158` rewrites the entire file on
+every `setUserWallet`). Build nothing until the commands come back.
 
 ## Cost
 
