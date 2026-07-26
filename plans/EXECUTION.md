@@ -60,9 +60,9 @@ them, do not try to resolve them.
 
 | Phase | What | Status |
 |---|---|---|
-| 0 | Pre-flight: portal toggles, key checks, Cloudflare provisioning | **not started** |
-| 1 | Lights on: Worker skeleton, `FeedStateDO`, mints to `#general` | not started |
-| 2 | Slash commands: Ed25519 endpoint, 8 handlers, prune 17 to 8 | not started |
+| 0 | Pre-flight: portal toggles, key checks, Cloudflare provisioning | **done**, except confirming Workers Paid |
+| 1 | Lights on: Worker skeleton, `FeedStateDO`, mints to `#general` | **built** (`6356a29`), not deployed |
+| 2 | Slash commands: Ed25519 endpoint, 8 handlers, prune 17 to 8 | in progress |
 | 3 | Gateway DO, inline `b#`/`a#` lookups, `#gallery` cron | not started |
 | 4 | OpenSea sale/listing feed to `#trading-floor`, drop `sharp` | not started |
 | 5 | Decommission, archive the other two repos, rewrite the README | not started |
@@ -81,9 +81,17 @@ These gate real work, so clear them early.
    in scope; only Message Content is, and only for the inline lookups.
 2. **Confirm the Cloudflare account is on Workers Paid.** Durable Objects are
    not available on the free plan, and both the gateway DO and `FeedStateDO` are
-   load bearing. Blocks Phase 1.
-3. **`wrangler login` and `wrangler secret put`** for `DISCORD_TOKEN`,
+   load bearing. Blocks deploying Phase 1.
+3. **`wrangler kv namespace create GLYPHBOTS_KV`**, then replace the literal
+   `REPLACE_WITH_KV_NAMESPACE_ID` in `worker/wrangler.jsonc`. The dry run accepts
+   the placeholder, a real deploy will not. The namespace is bound but read by
+   nothing, per decision 7.
+4. **`wrangler login` and `wrangler secret put`** for `DISCORD_TOKEN`,
    `DISCORD_PUBLIC_KEY`, `DISCORD_APP_ID`, `OPENSEA_API_TOKEN`.
+5. **Set the Interactions Endpoint URL** in the Discord Developer Portal to the
+   deployed Worker's `/discord` route, once Phase 2 is deployed. Discord sends a
+   PING to validate it and will refuse a URL that does not verify signatures
+   correctly, so this must happen after the Worker is live, not before.
 4. **Smoke test each phase in the live guild.** Embed rendering, gateway
    connection stability over days, and the first real OpenSea tick cannot be
    verified from tests.
