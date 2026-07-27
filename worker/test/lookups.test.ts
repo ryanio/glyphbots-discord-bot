@@ -11,7 +11,9 @@
 
 import { describe, expect, it, vi } from "vitest";
 import {
+  ARTIFACTS_CONTRACT,
   GENERAL_CHANNEL_ID,
+  GLYPHBOTS_CONTRACT,
   GUILD_ID,
   SHOW_AND_TELL_CHANNEL_ID,
 } from "../src/config";
@@ -503,5 +505,39 @@ describe("handling one message", () => {
     expect(body.embeds[0]?.image?.url).toBe(
       "https://www.glyphbots.com/bots/pngs/123.png"
     );
+  });
+
+  // The OpenSea address used to sit in the footer, where Discord renders it as
+  // literal text: no markdown, no auto-linking, nothing to click.
+  it("puts a clickable OpenSea link on a bot lookup, not in the footer", async () => {
+    const { deps: d, send } = deps();
+    await handleLookupMessage(message(), d);
+    const [, body] = firstCall(send);
+    const embed = body.embeds[0];
+
+    expect(embed?.fields).toContainEqual({
+      name: "OpenSea",
+      value: `[View](https://opensea.io/assets/ethereum/${GLYPHBOTS_CONTRACT}/123)`,
+      inline: true,
+    });
+    expect(embed?.footer?.text).not.toContain("http");
+  });
+
+  it("puts a clickable OpenSea link on an artifact lookup", async () => {
+    const fake = createLookupClients({
+      artifacts: { 5: createArtifact({ contractTokenId: 5 }) },
+    });
+    const { deps: d, send } = deps(fake);
+
+    await handleLookupMessage(message({ content: "a#5" }), d);
+    const [, body] = firstCall(send);
+    const embed = body.embeds[0];
+
+    expect(embed?.fields).toContainEqual({
+      name: "OpenSea",
+      value: `[View](https://opensea.io/assets/ethereum/${ARTIFACTS_CONTRACT}/5)`,
+      inline: true,
+    });
+    expect(embed?.footer?.text).not.toContain("http");
   });
 });

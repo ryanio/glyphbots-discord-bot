@@ -226,9 +226,6 @@ export const DISCORD_API = "https://discord.com/api/v10";
 /** GlyphBots brand color for embeds. */
 export const GLYPHBOTS_COLOR = 0x00ff88;
 
-/** Etherscan transaction base URL. */
-export const ETHERSCAN_TX_URL = "https://etherscan.io/tx/";
-
 /** OpenSea v2 API root (`src/api/opensea.ts:18` at `c75d6a8`). */
 export const OPENSEA_API_BASE = "https://api.opensea.io/api/v2";
 

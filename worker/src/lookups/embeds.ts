@@ -89,6 +89,15 @@ export const buildBotLookupEmbed = async (
     });
   }
 
+  // A field, not the footer. Discord renders footer text literally: markdown
+  // is not parsed there and a bare URL is not auto-linked, so the OpenSea
+  // address this used to carry was a string to copy by hand.
+  embed.addFields({
+    name: "OpenSea",
+    value: `[View](${getOpenSeaUrl(tokenId)})`,
+    inline: true,
+  });
+
   // Same one-line shape as `/bot`, so an inline reply and a slash reply do not
   // look like two different products. There is no story fetch here on purpose:
   // the subrequest budget above holds a bot lookup to two calls.
@@ -97,9 +106,7 @@ export const buildBotLookupEmbed = async (
     embed.addFields({ name: "Traits", value: traits });
   }
 
-  return embed
-    .setFooter({ text: `OpenSea: ${getOpenSeaUrl(tokenId)}` })
-    .toJSON() as APIEmbed;
+  return embed.setFooter({ text: "GlyphBots" }).toJSON() as APIEmbed;
 };
 
 /** One artifact, image straight off the GlyphBots API. */
@@ -126,7 +133,9 @@ export const buildArtifactLookupEmbed = async (
   const botName =
     originBot?.name?.replace(BOT_NAME_PREFIX, "") ?? `#${artifact.botTokenId}`;
 
-  // Field order matches `/artifact`: Token ID, Type, Origin Bot, one row.
+  // Field order follows `/artifact`: Token ID, Type, then the links. `/artifact`
+  // puts its links in a button row, which an inline lookup cannot use: one
+  // reply can carry six embeds and a message has one set of components.
   embed.addFields({ name: "Token ID", value: `#${tokenId}`, inline: true });
 
   if (artifact.type) {
@@ -136,6 +145,15 @@ export const buildArtifactLookupEmbed = async (
       inline: true,
     });
   }
+
+  // Clickable, and ahead of Origin Bot so it lands on the first row whether or
+  // not the artifact has a type. See the note in the bot embed for why the
+  // footer cannot hold this.
+  embed.addFields({
+    name: "OpenSea",
+    value: `[View](${getOpenSeaArtifactUrl(tokenId)})`,
+    inline: true,
+  });
 
   embed.addFields({
     name: "Origin Bot",
@@ -147,9 +165,7 @@ export const buildArtifactLookupEmbed = async (
     embed.setImage(artifact.imageUrl);
   }
 
-  return embed
-    .setFooter({ text: `OpenSea: ${getOpenSeaArtifactUrl(tokenId)}` })
-    .toJSON() as APIEmbed;
+  return embed.setFooter({ text: "GlyphBots Artifacts" }).toJSON() as APIEmbed;
 };
 
 /**

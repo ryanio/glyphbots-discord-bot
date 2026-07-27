@@ -35,9 +35,9 @@ import { EmbedBuilder } from "@discordjs/builders";
 import type { RESTPostAPIChannelMessageJSONBody } from "discord-api-types/v10";
 import type { GlyphBotsClient } from "../api/glyphbots";
 import { shortAddress } from "../api/glyphbots";
+import { getOpenSeaArtifactUrl } from "../api/opensea";
 import type { Artifact } from "../api/types";
 import {
-  ETHERSCAN_TX_URL,
   GLYPHBOTS_COLOR,
   MINTS_FETCH_LIMIT,
   MINTS_MAX_POSTS_PER_POLL,
@@ -252,6 +252,17 @@ export const buildMintEmbed = (
 
   const fields: Array<{ name: string; value: string; inline: boolean }> = [];
 
+  // The marketplace link leads. It replaces the mint transaction on Etherscan,
+  // which was the last field and the least interesting thing about a new
+  // artifact: a hash nobody clicks, in a block explorer that shows none of the
+  // art. Every minted artifact has a token id by construction, so unlike the tx
+  // hash this link is always there.
+  fields.push({
+    name: "◈ OpenSea",
+    value: `[View](${getOpenSeaArtifactUrl(artifact.contractTokenId)})`,
+    inline: true,
+  });
+
   fields.push({
     name: "◈ Bot",
     value: `[#${artifact.botTokenId}](${api.getBotUrl(artifact.botTokenId)})`,
@@ -286,14 +297,6 @@ export const buildMintEmbed = (
     value: `<t:${mintedSeconds}:R>`,
     inline: true,
   });
-
-  if (artifact.mintTxHash) {
-    fields.push({
-      name: "◉ Transaction",
-      value: `[Etherscan](${ETHERSCAN_TX_URL}${artifact.mintTxHash})`,
-      inline: true,
-    });
-  }
 
   embed.addFields(fields);
 

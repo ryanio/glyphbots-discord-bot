@@ -15,6 +15,7 @@ import {
   selectNewMints,
   toMintRecords,
 } from "../src/channels/mints";
+import { ARTIFACTS_CONTRACT } from "../src/config";
 import {
   contentSends,
   createApi,
@@ -221,14 +222,13 @@ describe("embed content", () => {
     );
   });
 
-  it("links the mint transaction on Etherscan when present", async () => {
+  it("links the artifact on OpenSea", async () => {
     const poster = createMemoryPoster();
     const api = createApi([
       createArtifact({
-        id: "tx",
+        id: "os",
         mintedAt: "2025-06-01T00:00:00Z",
         contractTokenId: 88,
-        mintTxHash: "0xdeadbeef",
       }),
     ]);
 
@@ -237,17 +237,21 @@ describe("embed content", () => {
     const values = (firstEmbedSend(poster.sends).fields ?? [])
       .map((f) => f.value)
       .join(" ");
-    expect(values).toContain("https://etherscan.io/tx/0xdeadbeef");
+    expect(values).toContain(
+      `https://opensea.io/assets/ethereum/${ARTIFACTS_CONTRACT}/88`
+    );
   });
 
-  it("leaves the transaction field off when there is no hash", async () => {
+  // The mint tx hash is still on the artifact record; it just has no business
+  // in the embed. Nobody clicks a block explorer link for a piece of art.
+  it("does not link the mint transaction on Etherscan", async () => {
     const poster = createMemoryPoster();
     const api = createApi([
       createArtifact({
-        id: "no-tx",
+        id: "tx",
         mintedAt: "2025-06-01T00:00:00Z",
         contractTokenId: 89,
-        mintTxHash: undefined,
+        mintTxHash: "0xdeadbeef",
       }),
     ]);
 
@@ -255,7 +259,12 @@ describe("embed content", () => {
 
     const fields = firstEmbedSend(poster.sends).fields ?? [];
     expect(fields.map((f) => f.name)).not.toContain("◉ Transaction");
-    expect(fields.map((f) => f.value).join(" ")).not.toContain("etherscan");
+    expect(
+      fields
+        .map((f) => f.value)
+        .join(" ")
+        .toLowerCase()
+    ).not.toContain("etherscan");
   });
 });
 
