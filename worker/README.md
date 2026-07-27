@@ -16,9 +16,14 @@ onto. Phases 1 to 3 of [`plans/cloudflare-consolidation.md`](../plans/cloudflare
 - A second cron posts one random collection item into `#gallery` every six
   hours.
 
-No OpenSea sales feed yet. That is Phase 4.
+- A third cron posts OpenSea sales into `#trading-floor`, grouped when several
+  land together. Sales only: listings run around 176 a day off one relister,
+  which would post every eight minutes.
 
-`../src` is the Node bot and is untouched. It stays until Phase 5.
+This is the whole system. Three Discord bots used to do this across three
+processes on a droplet, supervised by a fourth. Their repos are retired, and the
+Node bot that lived in this repo was deleted once the Worker took over. Git
+history has it at `d668f57`.
 
 ## Layout
 

@@ -420,6 +420,67 @@ describe("handling one message", () => {
     );
   });
 
+  it("renders traits on one line, the same shape /bot uses", async () => {
+    const fake = createLookupClients({
+      bots: {
+        123: createBot(123, {
+          traits: [
+            { trait_type: "Name", value: "Vector" },
+            { trait_type: "Head", value: "▲▼▲▼▲" },
+            { trait_type: "Eyes", value: "◇◇" },
+            { trait_type: "Body", value: "None" },
+          ],
+        }),
+      },
+    });
+    const send = createSend();
+
+    await handleLookupMessage(message(), {
+      clients: fake.clients,
+      limiter: createRateLimiter({ cooldownMs: 0 }),
+      send,
+      selfUserId: "self-bot",
+    });
+
+    const [, body] = firstCall(send);
+    const traits = body.embeds[0]?.fields?.find(
+      (f: { name: string }) => f.name === "Traits"
+    );
+
+    expect(traits?.value).toBe("**Head** ▲▼▲▼▲ · **Eyes** ◇◇");
+    expect(traits?.inline).toBeFalsy();
+  });
+
+  it("omits the traits field when a bot has nothing worth showing", async () => {
+    const fake = createLookupClients({
+      bots: {
+        123: createBot(123, {
+          traits: [
+            { trait_type: "Name", value: "Vector" },
+            { trait_type: "Body", value: "None" },
+          ],
+        }),
+      },
+    });
+    const send = createSend();
+
+    await handleLookupMessage(message(), {
+      clients: fake.clients,
+      limiter: createRateLimiter({ cooldownMs: 0 }),
+      send,
+      selfUserId: "self-bot",
+    });
+
+    const [, body] = firstCall(send);
+    const fields: Array<{ name: string; value: string }> =
+      body.embeds[0]?.fields ?? [];
+
+    expect(fields.map((f) => f.name)).not.toContain("Traits");
+    for (const field of fields) {
+      expect(field.value.length).toBeGreaterThan(0);
+    }
+  });
+
   it("uses the first-party PNG for a bot, never an OpenSea image", async () => {
     const { deps: d, send } = deps();
     await handleLookupMessage(message(), d);

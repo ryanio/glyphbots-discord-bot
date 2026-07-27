@@ -18,6 +18,11 @@
  * (`src/commands/bot.ts:73`), and it must stay that way: OpenSea's `image_url`
  * for this contract is `image/svg+xml`, which Discord will not render. The
  * OpenSea call on this path supplies the owner and the rarity rank only.
+ *
+ * **The text above the art is compact.** Traits used to be a six-line inline
+ * field, which forced Owner and Rarity to sit above a large gap, and stats used
+ * to be a six-row bar chart in a code block. Both now come from
+ * `./format`, which the inline lookups use too. See the note there.
  */
 
 import { EmbedBuilder } from "@discordjs/builders";
@@ -31,38 +36,15 @@ import { linkButtonRow } from "../discord/buttons";
 import { embedReply, errorReply } from "../discord/embeds";
 import { createLogger } from "../utils/logger";
 import type { CommandHandler } from "./context";
-import { BOT_NAME_PREFIX } from "./format";
+import {
+  BOT_NAME_PREFIX,
+  formatPowerLine,
+  formatRoleValue,
+  formatStatsGrid,
+  formatTraitLine,
+} from "./format";
 
 const log = createLogger("BotCmd");
-
-const STAT_BAR_SEGMENTS = 10;
-const STAT_MAX = 100;
-const TRAIT_LIMIT = 6;
-const POWER_LIMIT = 3;
-
-const statsBar = (value: number): string => {
-  const filled = Math.floor(value / (STAT_MAX / STAT_BAR_SEGMENTS));
-  return "█".repeat(filled) + "░".repeat(STAT_BAR_SEGMENTS - filled);
-};
-
-const STAT_ROWS: Array<[label: string, key: string]> = [
-  ["STR", "strength"],
-  ["AGI", "agility"],
-  ["INT", "intellect"],
-  ["LCK", "luck"],
-  ["END", "endurance"],
-  ["CHA", "charisma"],
-];
-
-const formatStatsBlock = (stats: BotStory["storyStats"]): string => {
-  if (!stats) {
-    return "";
-  }
-  return STAT_ROWS.map(([label, key]) => {
-    const value = stats[key] ?? 0;
-    return `${label} ${statsBar(value)} ${value}`;
-  }).join("\n");
-};
 
 /** Uniform pick across the supply. The only random source now, see the note. */
 const getRandomTokenId = (): number =>
@@ -99,38 +81,26 @@ const buildBotEmbed = (
     });
   }
 
-  if (bot.traits.length > 0) {
-    const traitList = bot.traits
-      .filter((t) => t.value !== "None" && t.value !== "No")
-      .slice(0, TRAIT_LIMIT)
-      .map((t) => `**${t.trait_type}:** ${t.value}`)
-      .join("\n");
-    if (traitList) {
-      embed.addFields({ name: "Traits", value: traitList, inline: true });
-    }
+  // Role rides the top inline row with Owner and Rarity rather than claiming
+  // one of its own.
+  const role = story ? formatRoleValue(story.arc.faction, story.arc.role) : "";
+  if (role) {
+    embed.addFields({ name: "Role", value: role, inline: true });
   }
 
-  if (story) {
-    embed.addFields({
-      name: "Role",
-      value: `${story.arc.faction} • ${story.arc.role}`,
-      inline: true,
-    });
+  const traitLine = formatTraitLine(bot.traits);
+  if (traitLine) {
+    embed.addFields({ name: "Traits", value: traitLine });
+  }
 
-    const statsBlock = formatStatsBlock(story.storyStats);
-    if (statsBlock) {
-      embed.addFields({
-        name: "Stats",
-        value: `\`\`\`\n${statsBlock}\n\`\`\``,
-      });
-    }
+  const statsGrid = story ? formatStatsGrid(story.storyStats) : "";
+  if (statsGrid) {
+    embed.addFields({ name: "Stats", value: statsGrid });
+  }
 
-    if (story.storyPowers && story.storyPowers.length > 0) {
-      embed.addFields({
-        name: "Powers",
-        value: story.storyPowers.slice(0, POWER_LIMIT).join(" • "),
-      });
-    }
+  const powers = story ? formatPowerLine(story.storyPowers) : "";
+  if (powers) {
+    embed.addFields({ name: "Powers", value: powers });
   }
 
   return embed.setFooter({ text: "GlyphBots" });

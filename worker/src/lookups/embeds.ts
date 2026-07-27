@@ -37,7 +37,7 @@ import { shortAddress } from "../api/glyphbots";
 import type { OpenSeaClient } from "../api/opensea";
 import { getOpenSeaArtifactUrl, getOpenSeaUrl } from "../api/opensea";
 import { COLORS, MAX_BOT_TOKEN_ID } from "../config";
-import { BOT_NAME_PREFIX } from "../commands/format";
+import { BOT_NAME_PREFIX, formatTraitLine } from "../commands/format";
 import { createLogger } from "../utils/logger";
 import type { LookupMatch } from "./matcher";
 
@@ -48,9 +48,7 @@ export type LookupClients = {
   opensea: OpenSeaClient;
 };
 
-const TRAIT_LIMIT = 3;
-
-/** `GlyphBot #123`, owner, rarity, a few traits, first-party PNG. */
+/** `GlyphBot #123`, owner, rarity, one line of traits, first-party PNG. */
 export const buildBotLookupEmbed = async (
   tokenId: number,
   clients: LookupClients
@@ -90,13 +88,12 @@ export const buildBotLookupEmbed = async (
     });
   }
 
-  const traits = bot.traits
-    .filter((trait) => trait.value !== "None" && trait.value !== "No")
-    .slice(0, TRAIT_LIMIT)
-    .map((trait) => `**${trait.trait_type}:** ${trait.value}`)
-    .join("\n");
+  // Same one-line shape as `/bot`, so an inline reply and a slash reply do not
+  // look like two different products. There is no story fetch here on purpose:
+  // the subrequest budget above holds a bot lookup to two calls.
+  const traits = formatTraitLine(bot.traits);
   if (traits) {
-    embed.addFields({ name: "Traits", value: traits, inline: true });
+    embed.addFields({ name: "Traits", value: traits });
   }
 
   return embed
@@ -125,14 +122,8 @@ export const buildArtifactLookupEmbed = async (
   const botName =
     originBot?.name?.replace(BOT_NAME_PREFIX, "") ?? `#${artifact.botTokenId}`;
 
-  embed.addFields(
-    { name: "Token ID", value: `#${tokenId}`, inline: true },
-    {
-      name: "Origin Bot",
-      value: `[${botName}](${clients.glyphbots.getBotUrl(artifact.botTokenId)})`,
-      inline: true,
-    }
-  );
+  // Field order matches `/artifact`: Token ID, Type, Origin Bot, one row.
+  embed.addFields({ name: "Token ID", value: `#${tokenId}`, inline: true });
 
   if (artifact.type) {
     embed.addFields({
@@ -141,6 +132,12 @@ export const buildArtifactLookupEmbed = async (
       inline: true,
     });
   }
+
+  embed.addFields({
+    name: "Origin Bot",
+    value: `[${botName}](${clients.glyphbots.getBotUrl(artifact.botTokenId)})`,
+    inline: true,
+  });
 
   if (artifact.imageUrl) {
     embed.setImage(artifact.imageUrl);

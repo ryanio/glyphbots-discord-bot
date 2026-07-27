@@ -94,3 +94,130 @@ export const formatTimeAgo = (timestamp: number, now = Date.now()): string => {
 
 /** Strip the `GlyphBot #123 - ` prefix off an API bot name. */
 export const BOT_NAME_PREFIX = /^GlyphBot #\d+ - /;
+
+/**
+ * Bot embed body text, shared by `/bot` and the inline `b#`/`#username`
+ * lookups so the two read as one product.
+ *
+ * The shapes here exist to keep a lookup to a few lines of channel height. A
+ * bot embed used to spend a six-line inline field on traits and a six-row code
+ * block on stats, which pushed the artwork most of a screen down and left the
+ * inline row beside the traits mostly empty. Traits now render on one line and
+ * stats in a 3x2 grid.
+ */
+
+/** Discord rejects a field value over 1024 characters. */
+const FIELD_VALUE_LIMIT = 1024;
+/** Headroom under the hard limit, so the ellipsis always fits. */
+const TRAIT_LINE_BUDGET = 1000;
+
+const TRAIT_SEPARATOR = " · ";
+const ELLIPSIS = "…";
+
+/**
+ * Traits that carry no information in an embed that already shows them.
+ * `Name` duplicates the description, which is the bot's name.
+ */
+const SKIPPED_TRAIT_TYPES = new Set(["name"]);
+/** Values the API uses for "this bot does not have one". */
+const EMPTY_TRAIT_VALUES = new Set(["None", "No"]);
+
+/** Traits worth rendering: no placeholders, no duplicate of the description. */
+export const displayTraits = <T extends { trait_type: string; value: string }>(
+  traits: readonly T[]
+): T[] =>
+  traits.filter(
+    (trait) =>
+      !EMPTY_TRAIT_VALUES.has(trait.value) &&
+      !SKIPPED_TRAIT_TYPES.has(trait.trait_type.toLowerCase()) &&
+      trait.value.trim() !== ""
+  );
+
+/**
+ * One line: `**Head** ▲▼▲ · **Eyes** ◇◇`.
+ *
+ * Trait counts vary per bot and the glyph values can be long, so this fills up
+ * to a budget well under Discord's per-field limit and marks the cut with an
+ * ellipsis rather than emitting a field Discord will reject. Returns `""` when
+ * there is nothing to show; callers must omit the field in that case, because
+ * an empty field value is also rejected.
+ */
+export const formatTraitLine = (
+  traits: readonly { trait_type: string; value: string }[]
+): string => {
+  const parts: string[] = [];
+  let length = 0;
+
+  for (const trait of displayTraits(traits)) {
+    const part = `**${trait.trait_type}** ${trait.value}`;
+    const added = parts.length === 0 ? part.length : part.length + TRAIT_SEPARATOR.length;
+    if (length + added > TRAIT_LINE_BUDGET) {
+      parts.push(ELLIPSIS);
+      break;
+    }
+    parts.push(part);
+    length += added;
+  }
+
+  const line = parts.join(TRAIT_SEPARATOR);
+  return line.length > FIELD_VALUE_LIMIT ? line.slice(0, FIELD_VALUE_LIMIT) : line;
+};
+
+const STAT_COLUMNS = 3;
+const STAT_LABEL_WIDTH = 3;
+const STAT_VALUE_WIDTH = 3;
+
+const STAT_CELLS: Array<[label: string, key: string]> = [
+  ["STR", "strength"],
+  ["AGI", "agility"],
+  ["INT", "intellect"],
+  ["LCK", "luck"],
+  ["END", "endurance"],
+  ["CHA", "charisma"],
+];
+
+/**
+ * The six story stats as a 3x2 monospace grid, two lines instead of six.
+ *
+ * The old version drew a ten-segment ASCII bar per stat. At this size the
+ * number is what carries the information, and the bars cost four extra lines.
+ * The code fence stays because proportional text will not align columns.
+ * Returns `""` when there are no stats, so the caller omits the field.
+ */
+export const formatStatsGrid = (
+  stats: Record<string, number> | null | undefined
+): string => {
+  if (!stats || Object.keys(stats).length === 0) {
+    return "";
+  }
+
+  const cells = STAT_CELLS.map(([label, key]) => {
+    const value = stats[key] ?? 0;
+    return `${label.padEnd(STAT_LABEL_WIDTH)} ${String(value).padStart(STAT_VALUE_WIDTH)}`;
+  });
+
+  const rows: string[] = [];
+  for (let i = 0; i < cells.length; i += STAT_COLUMNS) {
+    rows.push(cells.slice(i, i + STAT_COLUMNS).join("  "));
+  }
+
+  return `\`\`\`\n${rows.join("\n")}\n\`\`\``;
+};
+
+const POWER_LIMIT = 3;
+
+/** `Adaptive Movement · Darkness Field · Overload Strike`, or `""`. */
+export const formatPowerLine = (
+  powers: readonly string[] | null | undefined
+): string => {
+  if (!powers || powers.length === 0) {
+    return "";
+  }
+  return powers.slice(0, POWER_LIMIT).join(TRAIT_SEPARATOR);
+};
+
+/** Faction over role, so it sits in the top inline row without widening it. */
+export const formatRoleValue = (
+  faction: string | null | undefined,
+  role: string | null | undefined
+): string => [faction, role].filter((part) => Boolean(part)).join("\n");

@@ -62,23 +62,23 @@ const buildArtifactEmbed = async (
     inline: true,
   });
 
-  if (artifact.mintedAt) {
-    embed.addFields({
-      name: "Minted",
-      value: new Date(artifact.mintedAt).toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      }),
-      inline: true,
-    });
-  }
-
   if (artifact.imageUrl) {
     embed.setImage(artifact.imageUrl);
   }
 
-  return embed.setFooter({ text: "GlyphBots Artifacts" });
+  // The mint date moves to the footer. It was a fourth inline field, which
+  // wrapped onto a second row of its own for one short date.
+  const minted = artifact.mintedAt
+    ? new Date(artifact.mintedAt).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    : null;
+
+  return embed.setFooter({
+    text: minted ? `GlyphBots Artifacts · Minted ${minted}` : "GlyphBots Artifacts",
+  });
 };
 
 /** Resolve the artifact this invocation is about, or an error body. */

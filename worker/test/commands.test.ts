@@ -107,23 +107,101 @@ describe("/bot", () => {
       "#42 / 11,111"
     );
     expect(embed.fields?.find((f) => f.name === "Traits")?.value).toBe(
-      "**Head:** Antenna"
+      "**Head** Antenna"
     );
   });
 
-  it("renders the story stat bars and caps powers at three", async () => {
+  it("puts every trait on one line and drops the Name trait", async () => {
+    const glyphbots = stubGlyphBots({
+      fetchBot: vi.fn(() =>
+        Promise.resolve(
+          createBot({
+            traits: [
+              { trait_type: "Name", value: "Wanderer" },
+              { trait_type: "Head", value: "▲▼▲▼▲" },
+              { trait_type: "Eyes", value: "◇◇" },
+              { trait_type: "Arms", value: "None" },
+            ],
+          })
+        )
+      ),
+      fetchBotStory: vi.fn(() => Promise.resolve(createStory())),
+    });
+    const ctx = commandContext({
+      glyphbots,
+      opensea: stubOpenSea({ fetchNFT: vi.fn(() => Promise.resolve(createNFT())) }),
+      options: readOptions([intOption("id", 7)]),
+    });
+
+    const traits =
+      firstEmbed(await handleBot(ctx)).fields?.find((f) => f.name === "Traits")
+        ?.value ?? "";
+
+    expect(traits).toBe("**Head** ▲▼▲▼▲ · **Eyes** ◇◇");
+    expect(traits).not.toContain("\n");
+    expect(traits).not.toContain("Wanderer");
+  });
+
+  it("keeps an unusually long trait list inside Discord's field limit", async () => {
+    const traits = Array.from({ length: 60 }, (_, i) => ({
+      trait_type: `Module ${i}`,
+      value: "◇".repeat(40),
+    }));
+    const glyphbots = stubGlyphBots({
+      fetchBot: vi.fn(() => Promise.resolve(createBot({ traits }))),
+      fetchBotStory: vi.fn(() => Promise.resolve(createStory())),
+    });
+    const ctx = commandContext({
+      glyphbots,
+      opensea: stubOpenSea({ fetchNFT: vi.fn(() => Promise.resolve(createNFT())) }),
+      options: readOptions([intOption("id", 7)]),
+    });
+
+    const value =
+      firstEmbed(await handleBot(ctx)).fields?.find((f) => f.name === "Traits")
+        ?.value ?? "";
+
+    expect(value.length).toBeLessThanOrEqual(1024);
+    expect(value.endsWith("…")).toBe(true);
+  });
+
+  it("renders the stats as a 3x2 grid and caps powers at three", async () => {
     const { ctx } = setup();
     const embed = firstEmbed(await handleBot(ctx));
 
     const stats = embed.fields?.find((f) => f.name === "Stats")?.value ?? "";
-    expect(stats).toContain("STR ████░░░░░░ 40");
-    expect(stats).toContain("AGI ███████░░░ 70");
-    // Absent stats fall back to zero rather than dropping the row.
-    expect(stats).toContain("LCK ░░░░░░░░░░ 0");
+    // Two rows of three, no bars. Absent stats fall back to zero.
+    expect(stats).toBe("```\nSTR  40  AGI  70  INT   0\nLCK   0  END   0  CHA   0\n```");
 
-    expect(embed.fields?.find((f) => f.name === "Powers")?.value).toBe(
-      "Echo Sense • Static Veil • Null Step"
+    expect(embed.fields?.find((f) => f.name === "Role")?.value).toBe(
+      "Driftwatch\nScout"
     );
+    expect(embed.fields?.find((f) => f.name === "Powers")?.value).toBe(
+      "Echo Sense · Static Veil · Null Step"
+    );
+  });
+
+  it("omits Role, Stats and Powers entirely when a bot has no story", async () => {
+    const glyphbots = stubGlyphBots({
+      fetchBot: vi.fn(() => Promise.resolve(createBot())),
+      fetchBotStory: vi.fn(() => Promise.resolve(null)),
+    });
+    const ctx = commandContext({
+      glyphbots,
+      opensea: stubOpenSea({ fetchNFT: vi.fn(() => Promise.resolve(createNFT())) }),
+      options: readOptions([intOption("id", 7)]),
+    });
+
+    const fields = firstEmbed(await handleBot(ctx)).fields ?? [];
+    const names = fields.map((f) => f.name);
+
+    expect(names).not.toContain("Role");
+    expect(names).not.toContain("Stats");
+    expect(names).not.toContain("Powers");
+    // Discord rejects an empty field value, so there must be none.
+    for (const field of fields) {
+      expect(field.value.length).toBeGreaterThan(0);
+    }
   });
 
   it("attaches two link buttons", async () => {
@@ -204,7 +282,12 @@ describe("/artifact", () => {
 
     expect(embed.title).toBe("Signal Bloom");
     expect(embed.url).toBe(`${TEST_ORIGIN}/artifact/12`);
-    expect(embed.footer?.text).toBe("GlyphBots Artifacts");
+    // The mint date rides in the footer instead of a fourth inline field.
+    // The day depends on the runner's zone, so match the shape, not the date.
+    expect(embed.footer?.text).toMatch(
+      /^GlyphBots Artifacts · Minted Jan \d+, 2025$/
+    );
+    expect(embed.fields?.map((f) => f.name)).not.toContain("Minted");
     expect(embed.fields?.find((f) => f.name === "Token ID")?.value).toBe("#12");
     expect(embed.fields?.find((f) => f.name === "Type")?.value).toBe("Image");
     expect(embed.fields?.find((f) => f.name === "Origin Bot")?.value).toBe(
