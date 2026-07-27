@@ -4,16 +4,18 @@ The GlyphBots Discord bot. It runs as a single Cloudflare Worker, live at
 `https://glyphbots-worker.ryan-2e8.workers.dev`, serving one Discord
 application in one guild.
 
-The code that matters is in [`worker/`](worker/). Everything in
-[`legacy/`](legacy/) is the retired Node bot, kept for reference and for the
-features that are not built yet. See
-[`legacy/README.md`](legacy/README.md) before touching it.
+All of it is in [`worker/`](worker/).
+
+This repo used to hold a Node bot that ran on a DigitalOcean droplet under PM2,
+alongside two others. That droplet is gone and all three are now this one
+Worker. The Node source was deleted in the same change that wrote this README;
+it is in the git history at `d668f57` (under `legacy/`) and before that at
+`4e89b7d` (under `src/`) if any of it is ever wanted again.
 
 ## Repository layout
 
 ```
 worker/    the live Cloudflare Worker (see worker/README.md)
-legacy/    the retired Node bot, not deployed anywhere
 plans/     the consolidation plan and its execution tracker
 .github/   the deploy workflow
 ```
@@ -115,14 +117,17 @@ Channel and guild ids are not secrets and are inline constants in
 
 ## Coming soon
 
-Shelved, not deleted. The code is in `legacy/src/` and the conversion path is in
+None of this is built. The old Node implementations were deleted rather than
+carried forward, so reviving any of them means writing them against the Worker,
+not switching something back on. The conversion path is in
 [`plans/cloudflare-consolidation.md`](plans/cloudflare-consolidation.md) under
-"Conversion path for everything shelved".
+"Conversion path for everything shelved", and the old code is in the git history
+at `d668f57` if it is worth reading first.
 
-- **Arena battles.** Never finished. Combat resolution was never written
-  (`legacy/src/arena/interactions.ts:552`), so a round could be started but never
-  resolved. Reviving it means writing that resolution and picking a store for
-  per-battle state, not porting a working feature.
+- **Arena battles.** Never finished, even on the old bot. Combat resolution was
+  never written, so a round could be started but never resolved. Reviving it
+  means writing that resolution and picking a store for per-battle state. There
+  is no working version of this to go back to.
 - **Playground rotation.** Spotlights, postcards, discoveries, encounters and
   recaps. It posted into a channel that has since been deleted, and it needs a
   scheduling model to run on crons.

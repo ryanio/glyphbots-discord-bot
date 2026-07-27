@@ -636,15 +636,28 @@ a settled one.
 **Done when:** the README describes only the deployed system, and no shelved
 feature is advertised anywhere a user can see it.
 
-**How it was resolved (2026-07-26).** Archive, not delete, per decision 6. The
-whole Node package moved to `legacy/` unchanged: `src/`, `test/`, `scripts/`,
-`package.json`, `jest.config.js`, both tsconfigs, `biome.jsonc`. The repo root is
-now a container holding `worker/` (live), `legacy/` (retired), `plans/` and the
-deploy workflow. `legacy/` still typechecks and its 251 tests still pass, run from
-inside that directory; keeping them green costs nothing and makes the shelved
-arena, playground and lore code easier to revive along the conversion path above.
-The root README was rewritten around the Worker, and `legacy/README.md` says
-plainly that it is not the live system. The guild notice is drafted at
+**How it was resolved (2026-07-26).** Deleted, not archived. This reverses the
+"archive" half of decision 6, on the operator's call.
+
+It happened in two steps. The whole Node package first moved to `legacy/`
+unchanged, which proved the Worker had no hidden dependency on it (the move
+needed no config edits and the 251 tests still passed from inside the new
+directory). Then `legacy/` was removed entirely.
+
+The reasoning for going further than the original decision: a superseded
+implementation sitting next to the live one is a standing invitation to edit the
+wrong tree, and the reasons to keep it were weak. Nothing in it runs. The shelved
+arena was never finished, so there is no working version to preserve. And git
+history is a perfectly good archive: the tree is at `d668f57` under `legacy/`,
+and at `4e89b7d` and earlier under `src/`.
+
+The consequence to be honest about: the conversion path above now describes
+writing these features against the Worker, not switching old code back on.
+Anyone reviving one should read the old implementation out of git history first
+rather than assuming the plan's `src/...` line references resolve.
+
+The repo root is now `worker/` (live), `plans/` and the deploy workflow. The
+README was rewritten around the Worker. The guild notice is drafted at
 `plans/guild-announcement.md` and has not been posted. Archiving the other two
 repos is an operator step with a checklist in `EXECUTION.md`.
 

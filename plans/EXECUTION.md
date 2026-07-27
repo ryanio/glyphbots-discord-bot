@@ -34,7 +34,7 @@ Do not relitigate these. They came from the operator directly.
 | Feed events | **`sale` only.** `listing` dropped 2026-07-25 (see Preflight). `mint` excluded. |
 | Inline lookups | Allowlist `#general` and `#show-and-tell`. No DMs. |
 | `RANDOM_INTERVALS` | Cron into `#gallery`, six hour cadence. |
-| Repo | This one. New `worker/` package. `src/` archived at Phase 5. |
+| Repo | This one. New `worker/` package. Node bot **deleted** at Phase 5 (revised 2026-07-26 from "archived"; git history is the archive). |
 | Per-user state | Reserve a KV namespace, build nothing. |
 | womptron | Revived separately, X URL dropped, ~$0.54/mo. Not part of the Worker. |
 
@@ -66,7 +66,7 @@ them, do not try to resolve them.
 | 2 | Slash commands: Ed25519 endpoint, 8 handlers, prune 17 to 8 | **deployed**. Discord accepted the interactions endpoint, 8 commands registered in the guild |
 | 3 | Gateway DO, inline `b#`/`a#` lookups, `#gallery` cron | **deployed**. Gateway connected and holding a session, lookups answering in `#general` and `#show-and-tell` |
 | 4 | OpenSea sale feed to `#trading-floor`, drop `sharp` | **in progress** |
-| 5 | Decommission, archive the other two repos, rewrite the README | **in progress**. `src/` and `test/` moved to `legacy/`, root README rewritten, guild notice drafted at `plans/guild-announcement.md`. The two repo archivals are operator work, checklist below |
+| 5 | Decommission, archive the other two repos, rewrite the README | **done**. Node bot deleted (briefly staged under `legacy/`, then removed), root README rewritten, guild notice drafted at `plans/guild-announcement.md`. The two repo archivals are operator work, checklist below |
 
 Definitions of done are per-phase in `cloudflare-consolidation.md`.
 
@@ -106,12 +106,20 @@ These gate real work, so clear them early.
 
 ## A note on paths in this file
 
-Phase 5 moved the Node bot from `src/` and `test/` to `legacy/src/` and
-`legacy/test/`, along with its `package.json`, `jest.config.js`, both tsconfigs
-and `biome.jsonc`. Nothing inside changed. Every bare `src/...` reference below
-and in `cloudflare-consolidation.md` was written before the move and now lives
-under `legacy/`. Paths that name a repo (`opensea-activity-bot/src/...`) or the
-Worker (`worker/src/...`) are unaffected.
+Phase 5 deleted the Node bot. It briefly lived under `legacy/` before being
+removed entirely, on the reasoning that keeping a superseded implementation
+around invites someone to edit the wrong tree.
+
+Every bare `src/...` reference below and in `cloudflare-consolidation.md` was
+written while that code was live and **no longer resolves to anything in the
+working tree**. Those paths are still accurate against git history: `d668f57`
+has the tree under `legacy/src/`, and `4e89b7d` and earlier have it under
+`src/`. They are left as written because they are the evidence behind decisions
+recorded here, and rewriting them would break the link between a claim and the
+code that justified it.
+
+Paths that name a different repo (`opensea-activity-bot/src/...`) or the Worker
+(`worker/src/...`) are unaffected and still resolve.
 
 ## What is already shipped
 
