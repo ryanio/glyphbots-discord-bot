@@ -13,7 +13,9 @@ export type Artifact = {
   id: string;
   botTokenId: number;
   imageUrl: string;
-  title: string;
+  // The site never guarantees a title; extraction from the model output can
+  // come back empty, and the API stores null. Render a fallback, never "null".
+  title: string | null;
   createdAt: string;
   mintedAt: string | null;
   contractTokenId: number | null;

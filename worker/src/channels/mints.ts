@@ -243,7 +243,7 @@ export const buildMintEmbed = (
 ): EmbedBuilder => {
   const embed = new EmbedBuilder()
     .setColor(GLYPHBOTS_COLOR)
-    .setTitle(`◈ ${artifact.title} #${artifact.contractTokenId}`)
+    .setTitle(`◈ ${artifact.title ?? "Artifact"} #${artifact.contractTokenId}`)
     .setURL(api.getArtifactUrl(artifact.contractTokenId));
 
   if (artifact.imageUrl) {
@@ -324,7 +324,7 @@ const postMint = async (
 
     await deps.poster.send(body);
     log.info(
-      `Posted mint: ${artifact.title} #${artifact.contractTokenId} (bot ${artifact.botTokenId})`
+      `Posted mint: ${artifact.title ?? "Artifact"} #${artifact.contractTokenId} (bot ${artifact.botTokenId})`
     );
     return true;
   } catch (error) {
