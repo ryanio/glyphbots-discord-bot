@@ -28,16 +28,24 @@ export const handleSales: CommandHandler = async (ctx) => {
   }
 
   const saleLines = events.slice(0, DISPLAY_LIMIT).map((event, i) => {
-    const tokenId = event.nft?.identifier ?? "?";
-    const name = event.nft?.name ?? `GlyphBot #${tokenId}`;
+    const rawTokenId = event.nft?.identifier;
+    // `getBotUrl(Number(undefined))` and `getBotUrl(Number("?"))` both produce
+    // `/bot/NaN`, a link to a 404. Without a usable id the item is named but
+    // not linked.
+    const linkable =
+      rawTokenId !== undefined && Number.isFinite(Number(rawTokenId));
+    const name =
+      event.nft?.name ?? (linkable ? `GlyphBot #${rawTokenId}` : "GlyphBot");
     const price = event.payment
       ? formatEthAmount(event.payment.quantity, event.payment.decimals)
       : "?";
     const time = formatTimeAgo(event.event_timestamp);
     const buyer = event.buyer ? shortAddress(event.buyer) : "?";
-    const url = ctx.glyphbots.getBotUrl(Number(tokenId));
+    const item = linkable
+      ? `[${name}](${ctx.glyphbots.getBotUrl(Number(rawTokenId))})`
+      : name;
 
-    return `**${i + 1}.** [${name}](${url}) → ${price} (${time})\n└ Buyer: \`${buyer}\``;
+    return `**${i + 1}.** ${item} → ${price} (${time})\n└ Buyer: \`${buyer}\``;
   });
 
   const embed = new EmbedBuilder()

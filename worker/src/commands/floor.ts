@@ -12,7 +12,21 @@ import { COLORS, DEFAULT_GLYPHBOTS_API_URL } from "../config";
 import { linkButtonRow } from "../discord/buttons";
 import { embedReply, errorReply } from "../discord/embeds";
 import type { CommandHandler } from "./context";
-import { formatEthStat, formatNumber, formatPercentChange } from "./format";
+import {
+  ethFloorPrice,
+  finiteNumber,
+  formatEthStat,
+  formatNumber,
+  formatPercentChange,
+} from "./format";
+
+/** What a field shows when the number behind it is missing or unquotable. */
+const ABSENT = "—";
+
+const stat = (
+  value: number | null,
+  format: (value: number) => string
+): string => (value === null ? ABSENT : format(value));
 
 export const handleFloor: CommandHandler = async (ctx) => {
   const stats = await ctx.opensea.fetchCollectionStats();
@@ -24,7 +38,12 @@ export const handleFloor: CommandHandler = async (ctx) => {
     );
   }
 
-  const { total, intervals } = stats;
+  // Every read below goes through a guard rather than straight off the
+  // response. The declared types say all of this is present; a partial index at
+  // OpenSea says otherwise, and one missing field used to take the whole
+  // handler down with a throw instead of costing one line of the answer.
+  const total = stats.total as Partial<typeof stats.total> | undefined;
+  const intervals = stats.intervals ?? [];
   const oneDay = intervals.find((i) => i.interval === "one_day");
   const sevenDay = intervals.find((i) => i.interval === "seven_day");
   const thirtyDay = intervals.find((i) => i.interval === "thirty_day");
@@ -34,44 +53,51 @@ export const handleFloor: CommandHandler = async (ctx) => {
     .setTitle("📊 GlyphBots Collection Stats")
     .addFields(
       {
+        // Only quoted when OpenSea says the floor is denominated in ETH. See
+        // `ethFloorPrice`: the unit is written into the string, so quoting a
+        // floor priced in something else states something untrue.
         name: "💎 Floor Price",
-        value: formatEthStat(total.floor_price),
+        value: stat(ethFloorPrice(total), formatEthStat),
         inline: true,
       },
-      { name: "👥 Owners", value: formatNumber(total.num_owners), inline: true },
+      {
+        name: "👥 Owners",
+        value: stat(finiteNumber(total?.num_owners), formatNumber),
+        inline: true,
+      },
       {
         name: "📈 Total Volume",
-        value: formatEthStat(total.volume),
+        value: stat(finiteNumber(total?.volume), formatEthStat),
         inline: true,
       },
       {
         name: "🔄 24h Volume",
-        value: oneDay ? formatEthStat(oneDay.volume) : "—",
+        value: stat(finiteNumber(oneDay?.volume), formatEthStat),
         inline: true,
       },
       {
         name: "📊 24h Sales",
-        value: oneDay ? formatNumber(oneDay.sales) : "—",
+        value: stat(finiteNumber(oneDay?.sales), formatNumber),
         inline: true,
       },
       {
         name: "📈 7d Change",
-        value: sevenDay ? formatPercentChange(sevenDay.volume_change) : "—",
+        value: stat(finiteNumber(sevenDay?.volume_change), formatPercentChange),
         inline: true,
       },
       {
         name: "🏷️ Avg Price",
-        value: formatEthStat(total.average_price),
+        value: stat(finiteNumber(total?.average_price), formatEthStat),
         inline: true,
       },
       {
         name: "📊 Total Sales",
-        value: formatNumber(total.sales),
+        value: stat(finiteNumber(total?.sales), formatNumber),
         inline: true,
       },
       {
         name: "📈 30d Sales",
-        value: thirtyDay ? formatNumber(thirtyDay.sales) : "—",
+        value: stat(finiteNumber(thirtyDay?.sales), formatNumber),
         inline: true,
       }
     )

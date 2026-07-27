@@ -39,6 +39,7 @@
  * doing. Same shape as the mint watcher's first tick, and for the same reason.
  */
 
+import type { RESTPostAPIChannelMessageJSONBody } from "discord-api-types/v10";
 import { NUDGE_KIND_ATTEMPTS } from "../config";
 import type { ChannelPoster } from "../discord/channel-poster";
 import type { IdleStateStore } from "../durable-objects/idle-state-store";
@@ -117,7 +118,23 @@ export const runIdleNudge = async (deps: NudgeDeps): Promise<NudgeOutcome> => {
   );
 
   for (const kind of kinds) {
-    const body = await buildNudgePost(kind, contentDeps);
+    let body: RESTPostAPIChannelMessageJSONBody | null = null;
+
+    try {
+      body = await buildNudgePost(kind, contentDeps);
+    } catch (error) {
+      // Two ways this throws, and the fallback kind is the answer to both. The
+      // embed builders validate through `@sapphire/shapeshift` at call time, so
+      // an over-long bot name or a non-absolute URL off either API throws out
+      // of the builder; and `nudge-content.ts` wraps neither of its API calls.
+      // Unwrapped, a throw aborted the whole tick and the second kind, which is
+      // there precisely for a kind that cannot produce anything, was never
+      // tried.
+      log.error(
+        `Idle nudge content failed for ${kind}: ${getErrorMessage(error)}`
+      );
+      continue;
+    }
 
     if (!body) {
       continue;

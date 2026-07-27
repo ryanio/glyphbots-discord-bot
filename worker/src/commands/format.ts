@@ -61,6 +61,40 @@ export const formatNumber = (value: number): string => {
   return value.toLocaleString();
 };
 
+/**
+ * Guard against a stats response that typechecks but carries a hole.
+ *
+ * The OpenSea types in `../api/types.ts` declare these fields as required
+ * numbers, which is what the endpoint documents rather than what it always
+ * sends: fields go missing on a partial index and `undefined` sails straight
+ * into `toFixed` as a thrown handler.
+ */
+export const finiteNumber = (value: number | null | undefined): number | null =>
+  typeof value === "number" && Number.isFinite(value) ? value : null;
+
+/**
+ * The collection floor, but only when OpenSea says it is priced in ETH.
+ *
+ * `formatEthStat` writes the unit into the string it returns, so quoting a
+ * floor denominated in anything else would be a false statement rather than a
+ * formatting slip. An absent or empty symbol is read as ETH, which is what the
+ * endpoint gives for this collection. Shared by `/floor` and the idle nudge's
+ * `collectionFacts`, so the two cannot drift apart on what counts as a
+ * quotable floor.
+ */
+export const ethFloorPrice = (
+  total:
+    | { floor_price?: number | null; floor_price_symbol?: string | null }
+    | null
+    | undefined
+): number | null => {
+  const symbol = total?.floor_price_symbol;
+  if (symbol !== undefined && symbol !== null && symbol !== "" && symbol !== "ETH") {
+    return null;
+  }
+  return finiteNumber(total?.floor_price);
+};
+
 /** `src/commands/floor.ts:40` */
 export const formatPercentChange = (change: number): string => {
   if (change === 0) {

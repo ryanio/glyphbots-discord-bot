@@ -79,7 +79,15 @@ export const handleRarity: CommandHandler = async (ctx) => {
   }
 
   const botName = nft.name ?? `GlyphBot #${tokenId}`;
-  const rank = nft.rarity?.rank ?? 0;
+
+  // No rank means no rank, not rank zero. `percentileOf(0)` is 0, which clears
+  // every threshold in the table, so the old `?? 0` printed "#0 / 11,111" and
+  // "Legendary (Top 1%)" for any bot OpenSea had not ranked. The two other
+  // readers of this field already refuse it: `nudge-content.ts` skips a
+  // candidate whose rank is `<= 0`, and `lookups/embeds.ts` leaves the field
+  // off when it is null. This does the same.
+  const rawRank = nft.rarity?.rank ?? null;
+  const rank = rawRank !== null && rawRank > 0 ? rawRank : null;
 
   const traitLines = (nft.traits ?? [])
     .filter(
@@ -88,22 +96,37 @@ export const handleRarity: CommandHandler = async (ctx) => {
     .slice(0, TRAIT_LIMIT)
     .map((t) => `**${t.trait_type}:** ${t.value}`);
 
+  const description = [
+    ...(rank === null
+      ? []
+      : [
+          `**Rarity Rank:** #${rank.toLocaleString()} / ${MAX_BOT_TOKEN_ID.toLocaleString()}`,
+          `**Tier:** ${getRarityTier(rank)}`,
+          "",
+        ]),
+    traitLines.length > 0 ? "**Traits:**" : "",
+    ...traitLines,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
   const embed = new EmbedBuilder()
     .setColor(COLORS.rarity)
-    .setTitle(`${getRarityEmoji(rank)} ${botName}`)
-    .setDescription(
-      [
-        `**Rarity Rank:** #${rank.toLocaleString()} / ${MAX_BOT_TOKEN_ID.toLocaleString()}`,
-        `**Tier:** ${getRarityTier(rank)}`,
-        "",
-        traitLines.length > 0 ? "**Traits:**" : "",
-        ...traitLines,
-      ]
-        .filter(Boolean)
-        .join("\n")
-    )
-    .setThumbnail(ctx.glyphbots.getBotPngUrl(tokenId))
-    .setFooter({ text: "Rarity calculated by OpenRarity" });
+    .setTitle(rank === null ? botName : `${getRarityEmoji(rank)} ${botName}`)
+    .setThumbnail(ctx.glyphbots.getBotPngUrl(tokenId));
+
+  // `setDescription("")` throws, and an unranked bot with no printable traits
+  // leaves nothing to say.
+  if (description) {
+    embed.setDescription(description);
+  }
+
+  embed.setFooter({
+    text:
+      rank === null
+        ? "OpenSea has no rarity rank for this bot"
+        : "Rarity calculated by OpenRarity",
+  });
 
   return embedReply(embed, [
     linkButtonRow([

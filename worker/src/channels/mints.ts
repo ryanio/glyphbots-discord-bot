@@ -221,34 +221,52 @@ export const buildMintEmbed = (
   return embed;
 };
 
-/** Post one mint. Returns false on any send failure. */
+/**
+ * Post one mint. Returns false on any failure, including a failure to build.
+ *
+ * The build is inside the try on purpose. `EmbedBuilder` validates through
+ * `@sapphire/shapeshift` at call time, so `setURL`, `setImage`, `setTitle` and
+ * `addFields` throw synchronously on a relative `imageUrl`, a title over 256
+ * characters or a field value over 1024, and every one of those inputs is
+ * third-party data off the GlyphBots API. Built outside the try, one bad
+ * artifact threw all the way out of `pollMints`, the cursor write never ran,
+ * and five minutes later the whole batch was selected again: the good mints
+ * before it reposted, forever. Same per-item shape as
+ * `src/lookups/handle.ts:110-122`.
+ */
 const postMint = async (
   deps: MintPollDeps,
   artifact: MintedArtifact
 ): Promise<boolean> => {
-  const body: RESTPostAPIChannelMessageJSONBody = {
-    embeds: [buildMintEmbed(artifact, deps.api).toJSON()],
-  };
-
   try {
+    const body: RESTPostAPIChannelMessageJSONBody = {
+      embeds: [buildMintEmbed(artifact, deps.api).toJSON()],
+    };
+
     await deps.poster.send(body);
     log.info(
       `Posted mint: ${artifact.title} #${artifact.contractTokenId} (bot ${artifact.botTokenId})`
     );
     return true;
   } catch (error) {
-    log.error(`Failed to send mint message: ${getErrorMessage(error)}`);
+    log.error(
+      `Failed to post mint ${artifact.id} (#${artifact.contractTokenId}): ${getErrorMessage(error)}`
+    );
     return false;
   }
 };
 
-/** Post one summary line for mints the burst guard skipped. */
+/**
+ * Post one summary line for mints the burst guard skipped. Returns false when
+ * the line did not reach Discord, because the caller uses that to decide
+ * whether the summarized mints count as handled.
+ */
 const postBurstSummary = async (
   deps: MintPollDeps,
   skipped: MintedArtifact[]
-): Promise<void> => {
+): Promise<boolean> => {
   if (skipped.length === 0) {
-    return;
+    return true;
   }
 
   const plural = skipped.length === 1 ? "artifact" : "artifacts";
@@ -257,8 +275,10 @@ const postBurstSummary = async (
     await deps.poster.send({
       content: `◈ …and **${skipped.length}** more ${plural} minted in this batch.`,
     });
+    return true;
   } catch (error) {
     log.error(`Failed to send burst summary: ${getErrorMessage(error)}`);
+    return false;
   }
 };
 
@@ -322,14 +342,15 @@ export const pollMints = async (deps: MintPollDeps): Promise<number> => {
     ? newMints.slice(0, newMints.length - MINTS_MAX_POSTS_PER_POLL)
     : [];
 
+  let summarized = true;
   if (skipped.length > 0) {
     log.warn(
       `Burst guard: posting ${toPost.length} of ${newMints.length} mints individually, summarizing ${skipped.length}`
     );
-    await postBurstSummary(deps, skipped);
+    summarized = await postBurstSummary(deps, skipped);
   }
 
-  const handled: MintedArtifact[] = [...skipped];
+  const posted: MintedArtifact[] = [];
   const failed: MintedArtifact[] = [];
 
   for (const [index, artifact] of toPost.entries()) {
@@ -337,10 +358,22 @@ export const pollMints = async (deps: MintPollDeps): Promise<number> => {
       await delay(MINTS_POST_DELAY_MS);
     }
     if (await postMint(deps, artifact)) {
-      handled.push(artifact);
+      posted.push(artifact);
     } else {
       failed.push(artifact);
     }
+  }
+
+  // The summarized mints only count as handled once the summary line actually
+  // reached Discord. Treating them as handled regardless is how a single failed
+  // summary send loses a whole burst: their ids go into the posted set and the
+  // timestamp advances past them, and nothing ever mentions them again. A
+  // failed summary puts them in `failed` instead, which clamps the timestamp to
+  // at or below the oldest of them, exactly as a failed individual send does,
+  // so the next poll picks them up again.
+  const handled = summarized ? [...skipped, ...posted] : posted;
+  if (!summarized) {
+    failed.push(...skipped);
   }
 
   // Advance past everything handled, including the summarized ones, so a burst
@@ -355,5 +388,5 @@ export const pollMints = async (deps: MintPollDeps): Promise<number> => {
     );
   }
 
-  return handled.length - skipped.length;
+  return posted.length;
 };

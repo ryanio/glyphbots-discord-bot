@@ -209,7 +209,22 @@ const seedState = async (
   return state;
 };
 
-/** Build one message per settled group and per individual event. */
+/**
+ * Build one message per settled group and per individual event.
+ *
+ * Every build is wrapped on its own. `EmbedBuilder` validates through
+ * `@sapphire/shapeshift` at call time, and both `itemLabel` (into `setTitle`)
+ * and `itemUrl` (into `setURL`) are fed straight from OpenSea's `nft.name` and
+ * `nft.opensea_url`, so one event carrying a 300 character name or a
+ * non-absolute URL used to throw out of here, out of `pollSales`, and take the
+ * entire tick with it: nothing posted, cursor unmoved, same throw five minutes
+ * later. Per-item, the rest of the batch still goes out.
+ *
+ * A failed build still marks its events processed. The failure is a validation
+ * error on fixed data, so it will fail identically on every retry; leaving the
+ * keys off would only re-throw the same event each tick for as long as the lag
+ * window keeps re-serving it. One sale is dropped, loudly, and the feed lives.
+ */
 const buildMessages = async (
   deps: SalesPollDeps,
   state: SalesFeedState,
@@ -224,11 +239,17 @@ const buildMessages = async (
   const messages: PendingMessage[] = [];
 
   for (const group of groups) {
-    messages.push({
-      body: { embeds: [await buildGroupEmbed(group.events, clients)] },
-      oldestTimestamp: oldestTimestampOf(group.events),
-      label: `group of ${group.events.length}`,
-    });
+    try {
+      messages.push({
+        body: { embeds: [await buildGroupEmbed(group.events, clients)] },
+        oldestTimestamp: oldestTimestampOf(group.events),
+        label: `group of ${group.events.length}`,
+      });
+    } catch (error) {
+      log.error(
+        `Failed to build the embed for a group of ${group.events.length}, dropping it: ${getErrorMessage(error)}`
+      );
+    }
     // Marked here rather than after the send: the message now owns delivery,
     // and the deferred queue is persisted in the same write as these keys, so
     // the two cannot disagree.
@@ -236,15 +257,72 @@ const buildMessages = async (
   }
 
   for (const event of individuals) {
-    messages.push({
-      body: { embeds: [await buildSaleEmbed(event, clients)] },
-      oldestTimestamp: event.event_timestamp,
-      label: `sale #${event.nft?.identifier ?? "?"}`,
-    });
+    try {
+      messages.push({
+        body: { embeds: [await buildSaleEmbed(event, clients)] },
+        oldestTimestamp: event.event_timestamp,
+        label: `sale #${event.nft?.identifier ?? "?"}`,
+      });
+    } catch (error) {
+      log.error(
+        `Failed to build the embed for sale #${event.nft?.identifier ?? "?"}, dropping it: ${getErrorMessage(error)}`
+      );
+    }
     markProcessed(state.grouping, event);
   }
 
   return messages;
+};
+
+/**
+ * Where the cursor lands after a sweep.
+ *
+ * A completed sweep advances to the newest event it saw, which is the original
+ * rule and still the common case. A truncated one must not. OpenSea serves
+ * newest first, so the events the page budget could not reach are the OLDEST
+ * in the window, and jumping to the newest steps over every one of them
+ * without a word. It advances to the oldest event it did fetch instead, which
+ * is the honest watermark: everything at or above this has been seen.
+ *
+ * That rule has a fixed point, and the third branch is what breaks it. The
+ * next sweep starts at `oldest - SALES_LAG_WINDOW_SECONDS`, so it re-reads the
+ * same window, truncates in the same place and computes the same oldest.
+ * Left alone the cursor would never move again and every tick would burn ten
+ * pages re-reading events it has already posted. So a truncated sweep that
+ * made no progress gives the unreachable tail up, advances past it and says so
+ * at error level. Those events are lost; the fix for that is a bigger page
+ * budget, not a cursor that quietly claims to have read them.
+ */
+export const advanceSalesCursor = (
+  stored: number,
+  events: OpenSeaEvent[],
+  truncated: boolean
+): { at: number; abandonedBelow: number | null } => {
+  let newest: number | null = null;
+  let oldest: number | null = null;
+
+  for (const event of events) {
+    if (newest === null || event.event_timestamp > newest) {
+      newest = event.event_timestamp;
+    }
+    if (oldest === null || event.event_timestamp < oldest) {
+      oldest = event.event_timestamp;
+    }
+  }
+
+  if (newest === null || oldest === null) {
+    return { at: stored, abandonedBelow: null };
+  }
+
+  if (!truncated) {
+    return { at: Math.max(stored, newest), abandonedBelow: null };
+  }
+
+  if (oldest > stored) {
+    return { at: oldest, abandonedBelow: null };
+  }
+
+  return { at: Math.max(stored, newest), abandonedBelow: oldest };
 };
 
 /**
@@ -348,15 +426,28 @@ export const pollSales = async (deps: SalesPollDeps): Promise<number> => {
   const queue = [...state.deferred, ...built];
   const { sent, undelivered } = await sendUpToCap(deps, queue);
 
-  // Advance from event data only, never the clock. A truncated sweep cannot
-  // advance either, because `fetched` is short and the max is taken over what
-  // actually arrived.
+  // Advance from event data only, never the clock. A failed sweep does not
+  // advance at all, and a truncated one advances only as far as it actually
+  // read: see `advanceSalesCursor`, which is where the newest-first ordering
+  // is reasoned about.
   let lastEventTimestamp = state.lastEventTimestamp;
   if (!page.failed) {
-    for (const event of fetched) {
-      if (event.event_timestamp > lastEventTimestamp) {
-        lastEventTimestamp = event.event_timestamp;
-      }
+    const advanced = advanceSalesCursor(
+      state.lastEventTimestamp,
+      fetched,
+      page.truncated
+    );
+    lastEventTimestamp = advanced.at;
+
+    if (page.truncated) {
+      log.warn(
+        `Sweep truncated at ${page.pages} pages, cursor advanced to ${advanced.at} rather than to the newest event fetched`
+      );
+    }
+    if (advanced.abandonedBelow !== null) {
+      log.error(
+        `Sweep truncated again without moving the cursor; giving up on events older than ${advanced.abandonedBelow} (${new Date(advanced.abandonedBelow * MS_PER_SECOND).toISOString()}). They will not be posted. Raise SALES_MAX_PAGES if this recurs.`
+      );
     }
   }
 

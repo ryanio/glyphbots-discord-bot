@@ -33,19 +33,34 @@ export const cursor = (
   postedArtifactIds: string[] = []
 ): MintsCursorState => ({ lastMintedAtMs, postedArtifactIds });
 
-/** In-memory stand-in for FeedStateDO, same two-method interface. */
+const roundTrip = (
+  state: MintsCursorState | null
+): MintsCursorState | null =>
+  state === null ? null : (JSON.parse(JSON.stringify(state)) as MintsCursorState);
+
+/**
+ * In-memory stand-in for FeedStateDO, same two-method interface.
+ *
+ * Every read and write goes through JSON, the same trick `sales-fixtures.ts`
+ * and `idle-fixtures.ts` use and for the same reason: the production store is
+ * a `fetch` to a Durable Object, so anything surviving on object identity
+ * alone passes here and fails there. It matters most for this store, because
+ * `advanceCursor` copies `postedArtifactIds` out of whatever `read` handed
+ * back and a shared array would let a test see writes that never crossed the
+ * wire.
+ */
 export const createMemoryStore = (initial: MintsCursorState | null) => {
-  let stored = initial;
+  let stored = roundTrip(initial);
   const writes: MintsCursorState[] = [];
   return {
     writes,
     get current() {
       return stored;
     },
-    read: () => Promise.resolve(stored),
+    read: () => Promise.resolve(roundTrip(stored)),
     write: (next: MintsCursorState) => {
-      stored = next;
-      writes.push(next);
+      stored = roundTrip(next);
+      writes.push(stored as MintsCursorState);
       return Promise.resolve();
     },
   };

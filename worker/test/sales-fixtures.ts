@@ -91,14 +91,26 @@ export const createMemoryPoster = () => {
 /**
  * An OpenSea stub. `pages` is served in order, so a test can hand the seed
  * probe one payload and the first real tick another.
+ *
+ * The served page is filtered by the `after` the caller asked for, because the
+ * real endpoint returns events strictly after it. A stub that hands back
+ * everything regardless makes the cursor untestable: a test asserting the feed
+ * does not replay a backlog would be asserting nothing, since the backlog
+ * would arrive on every tick whatever the cursor said.
  */
 export const createOpenSea = (pages: OpenSeaEvent[][]) => {
   let call = 0;
   const fetchCollectionEventsSince = vi.fn(
-    (): Promise<EventsSincePage> => {
-      const events = pages[call] ?? pages.at(-1) ?? [];
+    (options?: { after?: number }): Promise<EventsSincePage> => {
+      const served = pages[call] ?? pages.at(-1) ?? [];
       call += 1;
-      return Promise.resolve({ events, pages: 1, failed: false });
+      const after = options?.after ?? 0;
+      return Promise.resolve({
+        events: served.filter((event) => event.event_timestamp > after),
+        pages: 1,
+        failed: false,
+        truncated: false,
+      });
     }
   );
   return {
@@ -109,6 +121,25 @@ export const createOpenSea = (pages: OpenSeaEvent[][]) => {
     },
   };
 };
+
+/**
+ * An OpenSea stub for one sweep with a fixed outcome, so a test can say
+ * "truncated" or "failed" without also constructing a pager.
+ */
+export const createSweepStub = (
+  page: Partial<EventsSincePage> & { events: OpenSeaEvent[] }
+) => ({
+  fetchAccount: vi.fn(() => Promise.resolve(null)),
+  fetchCollectionEventsSince: vi.fn(
+    (): Promise<EventsSincePage> =>
+      Promise.resolve({
+        pages: 1,
+        failed: false,
+        truncated: false,
+        ...page,
+      })
+  ),
+});
 
 export const stubGlyphBots = () => ({
   getBotPngUrl: (id: number) => `${TEST_ORIGIN}/bots/pngs/${id}.png`,

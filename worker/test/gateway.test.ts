@@ -5,14 +5,17 @@
  * What this can and cannot reach is worth being explicit about. Everything
  * below the network is covered: frame parsing, the HELLO to IDENTIFY or RESUME
  * decision, sequence tracking, heartbeat and ack tracking, the close-code
- * table and the backoff it schedules, and the MESSAGE_CREATE route into the
- * lookup path. What is not covered, and cannot be without a deploy, is
- * `openGateway`: the `/gateway/bot` discovery call, the 101 upgrade, and
- * whether Discord accepts the IDENTIFY. Those are listed in the README under
- * what remains unverified.
+ * table and the exact backoff it schedules, the MESSAGE_CREATE route into the
+ * lookup path, and the connect path's own bookkeeping (the in-flight guard,
+ * the `wsState` it reports) driven through a stubbed upgrade.
+ *
+ * What is not covered, and cannot be without a deploy, is what happens on the
+ * other side of that stub: whether `/gateway/bot` answers, whether the 101
+ * upgrade succeeds, and whether Discord accepts the IDENTIFY. Those are listed
+ * in the README under what remains unverified.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   BACKOFF_MS,
   classifyClose,
@@ -22,8 +25,23 @@ import {
   parseFrame,
   parseMessageCreate,
 } from "../src/durable-objects/gateway";
-import { GENERAL_CHANNEL_ID, GUILD_ID } from "../src/config";
+import {
+  GENERAL_CHANNEL_ID,
+  GUILD_ID,
+  TRADING_FLOOR_CHANNEL_ID,
+} from "../src/config";
 import type { WorkerEnv } from "../src/types";
+
+/**
+ * One teardown for the whole file rather than a restore at the end of each
+ * test. A `mockRestore()` written after the assertions never runs when an
+ * assertion fails, so a stubbed `Math.random` or `fetch` used to leak into
+ * every test that followed the first failure.
+ */
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.useRealTimers();
+});
 
 /**
  * The reply goes out through `@discordjs/rest`, which has its own HTTP stack
@@ -47,12 +65,29 @@ vi.mock("../src/discord/channel-poster", () => ({
 /** Enough of `DurableObjectState` for the DO's storage and alarm use. */
 const createFakeState = () => {
   const store = new Map<string, unknown>();
+  const alarms: number[] = [];
   let alarm: number | null = null;
+  let deletes = 0;
 
   return {
-    alarms: [] as number[],
+    /**
+     * Every absolute time handed to `setAlarm`, in order.
+     *
+     * This used to be declared and never written to, so every alarm assertion
+     * in the file was really just "an alarm exists", which is how a backoff
+     * that skipped its first step went unnoticed.
+     */
+    alarms,
+    /** How many times the alarm was deleted, which is how `failed` parks. */
+    get alarmDeletes() {
+      return deletes;
+    },
     get alarmAt() {
       return alarm;
+    },
+    /** The alarms as delays, which is the thing the backoff is about. */
+    delaysFrom(base: number) {
+      return alarms.map((at) => at - base);
     },
     get stored() {
       return store.get("gatewayState") as GatewayState | undefined;
@@ -67,17 +102,34 @@ const createFakeState = () => {
         return Promise.resolve();
       },
       getAlarm: () => Promise.resolve(alarm),
-      setAlarm: function (this: { alarms: number[] }, at: number) {
+      setAlarm: (at: number) => {
         alarm = at;
+        alarms.push(at);
         return Promise.resolve();
       },
       deleteAlarm: () => {
         alarm = null;
+        deletes += 1;
         return Promise.resolve();
       },
     },
   };
 };
+
+/**
+ * A `fetch` that fails loudly rather than reaching the network.
+ *
+ * `vi.spyOn(globalThis, "fetch")` with no implementation calls straight
+ * through, so a test whose only assertion is `not.toHaveBeenCalled()` is one
+ * edit away from talking to the real discord.com.
+ */
+const denyFetch = () =>
+  vi
+    .spyOn(globalThis, "fetch")
+    .mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input instanceof Request ? input.url : input);
+      throw new Error(`test made an unexpected network call: ${url}`);
+    });
 
 const createFakeSocket = () => {
   const sent: Record<string, unknown>[] = [];
@@ -91,6 +143,34 @@ const createFakeSocket = () => {
     close: (code: number, reason: string) => {
       closes.push({ code, reason });
     },
+  };
+};
+
+/**
+ * What a successful upgrade hands back: a socket `openGateway` will `accept()`
+ * and attach listeners to. Records both so a test can count how many sockets
+ * the DO actually took ownership of.
+ */
+const createUpgradedSocket = () => {
+  const listeners = new Map<string, (event: unknown) => void>();
+  const sent: Record<string, unknown>[] = [];
+  let accepted = 0;
+  return {
+    listeners,
+    sent,
+    get accepted() {
+      return accepted;
+    },
+    accept: () => {
+      accepted += 1;
+    },
+    addEventListener: (type: string, fn: (event: unknown) => void) => {
+      listeners.set(type, fn);
+    },
+    send: (raw: string) => {
+      sent.push(JSON.parse(raw) as Record<string, unknown>);
+    },
+    close: () => {},
   };
 };
 
@@ -220,6 +300,10 @@ describe("closing the socket", () => {
   });
 
   it("keeps the session on a resumable code and backs off", async () => {
+    vi.useFakeTimers();
+    const base = Date.parse("2026-01-01T00:00:00.000Z");
+    vi.setSystemTime(base);
+
     const { doInstance, state } = harness({
       wsState: "live",
       sessionId: "sess",
@@ -234,7 +318,8 @@ describe("closing the socket", () => {
     expect(state.stored?.sessionId).toBe("sess");
     expect(state.stored?.lastSeq).toBe(42);
     expect(state.stored?.reconnectAttempt).toBe(1);
-    expect(state.alarmAt).not.toBeNull();
+    // The first close waits the first step, not the second.
+    expect(state.delaysFrom(base)).toEqual([BACKOFF_MS[0]]);
   });
 
   it("drops the session on a re-identify code", async () => {
@@ -253,15 +338,43 @@ describe("closing the socket", () => {
     expect(state.stored?.lastSeq).toBeNull();
   });
 
-  it("walks the backoff up and stops at the ceiling", async () => {
-    const { doInstance, state } = harness({
+  it("walks the backoff up one step per close and stops at the ceiling", async () => {
+    vi.useFakeTimers();
+    const base = Date.parse("2026-01-01T00:00:00.000Z");
+    vi.setSystemTime(base);
+
+    const { doInstance, state } = harness({ wsState: "live" });
+
+    for (let close = 0; close < BACKOFF_MS.length + 1; close += 1) {
+      await doInstance.handleSocketClose(4000, `close ${close}`);
+    }
+
+    // The ladder the README documents, exactly: one step per consecutive
+    // close, starting at 1s, held at 60s. Seeding at the ceiling and closing
+    // once (which is what this test used to do) asserts none of it.
+    expect(state.delaysFrom(base)).toEqual([
+      1000, 2000, 5000, 15_000, 60_000, 60_000,
+    ]);
+    expect(state.stored?.reconnectAttempt).toBe(BACKOFF_MS.length - 1);
+  });
+
+  it("goes back to the first step once a READY lands", async () => {
+    vi.useFakeTimers();
+    const base = Date.parse("2026-01-01T00:00:00.000Z");
+    vi.setSystemTime(base);
+
+    const { doInstance, ws, state } = harness({
       wsState: "live",
       reconnectAttempt: BACKOFF_MS.length - 1,
     });
 
-    await doInstance.handleSocketClose(4000, "again");
+    await doInstance.handleSocketMessage(
+      ws as unknown as WebSocket,
+      frame({ op: 0, s: 1, t: "READY", d: { user: { id: "bot-id" } } })
+    );
+    await doInstance.handleSocketClose(4000, "after a good session");
 
-    expect(state.stored?.reconnectAttempt).toBe(BACKOFF_MS.length - 1);
+    expect(state.delaysFrom(base)).toEqual([BACKOFF_MS[0]]);
   });
 });
 
@@ -309,19 +422,22 @@ describe("the HELLO handshake", () => {
   });
 
   it("jitters the first heartbeat inside the interval", async () => {
-    const { doInstance, ws, state } = harness();
-    const random = vi.spyOn(Math, "random").mockReturnValue(0.5);
+    // The `Math.random` stub is undone by the file-wide `afterEach`, so a
+    // failure below cannot leave a deterministic `Math.random` behind for the
+    // rest of the suite.
+    vi.spyOn(Math, "random").mockReturnValue(0.5);
+    vi.useFakeTimers();
+    const base = Date.parse("2026-01-01T00:00:00.000Z");
+    vi.setSystemTime(base);
 
-    const before = Date.now();
+    const { doInstance, ws, state } = harness();
+
     await doInstance.handleSocketMessage(
       ws as unknown as WebSocket,
       frame({ op: 10, d: { heartbeat_interval: 40_000 } })
     );
 
-    expect(state.alarmAt).not.toBeNull();
-    expect((state.alarmAt ?? 0) - before).toBeGreaterThanOrEqual(20_000 - 50);
-    expect((state.alarmAt ?? 0) - before).toBeLessThanOrEqual(20_000 + 50);
-    random.mockRestore();
+    expect(state.delaysFrom(base)).toEqual([20_000]);
   });
 });
 
@@ -421,7 +537,6 @@ describe("dispatches and heartbeats", () => {
     expect(ws.sent).toHaveLength(0);
     await vi.advanceTimersByTimeAsync(5000);
     expect((ws.sent[0] as { op: number }).op).toBe(2);
-    vi.useRealTimers();
   });
 
   it("keeps the session on a resumable INVALID_SESSION", async () => {
@@ -435,7 +550,6 @@ describe("dispatches and heartbeats", () => {
 
     expect(state.stored?.sessionId).toBe("sess");
     await vi.advanceTimersByTimeAsync(5000);
-    vi.useRealTimers();
   });
 
   it("tracks the sequence number off every dispatch", async () => {
@@ -466,7 +580,148 @@ describe("the alarm", () => {
 
     expect(fetchSpy).toHaveBeenCalled();
     expect(state.stored?.wsState).toBe("reconnecting");
-    fetchSpy.mockRestore();
+  });
+
+  /**
+   * A fatal close nulls `liveWs` before it writes `failed`, so the two always
+   * arrive together. While the null-socket branch was tested first, `failed`
+   * was unreachable and the only thing standing between a 4014 and a reconnect
+   * loop was `clearAlarm` winning a race against the alarm `onHello` sets
+   * immediately before the IDENTIFY that earns the 4014.
+   */
+  it("stays parked in failed when an alarm fires after a fatal close", async () => {
+    const { doInstance, state } = harness({
+      wsState: "live",
+      heartbeatIntervalMs: 41_250,
+    });
+    const fetchSpy = denyFetch();
+
+    await doInstance.handleSocketClose(4014, "Disallowed intents");
+    expect(state.stored?.wsState).toBe("failed");
+
+    // The alarm that was already in flight when the 4014 landed.
+    await doInstance.alarm();
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(state.stored?.wsState).toBe("failed");
+    expect(state.stored?.failureReason).toContain("4014");
+    expect(state.alarms).toHaveLength(0);
+    expect(state.alarmAt).toBeNull();
+  });
+
+  it("leaves a failed gateway alone on the watchdog tick too", async () => {
+    const { doInstance, state } = harness({ wsState: "live" });
+    const fetchSpy = denyFetch();
+
+    await doInstance.handleSocketClose(4014, "Disallowed intents");
+    const response = await doInstance.fetch(
+      new Request("https://gateway/health-tick")
+    );
+
+    expect(await response.json()).toMatchObject({
+      ok: false,
+      wsState: "failed",
+    });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(state.stored?.wsState).toBe("failed");
+  });
+});
+
+describe("opening the socket", () => {
+  /**
+   * `liveWs` is assigned only after the upgrade `fetch` resolves, and a
+   * Durable Object's input gate closes around storage operations, not around
+   * an `await fetch`. So a heartbeat alarm firing while the watchdog was
+   * mid-connect used to sail past the `liveWs` check and accept a second
+   * socket, and both sockets kept their listeners: every MESSAGE_CREATE
+   * handled twice, every inline lookup answered twice.
+   */
+  it("does not open a second socket when a connect is already in flight", async () => {
+    const { doInstance, state } = harness({
+      wsState: "reconnecting",
+      sessionId: "sess",
+      resumeUrl: "wss://resume.example",
+      lastSeq: 5,
+    });
+
+    const sockets: ReturnType<typeof createUpgradedSocket>[] = [];
+    let releaseUpgrade = () => {};
+    const upgrade = new Promise<void>((resolve) => {
+      releaseUpgrade = resolve;
+    });
+
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async () => {
+        // Held open so both callers are past the guard before either finishes,
+        // which is the race as it happens in production.
+        await upgrade;
+        const ws = createUpgradedSocket();
+        sockets.push(ws);
+        return { status: 101, webSocket: ws } as unknown as Response;
+      });
+
+    const viaAlarm = doInstance.alarm();
+    const viaWatchdog = doInstance.fetch(
+      new Request("https://gateway/health-tick")
+    );
+    releaseUpgrade();
+    await Promise.all([viaAlarm, viaWatchdog]);
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(sockets).toHaveLength(1);
+    expect(sockets[0]?.accepted).toBe(1);
+    expect(state.stored?.wsState).toBe("connecting");
+  });
+
+  it("abandons a connect that never settles so the watchdog can retry", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(Date.parse("2026-01-01T00:00:00.000Z"));
+
+    const { doInstance } = harness({
+      wsState: "reconnecting",
+      sessionId: "sess",
+      resumeUrl: "wss://resume.example",
+      lastSeq: 5,
+    });
+
+    // The upgrade that never comes back. Joining this forever would be the
+    // failure the watchdog exists to break, so the guard has to expire.
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(() => new Promise<Response>(() => {}));
+
+    void doInstance.alarm();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+    // Inside the minute, another caller joins rather than opening a socket.
+    await vi.advanceTimersByTimeAsync(30_000);
+    void doInstance.alarm();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+    // Past it, the wedged reference is dropped and a fresh connect starts.
+    await vi.advanceTimersByTimeAsync(31_000);
+    void doInstance.alarm();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports connecting for the whole connect, discovery included", async () => {
+    const { doInstance, state } = harness({ wsState: "idle" });
+
+    const observed: (string | undefined)[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      observed.push(state.stored?.wsState);
+      return Response.json({ url: "wss://gateway.example" });
+    });
+
+    // The upgrade then fails, which is fine: the assertion is about what the
+    // status route would have reported while `/gateway/bot` was outstanding.
+    await doInstance.fetch(new Request("https://gateway/connect"));
+
+    expect(observed[0]).toBe("connecting");
   });
 });
 
@@ -532,7 +787,6 @@ describe("MESSAGE_CREATE routing", () => {
     expect(
       (posted[0]?.body as { embeds: { title?: string }[] }).embeds[0]?.title
     ).toBe("GlyphBot #1");
-    fetchSpy.mockRestore();
   });
 
   it("spends nothing on a message in a channel it does not serve", async () => {
@@ -543,7 +797,7 @@ describe("MESSAGE_CREATE routing", () => {
       env()
     );
     const ws = createFakeSocket();
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const fetchSpy = denyFetch();
 
     await doInstance.handleSocketMessage(
       ws as unknown as WebSocket,
@@ -553,7 +807,7 @@ describe("MESSAGE_CREATE routing", () => {
         t: "MESSAGE_CREATE",
         d: {
           id: "m1",
-          channel_id: "1446247601942036574",
+          channel_id: TRADING_FLOOR_CHANNEL_ID,
           guild_id: GUILD_ID,
           content: "b#1",
           author: { id: "human" },
@@ -562,7 +816,9 @@ describe("MESSAGE_CREATE routing", () => {
     );
 
     expect(fetchSpy).not.toHaveBeenCalled();
-    fetchSpy.mockRestore();
+    // Free of network work, but the frame still counts: see the sequence
+    // tests below.
+    expect(state.stored?.lastSeq).toBe(3);
   });
 
   it("moves the idle clock forward on a human message in #general", async () => {
@@ -596,6 +852,7 @@ describe("MESSAGE_CREATE routing", () => {
 
     expect(feed.applied).toHaveLength(1);
     expect((feed.applied[0] as { op: string }).op).toBe("human-message");
+    expect(state.stored?.lastSeq).toBe(5);
   });
 
   it("does not let its own post reset the idle clock", async () => {
@@ -647,7 +904,7 @@ describe("MESSAGE_CREATE routing", () => {
         t: "MESSAGE_CREATE",
         d: {
           id: "m3",
-          channel_id: "1446247601942036574",
+          channel_id: TRADING_FLOOR_CHANNEL_ID,
           guild_id: GUILD_ID,
           content: "gm",
           author: { id: "human" },
@@ -666,7 +923,7 @@ describe("MESSAGE_CREATE routing", () => {
       env()
     );
     const ws = createFakeSocket();
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const fetchSpy = denyFetch();
 
     await doInstance.handleSocketMessage(
       ws as unknown as WebSocket,
@@ -685,6 +942,129 @@ describe("MESSAGE_CREATE routing", () => {
     );
 
     expect(fetchSpy).not.toHaveBeenCalled();
-    fetchSpy.mockRestore();
+  });
+});
+
+/**
+ * The sequence number is what RESUME replays from, so it has to track the
+ * frames the gateway sent, not the subset this bot found interesting.
+ */
+describe("the sequence number across a reconnect", () => {
+  it("advances on chatter it never answers", async () => {
+    const state = createFakeState();
+    state.seed({ wsState: "live", selfUserId: "bot-id", lastSeq: 200 });
+    const feed = createFeedStateStub();
+    const doInstance = new GatewayDO(
+      state as unknown as DurableObjectState,
+      env({ FEED_STATE: feed.binding as unknown as DurableObjectNamespace })
+    );
+    const ws = createFakeSocket();
+    const fetchSpy = denyFetch();
+
+    const lines = ["gm", "wen mint", "lol"];
+    for (const [index, content] of lines.entries()) {
+      await doInstance.handleSocketMessage(
+        ws as unknown as WebSocket,
+        frame({
+          op: 0,
+          s: 201 + index,
+          t: "MESSAGE_CREATE",
+          d: {
+            id: `m${index}`,
+            channel_id: TRADING_FLOOR_CHANNEL_ID,
+            guild_id: GUILD_ID,
+            content,
+            author: { id: "human" },
+          },
+        })
+      );
+    }
+
+    expect(state.stored?.lastSeq).toBe(203);
+    // The write-avoidance that was worth keeping: no upstream calls and no
+    // cross-DO idle-clock write for a channel this bot does not serve.
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(feed.applied).toHaveLength(0);
+  });
+
+  it("RESUMEs from the last frame seen, not the last one answered", async () => {
+    const state = createFakeState();
+    state.seed({
+      wsState: "live",
+      selfUserId: "bot-id",
+      sessionId: "sess",
+      resumeUrl: "wss://resume.example",
+      // Where the last answered lookup left it, hours ago.
+      lastSeq: 200,
+    });
+    const doInstance = new GatewayDO(
+      state as unknown as DurableObjectState,
+      env()
+    );
+    denyFetch();
+
+    await doInstance.handleSocketMessage(
+      createFakeSocket() as unknown as WebSocket,
+      frame({
+        op: 0,
+        s: 986,
+        t: "MESSAGE_CREATE",
+        d: {
+          id: "m1",
+          channel_id: TRADING_FLOOR_CHANNEL_ID,
+          guild_id: GUILD_ID,
+          content: "gm",
+          author: { id: "human" },
+        },
+      })
+    );
+
+    // The socket drops and comes back.
+    const reopened = createFakeSocket();
+    await doInstance.handleSocketMessage(
+      reopened as unknown as WebSocket,
+      frame({ op: 10, d: { heartbeat_interval: 41_250 } })
+    );
+
+    const resume = reopened.sent[0] as {
+      op: number;
+      d: { session_id: string; seq: number };
+    };
+    expect(resume.op).toBe(6);
+    expect(resume.d.session_id).toBe("sess");
+    // Asking for 200 replays hundreds of frames, answers the old lookup a
+    // second time (nothing dedupes by message id), and risks an op=9 and a
+    // full re-IDENTIFY.
+    expect(resume.d.seq).toBe(986);
+  });
+
+  it("keeps the sequence out of the lookup path's way when a reply fails", async () => {
+    const state = createFakeState();
+    state.seed({ wsState: "live", selfUserId: "bot-id", lastSeq: 10 });
+    const doInstance = new GatewayDO(
+      state as unknown as DurableObjectState,
+      env()
+    );
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("upstream down"));
+
+    await doInstance.handleSocketMessage(
+      createFakeSocket() as unknown as WebSocket,
+      frame({
+        op: 0,
+        s: 11,
+        t: "MESSAGE_CREATE",
+        d: {
+          id: "m1",
+          channel_id: GENERAL_CHANNEL_ID,
+          guild_id: GUILD_ID,
+          content: "b#1",
+          author: { id: "human" },
+        },
+      })
+    );
+
+    // The sequence is recorded before the lookup runs, so an upstream failure
+    // cannot cost the resume point.
+    expect(state.stored?.lastSeq).toBe(11);
   });
 });

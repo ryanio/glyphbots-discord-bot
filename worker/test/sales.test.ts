@@ -9,7 +9,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { pollSales } from "../src/channels/sales";
+import { advanceSalesCursor, pollSales } from "../src/channels/sales";
 import {
   SALES_MAX_MESSAGES_PER_TICK,
   SALES_SETTLE_MS,
@@ -18,6 +18,7 @@ import {
   createMemoryPoster,
   createMemorySalesStore,
   createOpenSea,
+  createSweepStub,
   firstEmbed,
   pollDeps,
   saleEvent,
@@ -56,24 +57,38 @@ describe("cold start", () => {
   });
 
   it("does not replay the backlog on the tick after seeding", async () => {
-    const history = [
-      saleEvent({ event_timestamp: T0 - 200, transaction: "0xold" }),
-      saleEvent({ event_timestamp: T0 }),
-    ];
-    // The seed probe sees the newest event, then the first real tick sees the
-    // whole history because the lag window reaches back behind the cursor.
-    const opensea = createOpenSea([[history[1] as never], history]);
+    const old = saleEvent({
+      event_timestamp: T0 - 200,
+      transaction: "0xold",
+      nft: { identifier: "111", name: "GlyphBot" },
+    });
+    const seedEvent = saleEvent({
+      event_timestamp: T0,
+      transaction: "0xseed",
+      nft: { identifier: "222", name: "GlyphBot" },
+    });
+    // The seed probe sees the newest event. Every later tick is handed the
+    // whole history and the stub applies the `after` the feed asked for, which
+    // is what the real endpoint does.
+    const opensea = createOpenSea([[seedEvent], [old, seedEvent]]);
     const poster = createMemoryPoster();
     const store = createMemorySalesStore(null);
 
     await pollSales(pollDeps(opensea, poster, store, () => LATER));
+    expect(poster.sends).toHaveLength(0);
+
     await pollSales(pollDeps(opensea, poster, store, () => LATER));
 
-    // Only the event at or after the seeded cursor is in scope, and the older
-    // one is outside the fetch window in production. Neither posts twice.
-    expect(poster.sends.length).toBeLessThanOrEqual(2);
-    const titles = poster.sends.map((body) => firstEmbed(body).title);
-    expect(new Set(titles).size).toBe(titles.length);
+    // The lag window reaches 120 seconds behind the seeded cursor, so the
+    // seeding event itself comes back and posts. The one 200 seconds behind it
+    // is outside that window and is never seen at all.
+    expect(poster.sends).toHaveLength(1);
+    expect(firstEmbed(poster.sends[0]).title).toContain("#222");
+
+    // A third tick with the same payload adds nothing: the key set rejects it.
+    await pollSales(pollDeps(opensea, poster, store, () => LATER));
+    expect(poster.sends).toHaveLength(1);
+    expect(store.current?.lastEventTimestamp).toBe(T0);
   });
 });
 
@@ -207,21 +222,183 @@ describe("send failure", () => {
 
   it("does not advance the cursor when the fetch itself failed", async () => {
     const store = createMemorySalesStore(salesState(T0));
-    const opensea = {
-      fetchAccount: () => Promise.resolve(null),
-      fetchCollectionEventsSince: () =>
-        Promise.resolve({
-          events: [saleEvent({ event_timestamp: T0 + 10 })],
-          pages: 1,
-          failed: true,
-        }),
-    };
+    const opensea = createSweepStub({
+      events: [saleEvent({ event_timestamp: T0 + 10 })],
+      failed: true,
+    });
 
     await pollSales(
       pollDeps(opensea, createMemoryPoster(), store, () => LATER)
     );
 
     expect(store.current?.lastEventTimestamp).toBe(T0);
+  });
+});
+
+describe("an event the embed builders reject", () => {
+  /**
+   * `itemLabel` feeds `nft.name` into `setTitle` and `itemUrl` feeds
+   * `nft.opensea_url` into `setURL`, and both validate through
+   * `@sapphire/shapeshift` at call time. A name over 256 characters and a
+   * non-absolute URL are the two shapes that reach production; either one used
+   * to throw out of `buildMessages` and take the whole tick with it.
+   */
+  const poison = (timestamp: number) =>
+    saleEvent({
+      event_timestamp: timestamp,
+      transaction: `0xpoison${timestamp}`,
+      buyer: "0x9999999999999999999999999999999999999999",
+      nft: { identifier: "not-a-number", name: "x".repeat(400) },
+    });
+
+  it("does not throw out of the tick", async () => {
+    const store = createMemorySalesStore(salesState(T0));
+
+    await expect(
+      pollSales(
+        pollDeps(
+          createOpenSea([[poison(T0 + 10)]]),
+          createMemoryPoster(),
+          store,
+          () => LATER
+        )
+      )
+    ).resolves.toBe(0);
+  });
+
+  it("still posts the good events in the same batch", async () => {
+    const good = saleEvent({
+      event_timestamp: T0 + 20,
+      transaction: "0xgood",
+      buyer: "0x1111111111111111111111111111111111111111",
+      nft: { identifier: "42", name: "GlyphBot" },
+    });
+    const poster = createMemoryPoster();
+    const store = createMemorySalesStore(salesState(T0));
+
+    const sent = await pollSales(
+      pollDeps(
+        createOpenSea([[poison(T0 + 10), good]]),
+        poster,
+        store,
+        () => LATER
+      )
+    );
+
+    expect(sent).toBe(1);
+    expect(firstEmbed(poster.sends[0]).title).toContain("#42");
+  });
+
+  it("advances the cursor rather than stalling on it", async () => {
+    const store = createMemorySalesStore(salesState(T0));
+
+    await pollSales(
+      pollDeps(
+        createOpenSea([[poison(T0 + 10)]]),
+        createMemoryPoster(),
+        store,
+        () => LATER
+      )
+    );
+
+    expect(store.current?.lastEventTimestamp).toBe(T0 + 10);
+    expect(store.current?.deferred).toHaveLength(0);
+    // Marked processed, so the same unbuildable event is not retried on every
+    // tick for as long as the lag window keeps re-serving it.
+    expect(store.current?.grouping.processedKeys).toHaveLength(1);
+  });
+});
+
+describe("a truncated sweep", () => {
+  const backlog = (count: number, from: number) =>
+    Array.from({ length: count }, (_, index) =>
+      saleEvent({
+        event_timestamp: from + index,
+        buyer: `0x${String(index).repeat(40).slice(0, 40)}`,
+        transaction: `0xback${index}`,
+        nft: { identifier: String(300 + index), name: "GlyphBot" },
+      })
+    );
+
+  it("does not advance past the events it never fetched", async () => {
+    // OpenSea serves newest first, so a sweep that runs out of pages drops the
+    // oldest events in the window. Advancing to the newest one it did see
+    // steps over every one of them without a word.
+    const fetched = backlog(4, T0 + 100);
+    const store = createMemorySalesStore(salesState(T0));
+
+    await pollSales(
+      pollDeps(
+        createSweepStub({ events: fetched, pages: 10, truncated: true }),
+        createMemoryPoster(),
+        store,
+        () => LATER
+      )
+    );
+
+    expect(store.current?.lastEventTimestamp).toBe(T0 + 100);
+  });
+
+  it("advances to the newest when it did not, so the cursor cannot livelock", async () => {
+    // Second tick, same window: the sweep truncates in the same place and
+    // computes the same oldest, so holding the cursor there would pin it
+    // forever and burn ten pages a tick re-reading posted events. It gives the
+    // unreachable tail up instead, loudly.
+    const fetched = backlog(4, T0 + 100);
+    const store = createMemorySalesStore(salesState(T0 + 100));
+
+    await pollSales(
+      pollDeps(
+        createSweepStub({ events: fetched, pages: 10, truncated: true }),
+        createMemoryPoster(),
+        store,
+        () => LATER
+      )
+    );
+
+    expect(store.current?.lastEventTimestamp).toBe(T0 + 103);
+  });
+
+  it("advances to the newest when the sweep completed", async () => {
+    const fetched = backlog(4, T0 + 100);
+    const store = createMemorySalesStore(salesState(T0));
+
+    await pollSales(
+      pollDeps(
+        createSweepStub({ events: fetched, pages: 10, truncated: false }),
+        createMemoryPoster(),
+        store,
+        () => LATER
+      )
+    );
+
+    expect(store.current?.lastEventTimestamp).toBe(T0 + 103);
+  });
+});
+
+describe("advanceSalesCursor", () => {
+  const at = (timestamp: number) => saleEvent({ event_timestamp: timestamp });
+
+  it("leaves the cursor alone when nothing arrived", () => {
+    expect(advanceSalesCursor(500, [], false)).toEqual({
+      at: 500,
+      abandonedBelow: null,
+    });
+    expect(advanceSalesCursor(500, [], true)).toEqual({
+      at: 500,
+      abandonedBelow: null,
+    });
+  });
+
+  it("never moves backwards", () => {
+    expect(advanceSalesCursor(900, [at(500), at(600)], false).at).toBe(900);
+  });
+
+  it("names the events it gave up on", () => {
+    expect(advanceSalesCursor(600, [at(500), at(700)], true)).toEqual({
+      at: 700,
+      abandonedBelow: 500,
+    });
   });
 });
 

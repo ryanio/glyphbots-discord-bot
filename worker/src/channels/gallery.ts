@@ -156,8 +156,14 @@ export const postGalleryItem = async (
               deps.clients
             );
     } catch (error) {
-      log.error(`Gallery build failed: ${getErrorMessage(error)}`);
-      return "no-content";
+      // Next attempt, not out of the loop. The retry exists because a random
+      // pick can be a burned bot or an artifact the embed builders reject, and
+      // returning here spent the whole three-attempt budget on the first bad
+      // draw.
+      log.error(
+        `Gallery build ${attempt}/${MAX_ATTEMPTS} failed (${kind}): ${getErrorMessage(error)}`
+      );
+      continue;
     }
 
     if (!embed) {

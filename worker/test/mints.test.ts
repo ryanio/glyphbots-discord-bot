@@ -117,14 +117,24 @@ describe("new mint detection", () => {
     expect(store.current?.postedArtifactIds).toContain("dupe");
   });
 
-  it("posts nothing when the API returns no artifacts", async () => {
+  it("posts nothing and does not seed when the API returns no artifacts", async () => {
     const poster = createMemoryPoster();
-    const store = createMemoryStore(cursor(0));
+    const cold = createMemoryStore(null);
 
-    await pollMints(pollDeps(createApi([]), poster, store));
+    await pollMints(pollDeps(createApi([]), poster, cold));
 
     expect(poster.sends).toHaveLength(0);
-    expect(store.writes).toHaveLength(0);
+    // The empty-artifacts guard runs before the cursor is even read, and a
+    // cold store is what makes that visible. Without the guard an empty
+    // response seeds the cursor to "nothing minted yet", and the next response
+    // that does carry artifacts has no floor to diff against, so the whole
+    // backlog posts.
+    expect(cold.writes).toHaveLength(0);
+    expect(cold.current).toBeNull();
+
+    const warm = createMemoryStore(cursor(0));
+    await pollMints(pollDeps(createApi([]), poster, warm));
+    expect(warm.writes).toHaveLength(0);
   });
 });
 
@@ -292,6 +302,142 @@ describe("retry on send failure", () => {
     // Only the previously failed mint goes out on the retry.
     expect(embedSends(retryPoster.sends)).toHaveLength(1);
     expect(store.current?.postedArtifactIds).toContain("bad");
+  });
+});
+
+describe("an artifact the embed builders reject", () => {
+  /**
+   * `EmbedBuilder` validates through `@sapphire/shapeshift` at call time, so a
+   * relative `imageUrl` throws out of `setImage` and an over-long title out of
+   * `setTitle`. Both fields are third-party data straight off the GlyphBots
+   * API, so both are reachable in production.
+   */
+  const bad = (id: string, mintedAt: string, tokenId: number) => ({
+    ...(mintedArtifact(id, mintedAt, tokenId) as ReturnType<
+      typeof createArtifact
+    >),
+    imageUrl: "/artifacts/relative.png",
+  });
+
+  it("does not throw out of the poll", async () => {
+    const api = createApi([bad("bad", "2025-06-01T00:00:00Z", 1)]);
+
+    await expect(
+      pollMints(pollDeps(api, createMemoryPoster(), createMemoryStore(cursor(0))))
+    ).resolves.toBe(0);
+  });
+
+  it("does not stall the cursor or repost the good mint beside it", async () => {
+    const good = mintedArtifact("good", "2025-06-01T00:00:00Z", 1);
+    const artifacts = [good, bad("bad", "2025-06-02T00:00:00Z", 2)];
+    const store = createMemoryStore(cursor(0));
+    const first = createMemoryPoster();
+
+    await pollMints(pollDeps(createApi(artifacts), first, store));
+
+    // The good one went out and the cursor was written, which is the whole
+    // point: built outside the try, the bad one threw all the way out of
+    // `pollMints` and the write below never happened.
+    expect(embedSends(first.sends)).toHaveLength(1);
+    expect(store.writes).toHaveLength(1);
+    expect(store.current?.postedArtifactIds).toContain("good");
+    expect(store.current?.postedArtifactIds).not.toContain("bad");
+
+    // Five minutes later, the same payload. Without the fix this is where the
+    // good mint posted a second time, and it did so on every tick forever.
+    const second = createMemoryPoster();
+    await pollMints(pollDeps(createApi(artifacts), second, store));
+
+    expect(embedSends(second.sends)).toHaveLength(0);
+  });
+
+  it("treats the failure as a failed send, so the cursor stays behind it", async () => {
+    const store = createMemoryStore(cursor(0));
+    const artifacts = [
+      mintedArtifact("good", "2025-06-01T00:00:00Z", 1),
+      bad("bad", "2025-06-02T00:00:00Z", 2),
+    ];
+
+    await pollMints(pollDeps(createApi(artifacts), createMemoryPoster(), store));
+
+    expect(store.current?.lastMintedAtMs).toBeLessThanOrEqual(
+      new Date("2025-06-02T00:00:00Z").getTime()
+    );
+    expect(
+      selectNewMints(artifacts, store.current ?? cursor(null)).map((a) => a.id)
+    ).toEqual(["bad"]);
+  });
+});
+
+describe("a burst summary that does not reach Discord", () => {
+  const burst = Array.from({ length: 8 }, (_, i) =>
+    mintedArtifact(
+      `burst-${i}`,
+      new Date(Date.UTC(2025, 5, i + 1)).toISOString(),
+      100 + i
+    )
+  );
+
+  /** Fails only the summary line, which is the send carrying `content`. */
+  const summaryFails = () => {
+    const poster = createMemoryPoster();
+    poster.send.mockImplementation((body: RESTPostAPIChannelMessageJSONBody) =>
+      body.content === undefined
+        ? Promise.resolve()
+        : Promise.reject(new Error("discord 500"))
+    );
+    return poster;
+  };
+
+  it("does not mark the summarized mints as posted", async () => {
+    const store = createMemoryStore(cursor(0));
+
+    await pollMints(pollDeps(createApi(burst), summaryFails(), store));
+
+    // Three mints were only ever going to be represented by that one line. It
+    // did not go out, so nothing has told the channel about them.
+    for (const id of ["burst-0", "burst-1", "burst-2"]) {
+      expect(store.current?.postedArtifactIds).not.toContain(id);
+    }
+    for (let i = 3; i < 8; i++) {
+      expect(store.current?.postedArtifactIds).toContain(`burst-${i}`);
+    }
+  });
+
+  it("holds the cursor back so they are selectable again", async () => {
+    const store = createMemoryStore(cursor(0));
+
+    await pollMints(pollDeps(createApi(burst), summaryFails(), store));
+
+    expect(store.current?.lastMintedAtMs).toBeLessThanOrEqual(
+      Date.UTC(2025, 5, 1)
+    );
+    expect(
+      selectNewMints(burst, store.current ?? cursor(null)).map((a) => a.id)
+    ).toEqual(["burst-0", "burst-1", "burst-2"]);
+  });
+
+  it("posts them individually on the retry", async () => {
+    const store = createMemoryStore(cursor(0));
+
+    await pollMints(pollDeps(createApi(burst), summaryFails(), store));
+
+    const retry = createMemoryPoster();
+    await pollMints(pollDeps(createApi(burst), retry, store));
+
+    expect(embedSends(retry.sends)).toHaveLength(3);
+    expect(contentSends(retry.sends)).toHaveLength(0);
+    for (let i = 0; i < 8; i++) {
+      expect(store.current?.postedArtifactIds).toContain(`burst-${i}`);
+    }
+  });
+
+  it("still counts only the mints posted individually", async () => {
+    const posted = await pollMints(
+      pollDeps(createApi(burst), summaryFails(), createMemoryStore(cursor(0)))
+    );
+
+    expect(posted).toBe(5);
   });
 });
 

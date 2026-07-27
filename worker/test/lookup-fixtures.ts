@@ -130,7 +130,7 @@ export const createLookupClients = (options: FakeClientOptions = {}) => {
     fetchAccountNFTs,
     fetchCollectionEvents: vi.fn(() => Promise.resolve([])),
     fetchCollectionEventsSince: vi.fn(() =>
-      Promise.resolve({ events: [], pages: 1, failed: false })
+      Promise.resolve({ events: [], pages: 1, failed: false, truncated: false })
     ),
     fetchCollectionStats,
     fetchListings: vi.fn(() => Promise.resolve([])),

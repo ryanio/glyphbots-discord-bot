@@ -179,6 +179,17 @@ const STALE_MS = 90_000;
 /** Resume failures in a row before the log goes loud. */
 const RESUME_FAILURE_ALARM = 3;
 
+/**
+ * How long a connect already under way is trusted before another caller is
+ * allowed to start its own.
+ *
+ * A connect settles in well under a second, so this is only ever reached by an
+ * `await fetch` that never came back. Without the escape hatch, one of those
+ * would sit in front of every reconnect path forever, which is the "looks
+ * healthy, answers nothing" failure the watchdog exists to break.
+ */
+const CONNECT_WEDGE_MS = 60_000;
+
 /** Minimal frame envelope. Anything else on the frame is ignored. */
 type GatewayFrame = {
   op: number;
@@ -247,6 +258,20 @@ export class GatewayDO implements DurableObject {
    * resident: see the hibernation note at the top of this file.
    */
   private liveWs: WebSocket | null = null;
+  /**
+   * The connect currently in flight, if there is one. Callers join it rather
+   * than starting a second.
+   *
+   * `liveWs` cannot do this job. It is only assigned once the upgrade `fetch`
+   * has resolved, so through the whole connect it is null, and a Durable
+   * Object's input gate closes around storage operations, not around an
+   * `await fetch`. An alarm firing while `handleHealthTick` was mid-connect
+   * therefore sailed past the `liveWs` check and opened a second socket. Both
+   * sockets keep their listeners, so every MESSAGE_CREATE was handled twice
+   * and every inline lookup answered twice.
+   */
+  private connectInFlight: Promise<void> | null = null;
+  private connectStartedAt = 0;
   private readonly limiter: RateLimiter = createRateLimiter();
 
   constructor(state: DurableObjectState, env: WorkerEnv) {
@@ -414,8 +439,14 @@ export class GatewayDO implements DurableObject {
     }
 
     const s = await this.readState();
+    // `reconnectAttempt` counts closes already handled, so it indexes the step
+    // this close should wait, and the first close after a READY takes
+    // `BACKOFF_MS[0]`. Incrementing before indexing skipped that first step,
+    // making the first reconnect wait 2s and leaving `BACKOFF_MS[0]`
+    // unreachable from this path, against a README that documents 1s.
+    const step = Math.min(s.reconnectAttempt, BACKOFF_MS.length - 1);
+    const delay = BACKOFF_MS[step] ?? 60_000;
     const attempt = Math.min(s.reconnectAttempt + 1, BACKOFF_MS.length - 1);
-    const delay = BACKOFF_MS[attempt] ?? 60_000;
 
     await this.patchState({
       wsState: "reconnecting",
@@ -431,7 +462,9 @@ export class GatewayDO implements DurableObject {
         : {}),
     });
 
-    log.info(`reconnect scheduled in ${delay}ms (attempt ${attempt + 1})`);
+    log.info(
+      `reconnect scheduled in ${delay}ms (consecutive close ${step + 1})`
+    );
     await this.state.storage.setAlarm(Date.now() + delay);
   }
 
@@ -439,9 +472,26 @@ export class GatewayDO implements DurableObject {
    * Two duties: heartbeat while live, reconnect while not. A null `liveWs`
    * always means reconnect, whatever the stored state claims, because the
    * stored state can outlive the isolate that held the socket.
+   *
+   * `failed` is tested before that rule, and the order is load-bearing.
+   * `handleSocketClose` nulls `liveWs` before it writes `failed`, so the two
+   * conditions always arrive together; with the null-socket branch first, the
+   * `failed` branch could never be reached and a 4014 reconnected in a loop
+   * against a permission only a human can restore. `clearAlarm` in
+   * `handleSocketClose` was the only thing holding that back, and it loses the
+   * race against the alarm `onHello` schedules moments before the IDENTIFY
+   * that earns the 4014.
    */
   async alarm(): Promise<void> {
     const s = await this.readState();
+
+    if (s.wsState === "failed") {
+      log.warn(
+        `alarm while parked in failed (${s.failureReason}), staying parked. Only /_admin/gateway/connect restarts this.`
+      );
+      await this.clearAlarm();
+      return;
+    }
 
     if (
       s.wsState === "reconnecting" ||
@@ -450,10 +500,6 @@ export class GatewayDO implements DurableObject {
     ) {
       log.info(`alarm: reopening (wsState=${s.wsState})`);
       await this.openGateway();
-      return;
-    }
-
-    if (s.wsState === "failed") {
       return;
     }
 
@@ -649,26 +695,42 @@ export class GatewayDO implements DurableObject {
     }
 
     if (frame.t === "MESSAGE_CREATE") {
-      // The gates run before the state write so ordinary chatter in channels
-      // this bot does not serve never touches storage.
-      const handled = await this.onMessageCreate(frame.d, s);
-      if (handled) {
-        await this.patchState(patch);
-      }
+      // The sequence is written down first, before any of the lookup work, and
+      // on every message rather than only answered ones.
+      //
+      // `sendResume` replays from `lastSeq`. A sequence that only advanced on
+      // answered lookups asked Discord to replay from the last *answer*,
+      // possibly hours of chatter earlier: the answered lookup comes back down
+      // the wire and is answered a second time (nothing dedupes by message id),
+      // and a sequence far enough behind earns `op=9 INVALID_SESSION` and the
+      // full re-IDENTIFY the resume path exists to avoid.
+      //
+      // Writing before the answer rather than after also picks the safer side
+      // of a crash: a message whose sequence landed but whose reply did not is
+      // silently missed, where the other order would post the same embeds
+      // twice after the RESUME.
+      //
+      // The write this skips is one state write per message. The expensive
+      // work is still gated inside `onMessageCreate`: the cross-DO idle clock
+      // write only happens for human messages in `#general`, and the lookup's
+      // upstream calls only for a parsed match in a served channel.
+      await this.patchState(patch);
+      await this.onMessageCreate(frame.d, s);
       return;
     }
 
     await this.patchState(patch);
   }
 
-  /** Returns true when the message got as far as being answered. */
-  private async onMessageCreate(
-    raw: unknown,
-    s: GatewayState
-  ): Promise<boolean> {
+  /**
+   * The idle clock and the lookup path for one message. The caller has already
+   * recorded the sequence number, so nothing here decides whether it is worth
+   * writing state; the gates below only decide how much work to do.
+   */
+  private async onMessageCreate(raw: unknown, s: GatewayState): Promise<void> {
     const message = parseMessageCreate(raw);
     if (!message) {
-      return false;
+      return;
     }
 
     // Before the lookup gates, and independent of them: any human line in
@@ -678,7 +740,10 @@ export class GatewayDO implements DurableObject {
       await this.recordHumanActivity();
     }
 
-    const outcome = await handleLookupMessage(message, {
+    // The outcome is dropped on purpose: it no longer gates a state write, and
+    // `handleLookupMessage` already logs the cases worth hearing about (an
+    // answer, a rate limit, a failed send).
+    await handleLookupMessage(message, {
       clients: {
         glyphbots: createGlyphBotsClient(this.env),
         opensea: createOpenSeaClient(this.env),
@@ -695,8 +760,6 @@ export class GatewayDO implements DurableObject {
         ).send(body);
       },
     });
-
-    return outcome === "answered";
   }
 
   /**
@@ -766,7 +829,41 @@ export class GatewayDO implements DurableObject {
 
   // ── Connect ──────────────────────────────────────────────────────────────
 
-  private async openGateway(): Promise<void> {
+  /**
+   * The only way to open a socket. Everything funnels through here so the
+   * in-flight guard cannot be skipped: `handleConnect` checks `wsState`, but
+   * `alarm` and `handleHealthTick` do not, and `wsState` is a poor guard
+   * anyway because it is not written until the connect is already under way.
+   *
+   * The guard is set synchronously, before `connectOnce` reaches its first
+   * `await`, which is what makes it cover the `await fetch` that `liveWs`
+   * cannot. A second caller joins the connect already running and observes the
+   * same outcome.
+   */
+  private openGateway(): Promise<void> {
+    const inFlight = this.connectInFlight;
+    if (inFlight) {
+      if (Date.now() - this.connectStartedAt < CONNECT_WEDGE_MS) {
+        log.info("connect already in flight, joining it");
+        return inFlight;
+      }
+      // Past a minute the reference is abandoned rather than joined. That is
+      // the behaviour from before the guard existed, and it is only reachable
+      // in a case that is already broken.
+      log.warn("connect has been in flight for over a minute, starting another");
+    }
+
+    const attempt = this.connectOnce().finally(() => {
+      if (this.connectInFlight === attempt) {
+        this.connectInFlight = null;
+      }
+    });
+    this.connectInFlight = attempt;
+    this.connectStartedAt = Date.now();
+    return attempt;
+  }
+
+  private async connectOnce(): Promise<void> {
     if (this.liveWs) {
       // A lingering reference means a caller skipped `closeSocket`. Drop it
       // before attaching listeners to a new socket, or the old listeners keep
@@ -783,6 +880,12 @@ export class GatewayDO implements DurableObject {
       });
       return;
     }
+
+    // Written before discovery rather than just before the upgrade, so that
+    // `wsState` is honest for the whole connect. `handleConnect`'s guard and
+    // the watchdog's `lostSocket` check both read it, and both were wrong
+    // while the `/gateway/bot` call was outstanding.
+    await this.patchState({ wsState: "connecting" });
 
     const stored = await this.readState();
     let url: string;
@@ -808,8 +911,6 @@ export class GatewayDO implements DurableObject {
       .replace(WSS_PREFIX_RE, "https://")
       .replace(WS_PREFIX_RE, "http://");
     const wsUrl = `${httpUrl.replace(/\/$/, "")}${GATEWAY_QUERY}`;
-
-    await this.patchState({ wsState: "connecting" });
 
     try {
       const response = await fetch(wsUrl, {

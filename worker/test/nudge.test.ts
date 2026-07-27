@@ -338,6 +338,45 @@ describe("one idle check", () => {
     expect(store.current?.lastNudgeKind).toBe("stat");
   });
 
+  it("falls through to the next kind when the first one throws", async () => {
+    // Two ways `buildNudgePost` throws and neither is exotic: the embed
+    // builders validate at call time, and `nudge-content.ts` wraps none of its
+    // API calls. Unwrapped, the throw abandoned the tick and the fallback
+    // kind, which exists for exactly this, was never reached.
+    const clients = createLookupClients({
+      recentArtifacts: [createLookupArtifact(5)],
+      artifacts: { 5: createLookupArtifact(5) },
+    });
+    clients.fetchBot.mockRejectedValueOnce(new Error("glyphbots 500"));
+
+    const store = createMemoryIdleStore(
+      idleState({ lastHumanMessageAtMs: NOW - 49 * HOUR_MS })
+    );
+    const { deps, poster } = nudgeDeps(store, { clients });
+
+    expect(await runIdleNudge(deps)).toBe("posted");
+    expect(poster.sends).toHaveLength(1);
+    // "bot" was the kind due and it threw; "artifact" is next along.
+    expect(store.current?.lastNudgeKind).toBe("artifact");
+  });
+
+  it("gives up quietly when both kinds throw", async () => {
+    const clients = createLookupClients();
+    clients.fetchBot.mockRejectedValue(new Error("glyphbots 500"));
+    clients.fetchRecentArtifacts.mockRejectedValue(new Error("glyphbots 500"));
+
+    const store = createMemoryIdleStore(
+      idleState({ lastHumanMessageAtMs: NOW - 49 * HOUR_MS })
+    );
+    const { deps, poster } = nudgeDeps(store, { clients });
+
+    expect(await runIdleNudge(deps)).toBe("no-content");
+    expect(poster.sends).toHaveLength(0);
+    // Nothing was posted, so no cooldown was bought and the next hourly check
+    // tries again.
+    expect(store.current?.lastNudgeAtMs).toBeNull();
+  });
+
   it("records nothing when Discord rejects the post", async () => {
     const store = createMemoryIdleStore(
       idleState({ lastHumanMessageAtMs: NOW - 49 * HOUR_MS })

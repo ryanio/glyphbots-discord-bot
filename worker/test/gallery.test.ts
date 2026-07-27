@@ -211,6 +211,47 @@ describe("one gallery tick", () => {
     expect(poster.sends).toHaveLength(0);
   });
 
+  it("spends the rest of its attempts when a build throws", async () => {
+    // The retry loop is there because a random pick can be a burned bot or an
+    // artifact the embed builders reject. Returning out of the catch spent the
+    // whole three-attempt budget on the first bad draw.
+    const fake = createLookupClients();
+    fake.fetchBot.mockRejectedValueOnce(new Error("glyphbots 500"));
+    const poster = createMemoryPoster();
+
+    const outcome = await postGalleryItem({
+      clients: fake.clients,
+      poster,
+      store: quietFor(48),
+      now: () => NOW,
+      randomInt: () => 1234,
+    });
+
+    expect(outcome).toBe("posted");
+    expect(poster.sends).toHaveLength(1);
+    expect(fake.fetchBot).toHaveBeenCalledTimes(2);
+  });
+
+  it("gives up after three throwing attempts, without posting", async () => {
+    const fake = createLookupClients();
+    fake.fetchBot.mockRejectedValue(new Error("glyphbots 500"));
+    const poster = createMemoryPoster();
+    const store = quietFor(48);
+
+    const outcome = await postGalleryItem({
+      clients: fake.clients,
+      poster,
+      store,
+      now: () => NOW,
+      randomInt: () => 1234,
+    });
+
+    expect(outcome).toBe("no-content");
+    expect(poster.sends).toHaveLength(0);
+    expect(fake.fetchBot).toHaveBeenCalledTimes(3);
+    expect(store.current?.lastGalleryAtMs).toBeNull();
+  });
+
   it("does not buy a day of silence when the send fails", async () => {
     const fake = createLookupClients();
     const store = quietFor(48);

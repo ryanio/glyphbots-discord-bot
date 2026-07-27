@@ -35,6 +35,8 @@ import type { ArtifactSummary, OpenSeaCollectionStats } from "../api/types";
 import { artifactButtons, buildArtifactEmbed } from "../commands/artifact";
 import { botButtons, buildBotEmbed } from "../commands/bot";
 import {
+  ethFloorPrice,
+  finiteNumber,
   formatEthStat,
   formatNumber,
   formatTraitLine,
@@ -137,10 +139,6 @@ export type CollectionFact = {
   source: FactSource;
 };
 
-/** Guard against a response that typechecks but carries a hole. */
-const finite = (value: number | undefined): number | null =>
-  typeof value === "number" && Number.isFinite(value) ? value : null;
-
 const plural = (count: number, word: string): string =>
   count === 1 ? word : `${word}s`;
 
@@ -152,7 +150,8 @@ const plural = (count: number, word: string): string =>
  * reads as bad news for no reason. A floor is only quoted when OpenSea says it
  * is denominated in ETH, because `formatEthStat` writes the unit in and a floor
  * quoted in the wrong currency would be a false statement rather than a
- * formatting slip.
+ * formatting slip. That rule and the missing-number guard both live in
+ * `../commands/format.ts` now, so `/floor` applies the same ones.
  */
 export const collectionFacts = (
   stats: OpenSeaCollectionStats | null,
@@ -163,15 +162,11 @@ export const collectionFacts = (
 
   if (stats?.total) {
     const { total, intervals } = stats;
-    const symbol = total.floor_price_symbol;
-    const floor =
-      symbol === undefined || symbol === "" || symbol === "ETH"
-        ? finite(total.floor_price)
-        : null;
-    const volume = finite(total.volume);
-    const sales = finite(total.sales);
-    const owners = finite(total.num_owners);
-    const average = finite(total.average_price);
+    const floor = ethFloorPrice(total);
+    const volume = finiteNumber(total.volume);
+    const sales = finiteNumber(total.sales);
+    const owners = finiteNumber(total.num_owners);
+    const average = finiteNumber(total.average_price);
 
     if (floor !== null && floor > 0) {
       facts.push({
@@ -202,7 +197,7 @@ export const collectionFacts = (
     }
 
     const oneDay = intervals?.find((entry) => entry.interval === "one_day");
-    const oneDaySales = finite(oneDay?.sales);
+    const oneDaySales = finiteNumber(oneDay?.sales);
     if (oneDaySales !== null && oneDaySales > 0) {
       facts.push({
         source: "OpenSea",
@@ -211,8 +206,8 @@ export const collectionFacts = (
     }
 
     const sevenDay = intervals?.find((entry) => entry.interval === "seven_day");
-    const sevenDaySales = finite(sevenDay?.sales);
-    const sevenDayVolume = finite(sevenDay?.volume);
+    const sevenDaySales = finiteNumber(sevenDay?.sales);
+    const sevenDayVolume = finiteNumber(sevenDay?.volume);
     if (
       sevenDaySales !== null &&
       sevenDaySales > 0 &&

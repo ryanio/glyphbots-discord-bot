@@ -67,10 +67,19 @@ export type EventsSincePage = {
   pages: number;
   /**
    * True when a request came back empty because it failed rather than because
-   * there was nothing there. The caller must not advance its cursor on a
-   * truncated sweep.
+   * there was nothing there. The caller must not advance its cursor at all.
    */
   failed: boolean;
+  /**
+   * True when the page budget ran out with more still behind the last cursor.
+   *
+   * This is not the same as `failed` and the difference matters: the sweep
+   * succeeded, it just did not finish. OpenSea serves newest first, so the
+   * events it never reached are the OLDEST in the window, and a caller that
+   * advances its cursor to the newest event it saw steps straight over them.
+   * See `advanceSalesCursor` in `../channels/sales.ts`.
+   */
+  truncated: boolean;
 };
 
 export type OpenSeaClient = {
@@ -160,6 +169,10 @@ export const createOpenSeaClient = (
    * the limit (there is nothing behind it), stop when the API hands back the
    * cursor it was just given (it does), and stop at `maxPages` regardless.
    *
+   * Only the first two mean "that was all of it". The third means "there is
+   * more and I ran out of budget", which is why it is reported separately as
+   * `truncated` rather than being indistinguishable from a finished sweep.
+   *
    * One deliberate difference. The Node version builds the next URL as
    * `${getEvents()}?${result.next}`, treating `next` as an entire query string,
    * which drops `after` and the event type filters on every page after the
@@ -185,8 +198,8 @@ export const createOpenSeaClient = (
 
     const collected: OpenSeaEvent[] = [];
     let cursor: string | undefined;
-    let previousCursor: string | undefined;
     let pages = 0;
+    let truncated = false;
 
     while (pages < maxPages) {
       const params = baseParams();
@@ -199,18 +212,33 @@ export const createOpenSeaClient = (
 
       if (!page) {
         log.warn(`Events page ${pages} failed, stopping the sweep here`);
-        return { events: collected.reverse(), pages, failed: true };
+        return {
+          events: collected.reverse(),
+          pages,
+          failed: true,
+          truncated: false,
+        };
       }
 
       const batch = page.asset_events ?? [];
       collected.push(...batch);
 
-      if (batch.length < limit || !page.next || page.next === previousCursor) {
+      // `cursor` is what this request carried, so `page.next === cursor` is the
+      // API handing back the cursor it was just given. Comparing against the
+      // cursor from the request before that made this an A-B-A detector that
+      // fired a page late and collected the same batch twice.
+      if (batch.length < limit || !page.next || page.next === cursor) {
         break;
       }
 
-      previousCursor = cursor;
       cursor = page.next;
+
+      if (pages >= maxPages) {
+        truncated = true;
+        log.warn(
+          `Events sweep stopped at the ${maxPages} page ceiling with more behind it; the oldest events in this window were not fetched`
+        );
+      }
     }
 
     if (pages > 1) {
@@ -219,7 +247,7 @@ export const createOpenSeaClient = (
 
     // OpenSea serves newest first. The feed posts chronologically, and the
     // cursor is the max timestamp handled, so reverse once here.
-    return { events: collected.reverse(), pages, failed: false };
+    return { events: collected.reverse(), pages, failed: false, truncated };
   };
 
   return {

@@ -409,6 +409,86 @@ describe("/floor", () => {
       "—"
     );
   });
+
+  it("does not quote a non-ETH floor as ETH", async () => {
+    // `formatEthStat` writes the unit into the string, so printing a floor
+    // denominated in anything else states something untrue. Same rule the idle
+    // nudge's `collectionFacts` already applied, now shared.
+    const stats = createStats();
+    stats.total.floor_price_symbol = "SOL";
+    const ctx = commandContext({
+      opensea: stubOpenSea({
+        fetchCollectionStats: vi.fn(() => Promise.resolve(stats)),
+      }),
+    });
+
+    const embed = firstEmbed(await handleFloor(ctx));
+    expect(embed.fields?.[0]).toMatchObject({
+      name: "💎 Floor Price",
+      value: "—",
+    });
+    // And the rest of the answer is unaffected.
+    expect(embed.fields?.find((f) => f.name === "👥 Owners")?.value).toBe(
+      "2.1K"
+    );
+  });
+
+  it("still quotes the floor when the symbol is absent", async () => {
+    const stats = createStats();
+    stats.total.floor_price_symbol = undefined as unknown as string;
+    const ctx = commandContext({
+      opensea: stubOpenSea({
+        fetchCollectionStats: vi.fn(() => Promise.resolve(stats)),
+      }),
+    });
+
+    expect(firstEmbed(await handleFloor(ctx)).fields?.[0]?.value).toBe(
+      "0.0450 ETH"
+    );
+  });
+
+  it("degrades to a partial answer when the response has holes", async () => {
+    // The declared types say every one of these is a required number. A
+    // partial index at OpenSea says otherwise, and each of them used to reach
+    // `toFixed` or `toLocaleString` on `undefined` and throw the handler.
+    const ctx = commandContext({
+      opensea: stubOpenSea({
+        fetchCollectionStats: vi.fn(() =>
+          Promise.resolve({
+            total: { volume: 10 },
+            intervals: [{ interval: "one_day", sales: 4 }],
+          } as never)
+        ),
+      }),
+    });
+
+    const embed = firstEmbed(await handleFloor(ctx));
+    const value = (name: string) =>
+      embed.fields?.find((f) => f.name === name)?.value;
+
+    expect(embed.fields).toHaveLength(9);
+    expect(value("📈 Total Volume")).toBe("10.00 ETH");
+    expect(value("📊 24h Sales")).toBe("4");
+    expect(value("💎 Floor Price")).toBe("—");
+    expect(value("👥 Owners")).toBe("—");
+    expect(value("🏷️ Avg Price")).toBe("—");
+    expect(value("📊 Total Sales")).toBe("—");
+    expect(value("📈 30d Sales")).toBe("—");
+  });
+
+  it("survives a response with no total or intervals at all", async () => {
+    const ctx = commandContext({
+      opensea: stubOpenSea({
+        fetchCollectionStats: vi.fn(() => Promise.resolve({} as never)),
+      }),
+    });
+
+    const embed = firstEmbed(await handleFloor(ctx));
+    expect(embed.fields).toHaveLength(9);
+    for (const field of embed.fields ?? []) {
+      expect(field.value).toBe("—");
+    }
+  });
 });
 
 describe("the remaining four", () => {
@@ -429,6 +509,39 @@ describe("the remaining four", () => {
     expect(firstEmbed(await handleSales(commandContext())).title).toBe(
       "📉 No Recent Sales"
     );
+  });
+
+  it("/sales omits the link when the event carries no token id", async () => {
+    // The id used to fall back to the string "?", and `Number("?")` is NaN, so
+    // the line linked to `/bot/NaN`.
+    const ctx = commandContext({
+      opensea: stubOpenSea({
+        fetchCollectionEvents: vi.fn(() =>
+          Promise.resolve([createSaleEvent({ nft: undefined })])
+        ),
+      }),
+    });
+
+    const embed = firstEmbed(await handleSales(ctx));
+    expect(embed.description).not.toContain("NaN");
+    expect(embed.description).not.toContain("](");
+    expect(embed.description).toContain("**1.** GlyphBot → 0.5000 ETH");
+  });
+
+  it("/sales omits the link when the token id is not a number", async () => {
+    const ctx = commandContext({
+      opensea: stubOpenSea({
+        fetchCollectionEvents: vi.fn(() =>
+          Promise.resolve([
+            createSaleEvent({ nft: { identifier: "not-a-number" } }),
+          ])
+        ),
+      }),
+    });
+
+    const embed = firstEmbed(await handleSales(ctx));
+    expect(embed.description).not.toContain("NaN");
+    expect(embed.description).not.toContain("](");
   });
 
   it("/listings lists price and seller", async () => {
@@ -499,6 +612,88 @@ describe("the remaining four", () => {
     expect(embed.description).toContain("**Head:** Antenna");
     expect(embed.description).not.toContain("Aura");
     expect(embed.thumbnail?.url).toBe(`${TEST_ORIGIN}/bots/pngs/7.png`);
+  });
+
+  it("/rarity says nothing about rank when OpenSea has none", async () => {
+    // `?? 0` made an unranked bot rank zero, `percentileOf(0)` is 0, and 0
+    // clears every threshold in the table, so the user was told an unranked
+    // bot was "Legendary (Top 1%)". Both other readers of this field already
+    // refuse a missing or non-positive rank.
+    const ctx = commandContext({
+      opensea: stubOpenSea({
+        fetchNFT: vi.fn(() =>
+          Promise.resolve(
+            createNFT({
+              rarity: undefined,
+              traits: [
+                {
+                  trait_type: "Head",
+                  value: "Antenna",
+                  display_type: null,
+                  max_value: null,
+                },
+              ],
+            })
+          )
+        ),
+      }),
+      options: readOptions([intOption("bot", 7)]),
+    });
+
+    const embed = firstEmbed(await handleRarity(ctx));
+
+    expect(embed.description).not.toContain("Legendary");
+    expect(embed.description).not.toContain("Rarity Rank");
+    expect(embed.description).not.toContain("Tier");
+    expect(embed.description).not.toContain("#0");
+    expect(embed.title).toBe("GlyphBot #7");
+    // The traits it does have still show.
+    expect(embed.description).toContain("**Head:** Antenna");
+    expect(embed.thumbnail?.url).toBe(`${TEST_ORIGIN}/bots/pngs/7.png`);
+  });
+
+  it("/rarity treats a zero rank as no rank", async () => {
+    const ctx = commandContext({
+      opensea: stubOpenSea({
+        fetchNFT: vi.fn(() =>
+          Promise.resolve(
+            createNFT({
+              rarity: { strategy_id: "openrarity", strategy_version: "1", rank: 0 },
+              traits: [
+                {
+                  trait_type: "Head",
+                  value: "Antenna",
+                  display_type: null,
+                  max_value: null,
+                },
+              ],
+            })
+          )
+        ),
+      }),
+      options: readOptions([intOption("bot", 7)]),
+    });
+
+    const embed = firstEmbed(await handleRarity(ctx));
+    expect(embed.description).toBe("**Traits:**\n**Head:** Antenna");
+    expect(embed.title).toBe("GlyphBot #7");
+  });
+
+  it("/rarity answers at all for an unranked bot with no traits", async () => {
+    // An empty description is rejected by the builder, so this is the case
+    // where omitting the rank lines could have thrown instead.
+    const ctx = commandContext({
+      opensea: stubOpenSea({
+        fetchNFT: vi.fn(() =>
+          Promise.resolve(createNFT({ rarity: undefined, traits: [] }))
+        ),
+      }),
+      options: readOptions([intOption("bot", 7)]),
+    });
+
+    const embed = firstEmbed(await handleRarity(ctx));
+    expect(embed.title).toBe("GlyphBot #7");
+    expect(embed.description).toBeUndefined();
   });
 
   it("/activity formats each event kind and thumbnails the PNG", async () => {
