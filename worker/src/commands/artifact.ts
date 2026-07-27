@@ -38,9 +38,13 @@ export const buildArtifactEmbed = async (
   artifact: Artifact,
   glyphbots: GlyphBotsClient
 ): Promise<EmbedBuilder> => {
+  // `setTitle(null)` is accepted and drops the title, which also drops the
+  // link `setURL` puts on it, so an untitled artifact used to post as an
+  // unclickable embed. `setTitle("")` throws outright. A truthy fallback
+  // covers both, and the token id is already its own field below.
   const embed = new EmbedBuilder()
     .setColor(COLORS.artifact)
-    .setTitle(artifact.title);
+    .setTitle(artifact.title || "Artifact");
 
   if (artifact.contractTokenId) {
     embed.setURL(glyphbots.getArtifactUrl(artifact.contractTokenId));
@@ -148,7 +152,9 @@ const resolveArtifact = async (
       };
     }
 
-    log.info(`Random artifact: ${pick.title} (#${pick.contractTokenId})`);
+    log.info(
+      `Random artifact: ${pick.title || "Artifact"} (#${pick.contractTokenId})`
+    );
     return { artifact: pick };
   }
 

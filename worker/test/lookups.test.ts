@@ -415,6 +415,26 @@ describe("handling one message", () => {
     );
   });
 
+  it("titles an untitled artifact rather than dropping the heading", async () => {
+    // `setTitle(null)` is accepted and drops the title, and the link rides on
+    // the title, so an untitled artifact answered with an unclickable embed.
+    const fake = createLookupClients({
+      artifacts: { 4: createArtifact({ contractTokenId: 4, title: null }) },
+    });
+    const send = createSend();
+
+    await handleLookupMessage(message({ content: "a#4" }), {
+      clients: fake.clients,
+      limiter: createRateLimiter({ cooldownMs: 0 }),
+      send,
+      selfUserId: "self-bot",
+    });
+
+    const [, body] = firstCall(send);
+    expect(body.embeds[0]?.title).toBe("Artifact");
+    expect(body.embeds[0]?.url).toBe("https://www.glyphbots.com/artifact/4");
+  });
+
   it("renders traits on one line, the same shape /bot uses", async () => {
     const fake = createLookupClients({
       bots: {

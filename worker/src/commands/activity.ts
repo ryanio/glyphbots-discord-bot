@@ -73,7 +73,9 @@ export const handleActivity: CommandHandler = async (ctx) => {
     );
   }
 
-  const nftName = events[0]?.nft?.name ?? `GlyphBot #${tokenId}`;
+  // Truthy, not nullish: OpenSea sends `name: ""` for a token it has not
+  // finished indexing, which left the title reading "📊 Activity: ".
+  const nftName = events[0]?.nft?.name || `GlyphBot #${tokenId}`;
 
   const embed = new EmbedBuilder()
     .setColor(COLORS.activity)

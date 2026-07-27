@@ -14,6 +14,7 @@ import { handleArtifact } from "../src/commands/artifact";
 import { handleBot } from "../src/commands/bot";
 import { readOptions } from "../src/commands/context";
 import { handleFloor } from "../src/commands/floor";
+import { formatEthAmount } from "../src/commands/format";
 import { handleListings } from "../src/commands/listings";
 import { handleOwner } from "../src/commands/owner";
 import { handleRarity } from "../src/commands/rarity";
@@ -35,6 +36,7 @@ import {
   createStats,
   createStory,
   intOption,
+  partialListing,
   partialStats,
   stringOption,
   stubOpenSea,
@@ -296,6 +298,43 @@ describe("/artifact", () => {
     expect(embed.fields?.find((f) => f.name === "Origin Bot")?.value).toBe(
       `[Wanderer](${TEST_ORIGIN}/bot/7)`
     );
+  });
+
+  it("titles an untitled artifact rather than dropping the heading", async () => {
+    // `setTitle(null)` is accepted and silently drops the title, and the URL
+    // rides on the title, so the whole embed used to lose its link.
+    const ctx = commandContext({
+      glyphbots: stubGlyphBots({
+        fetchArtifact: vi.fn(() =>
+          Promise.resolve(createArtifact({ contractTokenId: 175, title: null }))
+        ),
+        fetchBot: vi.fn(() => Promise.resolve(createBot())),
+      }),
+      options: readOptions([intOption("id", 175)]),
+    });
+
+    const embed = firstEmbed(await handleArtifact(ctx));
+
+    expect(embed.title).toBe("Artifact");
+    expect(embed.url).toBe(`${TEST_ORIGIN}/artifact/175`);
+    expect(embed.fields?.find((f) => f.name === "Token ID")?.value).toBe(
+      "#175"
+    );
+  });
+
+  it("titles an artifact whose title came back empty", async () => {
+    // `setTitle("")` throws, which took the command down entirely.
+    const ctx = commandContext({
+      glyphbots: stubGlyphBots({
+        fetchArtifact: vi.fn(() =>
+          Promise.resolve(createArtifact({ title: "" }))
+        ),
+        fetchBot: vi.fn(() => Promise.resolve(createBot())),
+      }),
+      options: readOptions([intOption("id", 12)]),
+    });
+
+    expect(firstEmbed(await handleArtifact(ctx)).title).toBe("Artifact");
   });
 
   it("uses the first-party artifact image and never touches OpenSea", async () => {
@@ -569,6 +608,48 @@ describe("the remaining four", () => {
     );
   });
 
+  it("/listings skips a listing with no price and keeps the rest", async () => {
+    // The declared type says price and offerer are always there. A listing
+    // caught mid-cancellation says otherwise, and the deep read used to throw
+    // rather than costing one row.
+    const ctx = commandContext({
+      opensea: stubOpenSea({
+        fetchListings: vi.fn(() =>
+          Promise.resolve([
+            partialListing({
+              protocol_data: { parameters: { offerer: "0x1" } },
+            }),
+            createListing(),
+          ])
+        ),
+      }),
+    });
+
+    const embed = firstEmbed(await handleListings(ctx));
+    // The good listing is row one, and the skipped one leaves no gap.
+    expect(embed.description).toContain("**1.** 0.0450 ETH");
+    expect(embed.description).not.toContain("**2.**");
+    expect(embed.description).not.toContain("NaN");
+  });
+
+  it("/listings skips a listing with no seller", async () => {
+    const ctx = commandContext({
+      opensea: stubOpenSea({
+        fetchListings: vi.fn(() =>
+          Promise.resolve([
+            partialListing({
+              price: { current: { currency: "ETH", decimals: 18, value: "1" } },
+            }),
+          ])
+        ),
+      }),
+    });
+
+    expect(firstEmbed(await handleListings(ctx)).title).toBe(
+      "📋 No Active Listings"
+    );
+  });
+
   it("/owner resolves the account and thumbnails the PNG", async () => {
     const ctx = commandContext({
       opensea: stubOpenSea({
@@ -592,6 +673,76 @@ describe("the remaining four", () => {
   it("/owner reports an unknown bot", async () => {
     const ctx = commandContext({ options: readOptions([intOption("bot", 7)]) });
     expect(firstEmbed(await handleOwner(ctx)).title).toBe("❌ Bot Not Found");
+  });
+
+  it("/owner answers when the rarity object carries no rank", async () => {
+    // OpenSea sends the container with a null rank for an unranked bot. The
+    // guard used to be on the container, so reading `.toLocaleString()` off
+    // the null threw and the command answered nothing at all.
+    const ctx = commandContext({
+      opensea: stubOpenSea({
+        fetchNFT: vi.fn(() =>
+          Promise.resolve(
+            createNFT({
+              rarity: {
+                strategy_id: "openrarity",
+                strategy_version: "1",
+                rank: null as unknown as number,
+              },
+            })
+          )
+        ),
+      }),
+      options: readOptions([intOption("bot", 7)]),
+    });
+
+    const embed = firstEmbed(await handleOwner(ctx));
+    expect(embed.title).toBe("🤖 GlyphBot #7");
+    expect(embed.description).not.toContain("Rarity Rank");
+  });
+
+  it("/owner treats a zero rank as no rank", async () => {
+    const ctx = commandContext({
+      opensea: stubOpenSea({
+        fetchNFT: vi.fn(() =>
+          Promise.resolve(
+            createNFT({
+              rarity: {
+                strategy_id: "openrarity",
+                strategy_version: "1",
+                rank: 0,
+              },
+            })
+          )
+        ),
+      }),
+      options: readOptions([intOption("bot", 7)]),
+    });
+
+    expect(firstEmbed(await handleOwner(ctx)).description).not.toContain(
+      "Rarity Rank"
+    );
+  });
+
+  it("/owner escapes markdown in the username and the bio", async () => {
+    // Both are text the account holder wrote, and underscores are common.
+    const ctx = commandContext({
+      opensea: stubOpenSea({
+        fetchNFT: vi.fn(() => Promise.resolve(createNFT())),
+        fetchAccount: vi.fn(() =>
+          Promise.resolve({
+            address: "0x12",
+            username: "deep_value",
+            bio: "*bots* only",
+          })
+        ),
+      }),
+      options: readOptions([intOption("bot", 7)]),
+    });
+
+    const description = firstEmbed(await handleOwner(ctx)).description ?? "";
+    expect(description).toContain("@deep\\_value");
+    expect(description).toContain("\\*bots\\* only");
   });
 
   it("/rarity tiers the rank and thumbnails the PNG", async () => {
@@ -757,5 +908,49 @@ describe("the remaining four", () => {
     expect(firstEmbed(await handleActivity(ctx)).title).toBe(
       "📋 No Activity Found"
     );
+  });
+
+  it("/sales writes ? rather than NaN for an unreadable amount", async () => {
+    const ctx = commandContext({
+      opensea: stubOpenSea({
+        fetchCollectionEvents: vi.fn(() =>
+          Promise.resolve([
+            createSaleEvent({
+              payment: {
+                quantity: "not-a-number",
+                token_address: "0x0",
+                decimals: 18,
+                symbol: "ETH",
+              },
+            }),
+          ])
+        ),
+      }),
+    });
+
+    const embed = firstEmbed(await handleSales(ctx));
+    expect(embed.description).not.toContain("NaN");
+    expect(embed.description).toContain("→ ? (");
+  });
+});
+
+/**
+ * The one formatter with a failure mode of its own. It reads two fields off an
+ * OpenSea payment and the endpoint can leave either one unusable, which used
+ * to print "NaN ETH" in the middle of a `/sales` or `/listings` line.
+ */
+describe("formatEthAmount", () => {
+  it("scales a raw quantity", () => {
+    expect(formatEthAmount("500000000000000000", 18)).toBe("0.5000 ETH");
+  });
+
+  it("answers ? for a quantity that is not a number", () => {
+    expect(formatEthAmount("not-a-number", 18)).toBe("?");
+  });
+
+  it("answers ? when decimals is missing", () => {
+    expect(
+      formatEthAmount("500000000000000000", undefined as unknown as number)
+    ).toBe("?");
   });
 });

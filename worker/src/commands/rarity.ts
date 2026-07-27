@@ -80,7 +80,9 @@ export const handleRarity: CommandHandler = async (ctx) => {
     );
   }
 
-  const botName = nft.name ?? `GlyphBot #${tokenId}`;
+  // Truthy, not nullish: OpenSea sends `name: ""` for a token it has not
+  // finished indexing, and `setTitle("")` throws.
+  const botName = nft.name || `GlyphBot #${tokenId}`;
 
   // No rank means no rank, not rank zero. `percentileOf(0)` is 0, which clears
   // every threshold in the table, so the old `?? 0` printed "#0 / 11,111" and

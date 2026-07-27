@@ -239,6 +239,24 @@ describe("embed content", () => {
       .join(" ");
     expect(values).toContain("https://etherscan.io/tx/0xdeadbeef");
   });
+
+  it("leaves the transaction field off when there is no hash", async () => {
+    const poster = createMemoryPoster();
+    const api = createApi([
+      createArtifact({
+        id: "no-tx",
+        mintedAt: "2025-06-01T00:00:00Z",
+        contractTokenId: 89,
+        mintTxHash: undefined,
+      }),
+    ]);
+
+    await pollMints(mintPollDeps(api, poster, createMemoryStore(cursor(0))));
+
+    const fields = firstEmbedSend(poster.sends).fields ?? [];
+    expect(fields.map((f) => f.name)).not.toContain("◉ Transaction");
+    expect(fields.map((f) => f.value).join(" ")).not.toContain("etherscan");
+  });
 });
 
 describe("retry on send failure", () => {

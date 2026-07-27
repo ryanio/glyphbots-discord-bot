@@ -67,6 +67,9 @@ export const createArtifact = (overrides: Partial<Artifact> = {}): Artifact => {
     contractTokenId,
     mintQuantity: 1,
     minter: "0x1234567890abcdef1234567890abcdef12345678",
+    // Present by default, because the API summary carries it for anything that
+    // reached the chain. A test for the missing case passes `undefined`.
+    mintTxHash: `0xmint${contractTokenId}`,
     type: "image",
     ...overrides,
   };

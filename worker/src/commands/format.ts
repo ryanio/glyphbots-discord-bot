@@ -44,9 +44,19 @@ const formatEthValue = (value: number, digits = PRICE_DIGITS): string => {
   return `${value.toFixed(digits)} ETH`;
 };
 
-/** Raw on-chain quantity flavor (`src/commands/sales.ts:22` at `c75d6a8`). */
-export const formatEthAmount = (quantity: string, decimals: number): string =>
-  formatEthValue(Number(quantity) / 10 ** decimals);
+/**
+ * Raw on-chain quantity flavor (`src/commands/sales.ts:22` at `c75d6a8`).
+ *
+ * `quantity` is whatever OpenSea put in the field, so `Number` can hand back
+ * `NaN` for a malformed or absent amount, and `decimals` can be missing in the
+ * same response. Either one used to reach `toFixed` and print "NaN ETH" in the
+ * middle of a sales line. `?` is the same stand-in the sales feed's
+ * `formatAmount` uses for an unparseable quantity.
+ */
+export const formatEthAmount = (quantity: string, decimals: number): string => {
+  const value = Number(quantity) / 10 ** decimals;
+  return Number.isFinite(value) ? formatEthValue(value) : "?";
+};
 
 /** Collection stats use two decimals (`src/commands/floor.ts:27` at `c75d6a8`). */
 export const formatEthStat = (value: number): string =>

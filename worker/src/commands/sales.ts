@@ -34,8 +34,10 @@ export const handleSales: CommandHandler = async (ctx) => {
     // not linked.
     const linkable =
       rawTokenId !== undefined && Number.isFinite(Number(rawTokenId));
+    // Truthy, not nullish: OpenSea sends `name: ""` for a token it has not
+    // finished indexing, and an empty name leaves a bare arrow on the line.
     const name =
-      event.nft?.name ?? (linkable ? `GlyphBot #${rawTokenId}` : "GlyphBot");
+      event.nft?.name || (linkable ? `GlyphBot #${rawTokenId}` : "GlyphBot");
     const price = event.payment
       ? formatEthAmount(event.payment.quantity, event.payment.decimals)
       : "?";

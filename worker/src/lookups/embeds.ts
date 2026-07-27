@@ -114,9 +114,12 @@ export const buildArtifactLookupEmbed = async (
     return null;
   }
 
+  // Same fallback as `/artifact`, for the same reason: a null title is
+  // accepted by `setTitle` and takes the `setURL` link down with it, and an
+  // empty one throws. The token id has its own field below.
   const embed = new EmbedBuilder()
     .setColor(COLORS.artifact)
-    .setTitle(artifact.title)
+    .setTitle(artifact.title || "Artifact")
     .setURL(clients.glyphbots.getArtifactUrl(tokenId));
 
   const originBot = await clients.glyphbots.fetchBot(artifact.botTokenId);

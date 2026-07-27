@@ -185,6 +185,21 @@ export const createListing = (value = "45000000000000000"): OpenSeaListing => ({
 });
 
 /**
+ * A listing with holes in it, which is not what `OpenSeaListing` declares.
+ *
+ * Best-listings is the least reliable endpoint this bot reads: a listing
+ * caught mid-cancellation comes back with the wrapper and nothing under it.
+ * The cast is the point of the fixture, and taking a nested `Partial` keeps
+ * the field names checked so a test cannot pass by misspelling one.
+ */
+export const partialListing = (listing: {
+  price?: { current?: Partial<OpenSeaListing["price"]["current"]> };
+  protocol_data?: {
+    parameters?: Partial<OpenSeaListing["protocol_data"]["parameters"]>;
+  };
+}): OpenSeaListing => listing as OpenSeaListing;
+
+/**
  * Collection stats as OpenSea actually serves them on a partial index, which
  * is not what `OpenSeaCollectionStats` declares.
  *

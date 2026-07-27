@@ -334,7 +334,9 @@ const sampleNotableBot = async (
       best = {
         tokenId,
         rank,
-        name: nft.name ?? `GlyphBot #${tokenId}`,
+        // Truthy, not nullish: OpenSea sends `name: ""` for a token it has
+        // not finished indexing.
+        name: nft.name || `GlyphBot #${tokenId}`,
         traits: nft.traits ?? [],
       };
     }

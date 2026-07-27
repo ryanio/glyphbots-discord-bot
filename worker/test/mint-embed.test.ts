@@ -11,7 +11,10 @@ const api = {
 
 describe("buildMintEmbed", () => {
   it("uses the artifact title when present", () => {
-    const embed = buildMintEmbed(mintedArtifact("a1", "2025-01-02T00:00:00Z", 12), api);
+    const embed = buildMintEmbed(
+      mintedArtifact("a1", "2025-01-02T00:00:00Z", 12),
+      api
+    );
     expect(embed.toJSON().title).toBe("◈ Artifact a1 #12");
   });
 

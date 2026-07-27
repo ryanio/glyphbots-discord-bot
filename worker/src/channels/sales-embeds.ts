@@ -25,6 +25,7 @@ import { shortAddress } from "../api/glyphbots";
 import { getOpenSeaCollectionUrl, getOpenSeaUrl } from "../api/opensea";
 import type { OpenSeaEvent, OpenSeaPayment } from "../api/types";
 import { COLORS, SALES_TOP_ITEMS } from "../config";
+import { escapeMarkdown } from "../discord/embeds";
 
 /** Clients the embeds need. Narrowed so tests can hand over two functions. */
 export type SalesEmbedClients = {
@@ -147,7 +148,9 @@ const itemLabel = (event: OpenSeaEvent): string => {
   const tokenId = tokenIdOf(event);
   const name = event.nft?.name;
   if (tokenId === null) {
-    return name ?? "Unknown item";
+    // Truthy, not nullish: OpenSea sends `name: ""` for an unindexed token,
+    // and an empty title makes `setTitle` throw on "Purchased: ".
+    return name || "Unknown item";
   }
   return name ? `${name} #${tokenId}` : `GlyphBot #${tokenId}`;
 };
@@ -158,14 +161,6 @@ const itemUrl = (event: OpenSeaEvent): string | null => {
     ? (event.nft?.opensea_url ?? null)
     : getOpenSeaUrl(tokenId);
 };
-
-/**
- * Escape Discord markdown in text that came from a third party
- * (`discord/utils.ts:51-52`). OpenSea usernames are user-chosen and regularly
- * contain underscores.
- */
-const escapeMarkdown = (text: string): string =>
-  text.replace(/(?<special>[_*~`|>])/g, "\\$<special>");
 
 /** One sale, `buildSaleEmbed` + `buildEmbed` (`discord/utils.ts:122-135,347-382`). */
 export const buildSaleEmbed = async (

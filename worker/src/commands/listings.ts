@@ -8,6 +8,7 @@
 import { EmbedBuilder } from "@discordjs/builders";
 import { shortAddress } from "../api/glyphbots";
 import { getOpenSeaCollectionUrl } from "../api/opensea";
+import type { OpenSeaListing } from "../api/types";
 import { COLORS } from "../config";
 import { linkButtonRow } from "../discord/buttons";
 import { embedReply, errorReply } from "../discord/embeds";
@@ -17,25 +18,65 @@ import { formatEthAmount } from "./format";
 const FETCH_LIMIT = 10;
 const DISPLAY_LIMIT = 8;
 
+/**
+ * A listing as the endpoint actually answers, rather than as it is declared.
+ *
+ * `OpenSeaListing` says price and `protocol_data` are always there, three
+ * levels deep and all required. The best-listings endpoint is the least
+ * reliable of the ones this bot reads, and a listing mid-cancellation comes
+ * back with the wrapper and nothing under it, which turned a straight read
+ * into a thrown handler and no answer at all. Same trick as `/floor`
+ * (`floor.ts:45`): cast to the loose shape, then guard each read. Keeping the
+ * field names tied to `OpenSeaListing` means a rename still fails `tsc` here.
+ */
+type LooseListing = {
+  price?: { current?: Partial<OpenSeaListing["price"]["current"]> };
+  protocol_data?: {
+    parameters?: Partial<OpenSeaListing["protocol_data"]["parameters"]>;
+  };
+};
+
+type ListingRow = { price: string; seller: string };
+
+/** One row, or null when the listing is missing a price or a seller. */
+const readListing = (listing: OpenSeaListing): ListingRow | null => {
+  const loose = listing as LooseListing;
+  const current = loose.price?.current;
+  const offerer = loose.protocol_data?.parameters?.offerer;
+
+  if (
+    current?.value === undefined ||
+    typeof current.decimals !== "number" ||
+    !offerer
+  ) {
+    return null;
+  }
+
+  return {
+    price: formatEthAmount(current.value, current.decimals),
+    seller: shortAddress(offerer),
+  };
+};
+
 export const handleListings: CommandHandler = async (ctx) => {
   const listings = await ctx.opensea.fetchListings(FETCH_LIMIT);
+  const rows = listings
+    .map(readListing)
+    .filter((row): row is ListingRow => row !== null)
+    .slice(0, DISPLAY_LIMIT);
 
-  if (listings.length === 0) {
+  // Also the answer when every listing came back unreadable. From the caller's
+  // side there is nothing to show either way.
+  if (rows.length === 0) {
     return errorReply(
       "📋 No Active Listings",
       "No GlyphBots are currently listed for sale on OpenSea."
     );
   }
 
-  const listingLines = listings.slice(0, DISPLAY_LIMIT).map((listing, i) => {
-    const price = formatEthAmount(
-      listing.price.current.value,
-      listing.price.current.decimals
-    );
-    const seller = shortAddress(listing.protocol_data.parameters.offerer);
-
-    return `**${i + 1}.** ${price}\n└ Seller: \`${seller}\``;
-  });
+  const listingLines = rows.map(
+    (row, i) => `**${i + 1}.** ${row.price}\n└ Seller: \`${row.seller}\``
+  );
 
   const embed = new EmbedBuilder()
     .setColor(COLORS.listing)
