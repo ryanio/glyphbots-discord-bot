@@ -4,7 +4,9 @@
  * Phases 1 to 4 of plans/cloudflare-consolidation.md: crons post new artifact
  * mints into #general, a random collection item into #gallery and OpenSea
  * sales into #trading-floor, `POST /discord/interactions` serves eight slash
- * commands, and the gateway DO answers inline lookups.
+ * commands, and the gateway DO answers inline lookups. A fourth cron checks
+ * whether the guild has gone quiet and, only if it has, posts one item into
+ * #general.
  *
  * Bindings are read off `env` inside the handlers and threaded down as
  * explicit arguments. No module here captures the environment at import time.
@@ -15,16 +17,19 @@ import { createGlyphBotsClient } from "./api/glyphbots";
 import { createOpenSeaClient } from "./api/opensea";
 import { postGalleryItem } from "./channels/gallery";
 import { pollMints } from "./channels/mints";
+import { runIdleNudge } from "./channels/nudge";
 import { pollSales } from "./channels/sales";
 import { handlers } from "./commands";
 import {
   GALLERY_CHANNEL_ID,
   LOOKUP_CHANNEL_IDS,
   MINTS_CHANNEL_ID,
+  NUDGE_CHANNEL_ID,
   TRADING_FLOOR_CHANNEL_ID,
 } from "./config";
 import { createChannelPoster } from "./discord/channel-poster";
 import { createGatewayClient } from "./durable-objects/gateway-client";
+import { createIdleStateStore } from "./durable-objects/idle-state-store";
 import { createMintCursorStore } from "./durable-objects/mint-cursor-store";
 import { createSalesStateStore } from "./durable-objects/sales-state-store";
 import { admin } from "./routes/admin";
@@ -38,7 +43,7 @@ export { GatewayDO } from "./durable-objects/gateway";
 /**
  * Cron expressions, matched against `event.cron` in `scheduled()`.
  *
- * All three entries live in `wrangler.jsonc` and the dispatch is exact-match
+ * All four entries live in `wrangler.jsonc` and the dispatch is exact-match
  * rather than "if it fired, do everything": crons that run each other's work is
  * how a six-hourly gallery post turns into one every five minutes.
  *
@@ -48,10 +53,16 @@ export { GatewayDO } from "./durable-objects/gateway";
  * `event.cron` is all the handler gets, and the offset also keeps the two ticks
  * off each other's subrequest budget. The reasoning is spelled out in
  * `wrangler.jsonc`.
+ *
+ * The nudge cron is hourly, and hourly is a check rather than a cadence: what
+ * it posts is bounded by the 48 hour threshold and the 24 hour cooldown in
+ * `src/channels/idle.ts`, not by how often it looks. Minute 23 keeps it clear
+ * of both five-minute entries, which fire on minutes ending 0 or 5 and 2 or 7.
  */
 const MINTS_CRON = "*/5 * * * *";
 const SALES_CRON = "2-59/5 * * * *";
 const GALLERY_CRON = "0 */6 * * *";
+const NUDGE_CRON = "23 * * * *";
 
 const log = createLogger("WORKER");
 
@@ -76,6 +87,7 @@ app.get("/health", async (c) => {
     phase: 4,
     mintsChannelId: MINTS_CHANNEL_ID,
     galleryChannelId: GALLERY_CHANNEL_ID,
+    nudgeChannelId: NUDGE_CHANNEL_ID,
     tradingFloorChannelId: TRADING_FLOOR_CHANNEL_ID,
     lookupChannelIds: LOOKUP_CHANNEL_IDS,
     commands: Object.keys(handlers).sort(),
@@ -136,22 +148,51 @@ const pokeGateway = async (env: WorkerEnv): Promise<void> => {
   }
 };
 
-/** One `#gallery` tick. */
+/** One `#gallery` tick. Most of them decide the guild is too awake to post. */
 const runGallery = async (env: WorkerEnv): Promise<void> => {
   if (!env.DISCORD_TOKEN) {
     log.error("DISCORD_TOKEN is not set, gallery cannot post");
     return;
   }
   try {
-    await postGalleryItem({
+    const outcome = await postGalleryItem({
       clients: {
         glyphbots: createGlyphBotsClient(env),
         opensea: createOpenSeaClient(env),
       },
       poster: createChannelPoster(env, GALLERY_CHANNEL_ID),
+      store: createIdleStateStore(env),
     });
+    log.info(`Gallery tick complete: ${outcome}`);
   } catch (error) {
     log.error(`Gallery tick failed: ${getErrorMessage(error)}`);
+  }
+};
+
+/**
+ * One idle check.
+ *
+ * Almost every one of these does nothing and logs `not-quiet`, which is the
+ * feature working rather than a fault. See `src/channels/nudge.ts`.
+ */
+const runNudge = async (env: WorkerEnv): Promise<void> => {
+  if (!env.DISCORD_TOKEN) {
+    log.error("DISCORD_TOKEN is not set, the idle nudge cannot post");
+    return;
+  }
+
+  try {
+    const outcome = await runIdleNudge({
+      clients: {
+        glyphbots: createGlyphBotsClient(env),
+        opensea: createOpenSeaClient(env),
+      },
+      poster: createChannelPoster(env, NUDGE_CHANNEL_ID),
+      store: createIdleStateStore(env),
+    });
+    log.info(`Idle nudge: ${outcome}`);
+  } catch (error) {
+    log.error(`Idle nudge failed: ${getErrorMessage(error)}`);
   }
 };
 
@@ -177,6 +218,9 @@ const runSalesFeed = async (env: WorkerEnv): Promise<void> => {
 
 /** Route a cron firing to its own work, and nothing else's. */
 export const dispatchCron = (cron: string, env: WorkerEnv): Promise<void>[] => {
+  if (cron === NUDGE_CRON) {
+    return [runNudge(env)];
+  }
   if (cron === GALLERY_CRON) {
     return [runGallery(env)];
   }

@@ -1,7 +1,8 @@
 # glyphbots-worker
 
 The Cloudflare Worker that the three GlyphBots Discord bots are consolidating
-onto. Phases 1 to 3 of [`plans/cloudflare-consolidation.md`](../plans/cloudflare-consolidation.md).
+onto. Phases 1 to 4 of [`plans/cloudflare-consolidation.md`](../plans/cloudflare-consolidation.md),
+plus the idle work, which is not in that plan.
 
 **What it does today:**
 
@@ -13,12 +14,17 @@ onto. Phases 1 to 3 of [`plans/cloudflare-consolidation.md`](../plans/cloudflare
 - A Durable Object holds one WebSocket to the Discord gateway and answers
   inline `b#123` / `a#123` / `#username` lookups, in `#general` and
   `#show-and-tell` only.
-- A second cron posts one random collection item into `#gallery` every six
-  hours.
+- A second cron posts one random collection item into `#gallery`, but only when
+  `#general` has been quiet for a day, and at most once a day.
 
 - A third cron posts OpenSea sales into `#trading-floor`, grouped when several
   land together. Sales only: listings run around 176 a day off one relister,
   which would post every eight minutes.
+
+- A fourth cron checks hourly whether `#general` has gone 48 hours without a
+  human message and, only then, posts one item into it: a random bot, a random
+  artifact, a collection fact or a notable bot, in rotation, no more than once a
+  day.
 
 This is the whole system. Three Discord bots used to do this across three
 processes on a droplet, supervised by a fourth. Their repos are retired, and the
@@ -35,7 +41,10 @@ src/
   api/glyphbots.ts                GlyphBots client, built per invocation
   api/opensea.ts                  OpenSea client, built per invocation
   api/types.ts                    Artifact, Bot and OpenSea shapes
-  channels/gallery.ts             the six-hourly #gallery post
+  channels/gallery.ts             the #gallery post, gated on quiet
+  channels/idle.ts                the idle clock and both post decisions (pure)
+  channels/nudge.ts               one idle check on #general
+  channels/nudge-content.ts       the four things a nudge can say
   channels/mints.ts               cursor logic + one poll
   commands/                       the eight handlers
     context.ts                    what a handler is handed, option reading
@@ -50,6 +59,7 @@ src/
   durable-objects/feed-state.ts   FeedStateDO, holds the mint cursor
   durable-objects/gateway.ts      GatewayDO, the WebSocket to Discord
   durable-objects/gateway-client.ts      connect / status / reconnect / tick
+  durable-objects/idle-state-store.ts    read + apply-one-operation
   durable-objects/mint-cursor-store.ts   the narrow read/write interface
   lookups/matcher.ts              b#123 / a#123 / #username parsing (pure)
   lookups/embeds.ts               one embed per match
@@ -64,7 +74,8 @@ test/interactions.test.ts         signature, PING/PONG, defer inversion, wiring
 test/commands.test.ts             per-command response shaping
 test/lookups.test.ts              matcher, allowlist, rate limiter, one message
 test/gateway.test.ts              frames, close codes, heartbeats, routing
-test/gallery.test.ts              the #gallery tick
+test/gallery.test.ts              the #gallery tick and its idle gate
+test/nudge.test.ts                the idle clock, the rotation, the facts
 test/cron.test.ts                 which cron runs which job
 ```
 
@@ -325,22 +336,145 @@ The state resets when the DO is evicted. That is deliberate and matches Coral:
 this is a spend guard, not a security control, and persisting it would put a
 storage write on the hot path of every message in the guild.
 
+## The idle nudge
+
+The guild is about thirty people and can go days without a message. The nudge
+exists so the bot has something to say when that happens, and says nothing at
+all when it does not.
+
+**It posts because it is quiet, not on a schedule.** The cron is hourly, but
+hourly is the rate it *checks*, not the rate it posts. An ordinary day is
+twenty-four ticks and zero posts, and `wrangler tail` shows
+`Idle nudge: not-quiet` twenty-four times. That is the feature working.
+
+```
+#general silent for 48 hours  ->  post one item
+still silent                  ->  at most one more per 24 hours
+anybody says anything         ->  silent again until 48 hours have accumulated
+```
+
+The threshold is measured from the last human message and the cooldown from the
+last nudge, and both are needed. Threshold alone would repost every hour for as
+long as the silence lasted; cooldown alone would post daily into a busy channel.
+
+### Where the clock lives, and why it is not in the gateway DO
+
+`FeedStateDO`, under `idleState`, next to the mint cursor and the sales state.
+
+The obvious place is a field on `GatewayDO`, which is the thing already
+receiving `MESSAGE_CREATE`. That is wrong in both directions and both failures
+are silent. A fresh DO after a deploy has no timestamp: read as "nothing since
+the epoch" the first tick sees infinite silence and fires, and read as "now" a
+nudge that was genuinely due is suppressed for another two days. The DO is also
+evicted on relocation, not only on deploy, so no deploy schedule can reason
+about it.
+
+Two writers touch the record, the gateway on every human message and the cron
+once an hour, so the read-modify-write happens **inside** the DO: the store
+(`durable-objects/idle-state-store.ts`) sends an operation rather than a whole
+value, and `applyIdleUpdate` runs behind the input gate. A whole-record write
+from the cron would otherwise discard a message that arrived while it was
+building an embed, which is the one failure that would have the bot talking over
+somebody.
+
+Two more properties of that merge: a `seed` never overwrites a clock that
+already exists, and a `human-message` takes the maximum rather than the
+argument, so an out-of-order event cannot wind the clock backwards and
+manufacture silence.
+
+**The first check after a deploy posts nothing.** With no record in storage the
+clock is seeded to the current time and the tick returns. Same cold start as the
+mint watcher, for the same reason.
+
+### What resets the clock
+
+Only a non-bot message in `#general`. Our own nudge lands in that channel as a
+`MESSAGE_CREATE` like anything else, and a clock that accepted it would restart
+its own 48 hours on every post: one nudge, ever. The mint watcher posts into
+`#general` under the same account and is ignored for the same reason, so a mint
+does not count as the room being awake. Both the `bot` flag and an id match
+against ourselves are checked.
+
+### What it posts
+
+Four kinds in rotation, so the same kind never lands twice running:
+
+| Kind | Shape | Cost |
+|---|---|---|
+| `bot` | the `/bot` embed, exported from `commands/bot.ts` | 3 subrequests |
+| `artifact` | the `/artifact` embed, exported from `commands/artifact.ts` | 2 |
+| `stat` | one collection fact, several phrasings | 2 |
+| `notable` | best rank out of three random draws | up to 3 |
+
+The first two are the command builders themselves rather than copies, so a
+nudge and a slash command render identically. The last two are built in
+`channels/nudge-content.ts` out of the same formatters and the same rarity
+table `/rarity` uses.
+
+`notable` samples rather than searches because there is no reverse index from
+rank to token id anywhere in this system: the rank arrives attached to a token,
+so finding a rare one means looking at tokens. Three draws, keeping the best,
+stopping early on anything inside the top 10%. The post states the rank it found
+and does not claim the bot is the rarest of anything.
+
+If the chosen kind has nothing to say (a burned token, an empty artifact list, a
+dead upstream) it falls through to the next kind once, then gives up and waits
+an hour. A failed send records no cooldown, so a message nobody saw does not buy
+the guild another day of silence.
+
+### The facts are checked, not generated
+
+Every number is read straight off a response and printed with the same
+formatters `/floor` uses. Nothing is derived, averaged, compared to a previous
+value or rounded into a claim the source did not make. Facts whose input is
+missing or zero are not offered at all, and a floor price is only quoted when
+OpenSea says it is denominated in ETH, because `formatEthStat` writes the unit
+in and a floor quoted in the wrong currency is a false statement rather than a
+formatting slip. `collectionFacts` returns the list of things that are currently
+true and one is chosen from it.
+
 ## The #gallery cron
 
-`0 */6 * * *` posts one random collection item into `#gallery`, alternating
-bots and artifacts. This is `RANDOM_INTERVALS` from
-`discord-nft-embed-bot/src/index.ts:696-746` with the `setInterval` removed,
-running at the six hour cadence it had before it stopped on 2026-05-02.
+`0 */6 * * *`, and since the idle work it fires four times a day but posts at
+most once: only when `#general` has been quiet for 24 hours, and no more often
+than every 24 hours.
 
-`scheduled()` dispatches on `event.cron`, so the two crons never run each
-other's work. The five minute entry runs the mint watcher and pokes the gateway
-watchdog; the six hour entry runs the gallery and nothing else.
+It used to post unconditionally, which in a guild this size meant the bot
+posting to itself four times a day. That is the shape of a dead channel, not a
+lively one. The rule now:
 
-Whose turn it is comes from the clock (six hour buckets since the epoch,
-alternating) rather than from storage, so two isolates cannot disagree. The
-recently-posted memory the Node bot kept is dropped: at six hours across 11,111
-bots a repeat is rare enough not to be worth a Durable Object round trip. If it
-ever becomes visible, the fix is a `galleryRecent` key in `FeedStateDO`.
+- **an active server barely sees it.** Somebody having spoken yesterday
+  suppresses it entirely. `#gallery` is a filler channel and filler is welcome
+  only when there is nothing else.
+- **a dead server sees one a day, not four.** Three of the four ticks fall
+  inside the cooldown and cost one Durable Object read each.
+- **it leads the nudge rather than duplicating it.** `#gallery` starts at 24
+  hours of quiet and the `#general` nudge at 48, so a quietening server gets the
+  low-stakes post first, in the channel meant for it. Once both are firing they
+  are one post a day each, in different channels.
+
+Half the nudge's threshold, the same cadence: a quieter server never makes the
+bot faster, only slightly earlier.
+
+`#general` is the signal for both because it is the only activity signal the
+Worker has, and it is where the guild actually talks.
+
+Whose turn it is is stored now rather than derived from the clock. The old
+version alternated on six-hour buckets since the epoch, which is correct only
+while the cron posts on every tick: gated to one post a day, consecutive posts
+sit four buckets apart, the same parity every time, and the channel would have
+shown bots and nothing else forever.
+
+The recently-posted memory the Node bot kept stays dropped: at one post a day
+across 11,111 bots a repeat is not worth a round trip.
+
+`scheduled()` dispatches on `event.cron`, so no cron runs another's work. The
+five minute entry runs the mint watcher and pokes the gateway watchdog, the
+offset five minute entry runs the sales feed, the six hour entry runs the
+gallery, and `23 * * * *` runs the idle check. Minute 23 misses both five minute
+entries, which land on minutes ending 0 or 5 and 2 or 7. Note that
+`wrangler deploy --dry-run` does **not** validate cron expressions, so those
+strings are correct by inspection or not at all.
 
 ## Smoke testing a deploy
 
@@ -365,7 +499,11 @@ Tests cannot reach a real gateway, so this list is the actual verification.
 6. **Come back the next day.** `wsState` should still be `live` and `lastEventAt`
    should be recent. The failure this whole design is defending against does
    not show up in the first ten minutes.
-7. Watch for one `#gallery` post at the next six-hour boundary.
+7. **The idle work needs a quiet server to observe.** `#gallery` and the nudge
+   both post nothing for the first 24 to 48 hours after a deploy whatever the
+   guild does, because the clock is seeded on the first check. After that,
+   `wrangler tail` around `:23` should show `Idle nudge: not-quiet` on an active
+   day; the first real nudge only arrives after two days of actual silence.
 
 ## What is not verified, and cannot be from here
 
@@ -385,6 +523,16 @@ Tests cannot reach a real gateway, so this list is the actual verification.
   checks that, and a missing permission looks exactly like a broken bot.
 - **The 50-subrequest budget under a real burst.** The arithmetic above says it
   fits; only a live burst proves it.
+- **A nudge or a gallery post actually firing.** Both are covered end to end
+  against an injected clock, but the shortest real observation is two days of
+  guild silence, so nothing here has watched one land.
+- **Cron expression validity.** `wrangler deploy --dry-run` does not check them
+  (tested), and the dashboard is the only place that will say whether
+  `23 * * * *` was accepted.
+- **`GET /api/artifacts/recently-minted?summary=true` staying that shape.** It
+  was read live on 2026-07-26 and returns a bare
+  `{total, last1d, last7d, last30d}` with no `ok` envelope. The client rejects a
+  response missing any of the four rather than printing a zero.
 
 ## Registering the commands
 

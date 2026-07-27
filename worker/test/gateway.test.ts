@@ -94,10 +94,36 @@ const createFakeSocket = () => {
   };
 };
 
+/**
+ * A stand-in for the `FEED_STATE` namespace.
+ *
+ * The DO needs one because `MESSAGE_CREATE` now writes the idle clock through
+ * to `FeedStateDO` (`src/channels/idle.ts`). The stub records what would have
+ * been sent, which is what the idle-clock tests below assert on.
+ */
+const createFeedStateStub = () => {
+  const applied: unknown[] = [];
+  return {
+    applied,
+    binding: {
+      idFromName: (name: string) => name,
+      get: () => ({
+        fetch: async (_url: string, init?: RequestInit) => {
+          if (init?.body) {
+            applied.push(JSON.parse(String(init.body)) as unknown);
+          }
+          return Response.json({ state: null });
+        },
+      }),
+    },
+  };
+};
+
 const env = (overrides: Partial<WorkerEnv> = {}) =>
   ({
     DISCORD_TOKEN: "test-token",
     DISCORD_APP_ID: "app",
+    FEED_STATE: createFeedStateStub().binding,
     ...overrides,
   }) as unknown as WorkerEnv;
 
@@ -537,6 +563,99 @@ describe("MESSAGE_CREATE routing", () => {
 
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
+  });
+
+  it("moves the idle clock forward on a human message in #general", async () => {
+    const state = createFakeState();
+    state.seed({ wsState: "live", selfUserId: "bot-id" });
+    const feed = createFeedStateStub();
+    const doInstance = new GatewayDO(
+      state as unknown as DurableObjectState,
+      env({ FEED_STATE: feed.binding as unknown as DurableObjectNamespace })
+    );
+    const ws = createFakeSocket();
+
+    await doInstance.handleSocketMessage(
+      ws as unknown as WebSocket,
+      frame({
+        op: 0,
+        s: 5,
+        t: "MESSAGE_CREATE",
+        d: {
+          id: "m1",
+          channel_id: GENERAL_CHANNEL_ID,
+          guild_id: GUILD_ID,
+          // Ordinary conversation, not a lookup. It still counts as the room
+          // being alive, which is the whole point of recording it here rather
+          // than inside the lookup path.
+          content: "morning all",
+          author: { id: "human" },
+        },
+      })
+    );
+
+    expect(feed.applied).toHaveLength(1);
+    expect((feed.applied[0] as { op: string }).op).toBe("human-message");
+  });
+
+  it("does not let its own post reset the idle clock", async () => {
+    const state = createFakeState();
+    state.seed({ wsState: "live", selfUserId: "bot-id" });
+    const feed = createFeedStateStub();
+    const doInstance = new GatewayDO(
+      state as unknown as DurableObjectState,
+      env({ FEED_STATE: feed.binding as unknown as DurableObjectNamespace })
+    );
+    const ws = createFakeSocket();
+
+    // The nudge, coming back off the gateway as any other message would. If
+    // this reset the clock the bot would nudge once and then never again.
+    await doInstance.handleSocketMessage(
+      ws as unknown as WebSocket,
+      frame({
+        op: 0,
+        s: 6,
+        t: "MESSAGE_CREATE",
+        d: {
+          id: "m2",
+          channel_id: GENERAL_CHANNEL_ID,
+          guild_id: GUILD_ID,
+          content: "",
+          author: { id: "bot-id", bot: true },
+        },
+      })
+    );
+
+    expect(feed.applied).toHaveLength(0);
+  });
+
+  it("does not count chatter in a channel it does not watch", async () => {
+    const state = createFakeState();
+    state.seed({ wsState: "live", selfUserId: "bot-id" });
+    const feed = createFeedStateStub();
+    const doInstance = new GatewayDO(
+      state as unknown as DurableObjectState,
+      env({ FEED_STATE: feed.binding as unknown as DurableObjectNamespace })
+    );
+    const ws = createFakeSocket();
+
+    await doInstance.handleSocketMessage(
+      ws as unknown as WebSocket,
+      frame({
+        op: 0,
+        s: 7,
+        t: "MESSAGE_CREATE",
+        d: {
+          id: "m3",
+          channel_id: "1446247601942036574",
+          guild_id: GUILD_ID,
+          content: "gm",
+          author: { id: "human" },
+        },
+      })
+    );
+
+    expect(feed.applied).toHaveLength(0);
   });
 
   it("never answers itself", async () => {

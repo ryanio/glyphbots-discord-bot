@@ -14,9 +14,10 @@
  */
 
 import { EmbedBuilder } from "@discordjs/builders";
+import type { GlyphBotsClient } from "../api/glyphbots";
 import { getOpenSeaArtifactUrl } from "../api/opensea";
 import type { Artifact } from "../api/types";
-import { COLORS } from "../config";
+import { COLORS, RANDOM_ARTIFACT_FETCH_LIMIT } from "../config";
 import { type LinkButton, linkButtonRow } from "../discord/buttons";
 import { embedReply, errorReply } from "../discord/embeds";
 import { createLogger } from "../utils/logger";
@@ -25,18 +26,24 @@ import { BOT_NAME_PREFIX } from "./format";
 
 const log = createLogger("ArtifactCmd");
 
-const RECENT_FETCH_LIMIT = 50;
-
-const buildArtifactEmbed = async (
+/**
+ * The `/artifact` embed.
+ *
+ * Exported, and taking a `GlyphBotsClient` rather than the whole
+ * `CommandContext`, because the idle nudge posts this same shape from a cron
+ * where no interaction exists. The client was the only thing it ever read off
+ * the context.
+ */
+export const buildArtifactEmbed = async (
   artifact: Artifact,
-  ctx: CommandContext
+  glyphbots: GlyphBotsClient
 ): Promise<EmbedBuilder> => {
   const embed = new EmbedBuilder()
     .setColor(COLORS.artifact)
     .setTitle(artifact.title);
 
   if (artifact.contractTokenId) {
-    embed.setURL(ctx.glyphbots.getArtifactUrl(artifact.contractTokenId));
+    embed.setURL(glyphbots.getArtifactUrl(artifact.contractTokenId));
     embed.addFields({
       name: "Token ID",
       value: `#${artifact.contractTokenId}`,
@@ -52,13 +59,13 @@ const buildArtifactEmbed = async (
     });
   }
 
-  const originBot = await ctx.glyphbots.fetchBot(artifact.botTokenId);
+  const originBot = await glyphbots.fetchBot(artifact.botTokenId);
   const botName =
     originBot?.name?.replace(BOT_NAME_PREFIX, "") ?? `#${artifact.botTokenId}`;
 
   embed.addFields({
     name: "Origin Bot",
-    value: `[${botName}](${ctx.glyphbots.getBotUrl(artifact.botTokenId)})`,
+    value: `[${botName}](${glyphbots.getBotUrl(artifact.botTokenId)})`,
     inline: true,
   });
 
@@ -81,6 +88,40 @@ const buildArtifactEmbed = async (
   });
 };
 
+/**
+ * The row under an artifact embed. Exported alongside the embed so the idle
+ * nudge posts the same three buttons rather than a near-copy of them.
+ */
+export const artifactButtons = (
+  artifact: Artifact,
+  glyphbots: GlyphBotsClient
+): LinkButton[] => {
+  const buttons: LinkButton[] = [];
+
+  if (artifact.contractTokenId) {
+    buttons.push(
+      {
+        label: "View Artifact",
+        url: glyphbots.getArtifactUrl(artifact.contractTokenId),
+        emoji: "✨",
+      },
+      {
+        label: "OpenSea",
+        url: getOpenSeaArtifactUrl(artifact.contractTokenId),
+        emoji: "🌊",
+      }
+    );
+  }
+
+  buttons.push({
+    label: "Origin Bot",
+    url: glyphbots.getBotUrl(artifact.botTokenId),
+    emoji: "🤖",
+  });
+
+  return buttons;
+};
+
 /** Resolve the artifact this invocation is about, or an error body. */
 const resolveArtifact = async (
   ctx: CommandContext
@@ -89,7 +130,9 @@ const resolveArtifact = async (
   const isRandom = ctx.options.getBoolean("random") ?? false;
 
   if (isRandom) {
-    const recent = await ctx.glyphbots.fetchRecentArtifacts(RECENT_FETCH_LIMIT);
+    const recent = await ctx.glyphbots.fetchRecentArtifacts(
+      RANDOM_ARTIFACT_FETCH_LIMIT
+    );
     const pick = recent[Math.floor(Math.random() * recent.length)];
 
     if (!pick) {
@@ -134,30 +177,9 @@ export const handleArtifact: CommandHandler = async (ctx) => {
   }
 
   const { artifact } = resolved;
-  const embed = await buildArtifactEmbed(artifact, ctx);
+  const embed = await buildArtifactEmbed(artifact, ctx.glyphbots);
 
-  const buttons: LinkButton[] = [];
-
-  if (artifact.contractTokenId) {
-    buttons.push(
-      {
-        label: "View Artifact",
-        url: ctx.glyphbots.getArtifactUrl(artifact.contractTokenId),
-        emoji: "✨",
-      },
-      {
-        label: "OpenSea",
-        url: getOpenSeaArtifactUrl(artifact.contractTokenId),
-        emoji: "🌊",
-      }
-    );
-  }
-
-  buttons.push({
-    label: "Origin Bot",
-    url: ctx.glyphbots.getBotUrl(artifact.botTokenId),
-    emoji: "🤖",
-  });
-
-  return embedReply(embed, [linkButtonRow(buttons)]);
+  return embedReply(embed, [
+    linkButtonRow(artifactButtons(artifact, ctx.glyphbots)),
+  ]);
 };

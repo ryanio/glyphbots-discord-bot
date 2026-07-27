@@ -38,11 +38,22 @@
  * and both are deliberately left unrequested: nothing in scope reads them, and
  * requesting them means a larger READY payload and a stream of events the DO
  * would spend CPU discarding.
+ *
+ * ## The idle clock
+ *
+ * `MESSAGE_CREATE` is also where the Worker learns the guild is awake. Every
+ * non-bot message in `#general` is written through to `FeedStateDO`, and the
+ * hourly nudge cron reads it back (`src/channels/idle.ts`). It is written to
+ * storage rather than kept on this DO because this DO does not survive a
+ * deploy, and a nudge that fires or fails to fire because of a redeploy would
+ * be invisible either way.
  */
 
 import { createGlyphBotsClient } from "../api/glyphbots";
 import { createOpenSeaClient } from "../api/opensea";
+import { isHumanActivity } from "../channels/idle";
 import { createChannelPoster } from "../discord/channel-poster";
+import { createIdleStateStore } from "./idle-state-store";
 import {
   handleLookupMessage,
   type LookupMessage,
@@ -660,6 +671,13 @@ export class GatewayDO implements DurableObject {
       return false;
     }
 
+    // Before the lookup gates, and independent of them: any human line in
+    // `#general` counts as the room being alive whether or not it happens to
+    // parse as `b#123`.
+    if (isHumanActivity(message, s.selfUserId)) {
+      await this.recordHumanActivity();
+    }
+
     const outcome = await handleLookupMessage(message, {
       clients: {
         glyphbots: createGlyphBotsClient(this.env),
@@ -679,6 +697,26 @@ export class GatewayDO implements DurableObject {
     });
 
     return outcome === "answered";
+  }
+
+  /**
+   * Write the idle clock forward, best effort.
+   *
+   * Deliberately swallowed on failure. The cost of a lost write is one nudge
+   * arriving up to a day early against a guild that had in fact spoken, which
+   * is a cosmetic problem; the cost of letting it throw is a lookup going
+   * unanswered because a storage write failed, which is a real one. The DO
+   * merges by maximum, so a lost write is also recovered by the next message.
+   */
+  private async recordHumanActivity(): Promise<void> {
+    try {
+      await createIdleStateStore(this.env).apply({
+        op: "human-message",
+        atMs: Date.now(),
+      });
+    } catch (error) {
+      log.warn(`Idle clock write failed: ${getErrorMessage(error)}`);
+    }
   }
 
   // ── Outbound ─────────────────────────────────────────────────────────────

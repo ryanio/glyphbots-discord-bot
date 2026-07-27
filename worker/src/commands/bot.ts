@@ -32,7 +32,7 @@ import type { OpenSeaClient } from "../api/opensea";
 import { getOpenSeaUrl } from "../api/opensea";
 import type { Bot, BotStory } from "../api/types";
 import { COLORS, MAX_BOT_TOKEN_ID } from "../config";
-import { linkButtonRow } from "../discord/buttons";
+import { type LinkButton, linkButtonRow } from "../discord/buttons";
 import { embedReply, errorReply } from "../discord/embeds";
 import { createLogger } from "../utils/logger";
 import type { CommandHandler } from "./context";
@@ -50,7 +50,16 @@ const log = createLogger("BotCmd");
 const getRandomTokenId = (): number =>
   Math.floor(Math.random() * MAX_BOT_TOKEN_ID) + 1;
 
-const buildBotEmbed = (
+/**
+ * The `/bot` embed.
+ *
+ * Exported because the idle nudge posts this exact shape when its rotation
+ * lands on a random bot (`src/channels/nudge-content.ts`). It takes data rather
+ * than a `CommandContext` so the cron path can call it without inventing an
+ * interaction, and everything it renders comes from `./format`, which the
+ * inline lookups share. There is no second copy of this embed anywhere.
+ */
+export const buildBotEmbed = (
   tokenId: number,
   bot: Bot,
   story: BotStory | null,
@@ -105,6 +114,15 @@ const buildBotEmbed = (
 
   return embed.setFooter({ text: "GlyphBots" });
 };
+
+/** The row under a bot embed, exported for the same reason the embed is. */
+export const botButtons = (
+  tokenId: number,
+  glyphbots: GlyphBotsClient
+): LinkButton[] => [
+  { label: "View Bot", url: glyphbots.getBotUrl(tokenId), emoji: "🤖" },
+  { label: "OpenSea", url: getOpenSeaUrl(tokenId), emoji: "🌊" },
+];
 
 /** Pick a random bot held by an OpenSea account, by address or username. */
 const randomFromAccount = async (
@@ -187,10 +205,5 @@ export const handleBot: CommandHandler = async (ctx) => {
     ctx.glyphbots
   );
 
-  return embedReply(embed, [
-    linkButtonRow([
-      { label: "View Bot", url: ctx.glyphbots.getBotUrl(tokenId), emoji: "🤖" },
-      { label: "OpenSea", url: getOpenSeaUrl(tokenId), emoji: "🌊" },
-    ]),
-  ]);
+  return embedReply(embed, [linkButtonRow(botButtons(tokenId, ctx.glyphbots))]);
 };

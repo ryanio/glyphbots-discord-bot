@@ -16,10 +16,16 @@ import type { CommandHandler } from "./context";
 const PERCENT = 100;
 const TRAIT_LIMIT = 8;
 
-const percentileOf = (rank: number): number =>
+/** Where a rank sits in the supply, as a percentage. 1 is the rarest. */
+export const percentileOf = (rank: number): number =>
   (rank / MAX_BOT_TOKEN_ID) * PERCENT;
 
-const getRarityEmoji = (rank: number): string => {
+/**
+ * Exported alongside `getRarityTier`, because the idle nudge's "notable bot"
+ * post labels its pick with the same two functions rather than a second table
+ * that could drift from this one.
+ */
+export const getRarityEmoji = (rank: number): string => {
   const percentile = percentileOf(rank);
   if (percentile <= 1) {
     return "🏆";
@@ -39,7 +45,7 @@ const getRarityEmoji = (rank: number): string => {
   return "⭐";
 };
 
-const getRarityTier = (rank: number): string => {
+export const getRarityTier = (rank: number): string => {
   const percentile = percentileOf(rank);
   if (percentile <= 1) {
     return "Legendary (Top 1%)";

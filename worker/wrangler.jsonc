@@ -7,14 +7,21 @@
   "observability": {
     "enabled": true
   },
-  // Three crons, dispatched on `event.cron` in `scheduled()` so none runs
+  // Four crons, dispatched on `event.cron` in `scheduled()` so none runs
   // another's work:
   // - `*/5 * * * *` the mint watcher (MINTS_POLL_INTERVAL_MINUTES = 5 on the
   //   Node bot, src/lib/constants.ts:46), which also pokes the gateway
   //   watchdog.
   // - `2-59/5 * * * *` the OpenSea sales feed into #trading-floor.
-  // - `0 */6 * * *` one random collection item into #gallery, the cadence
-  //   RANDOM_INTERVALS ran at before it stopped on 2026-05-02.
+  // - `0 */6 * * *` a random collection item into #gallery, the cadence
+  //   RANDOM_INTERVALS ran at before it stopped on 2026-05-02. Since the idle
+  //   work landed this fires four times a day but posts at most once, and only
+  //   when #general has been quiet for 24 hours (src/channels/gallery.ts).
+  // - `23 * * * *` the idle check on #general. Hourly, and hourly is the check
+  //   rate rather than the post rate: it posts only after 48 hours of silence
+  //   and then at most once a day, so an ordinary day is 24 ticks and zero
+  //   posts (src/channels/nudge.ts). Minute 23 is chosen to miss both
+  //   five-minute entries, which land on minutes ending 0 or 5 and 2 or 7.
   //
   // The sales feed is every five minutes, not the plan's `* * * * *`. Measured
   // 2026-07-25: sales run 1.24/day, so a per-minute cron is about 1,161 empty
@@ -26,8 +33,17 @@
   // be told apart from the mint tick. Second, offsetting it keeps the two ticks
   // from contending for the same subrequest budget and the same FeedStateDO
   // input gate in the same second. Same cadence, two minutes apart.
+  //
+  // `wrangler deploy --dry-run` does not validate these strings (tested), so
+  // they are correct by inspection or not at all. Five fields each: minute,
+  // hour, day of month, month, day of week.
   "triggers": {
-    "crons": ["*/5 * * * *", "2-59/5 * * * *", "0 */6 * * *"]
+    "crons": [
+      "*/5 * * * *",
+      "2-59/5 * * * *",
+      "0 */6 * * *",
+      "23 * * * *"
+    ]
   },
   "durable_objects": {
     "bindings": [

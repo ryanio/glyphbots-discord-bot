@@ -13,8 +13,10 @@ import type { OpenSeaClient } from "../src/api/opensea";
 import type {
   AccountNFT,
   Artifact,
+  ArtifactSummary,
   Bot,
   OpenSeaAccount,
+  OpenSeaCollectionStats,
   OpenSeaNFT,
 } from "../src/api/types";
 import type { LookupClients } from "../src/lookups/embeds";
@@ -64,8 +66,12 @@ export type FakeClientOptions = {
   account?: OpenSeaAccount | null;
   accountNFTs?: AccountNFT[];
   artifacts?: Record<number, Artifact | null>;
+  artifactSummary?: ArtifactSummary | null;
   bots?: Record<number, Bot | null>;
+  collectionStats?: OpenSeaCollectionStats | null;
   recentArtifacts?: Artifact[];
+  /** Per-token OpenSea answers. Anything unlisted falls back to the default. */
+  nfts?: Record<number, OpenSeaNFT | null>;
 };
 
 /** A `LookupClients` whose every method is a spy. */
@@ -86,7 +92,15 @@ export const createLookupClients = (options: FakeClientOptions = {}) => {
     Promise.resolve(options.recentArtifacts ?? [])
   );
   const fetchNFT = vi.fn((tokenId: number) =>
-    Promise.resolve(createOpenSeaNFT(tokenId))
+    Promise.resolve(
+      options.nfts ? (options.nfts[tokenId] ?? null) : createOpenSeaNFT(tokenId)
+    )
+  );
+  const fetchArtifactSummary = vi.fn(() =>
+    Promise.resolve(options.artifactSummary ?? null)
+  );
+  const fetchCollectionStats = vi.fn(() =>
+    Promise.resolve(options.collectionStats ?? null)
   );
   const fetchAccount = vi.fn(() =>
     Promise.resolve(
@@ -102,6 +116,7 @@ export const createLookupClients = (options: FakeClientOptions = {}) => {
   const glyphbots = {
     baseUrl: "https://www.glyphbots.com",
     fetchArtifact,
+    fetchArtifactSummary,
     fetchBot,
     fetchBotStory: vi.fn(() => Promise.resolve(null)),
     fetchRecentArtifacts,
@@ -117,7 +132,7 @@ export const createLookupClients = (options: FakeClientOptions = {}) => {
     fetchCollectionEventsSince: vi.fn(() =>
       Promise.resolve({ events: [], pages: 1, failed: false })
     ),
-    fetchCollectionStats: vi.fn(() => Promise.resolve(null)),
+    fetchCollectionStats,
     fetchListings: vi.fn(() => Promise.resolve([])),
     fetchNFT,
     fetchNFTEvents: vi.fn(() => Promise.resolve([])),
@@ -130,7 +145,9 @@ export const createLookupClients = (options: FakeClientOptions = {}) => {
     fetchAccount,
     fetchAccountNFTs,
     fetchArtifact,
+    fetchArtifactSummary,
     fetchBot,
+    fetchCollectionStats,
     fetchNFT,
     fetchRecentArtifacts,
     /** Every outbound call this path would have made. */
@@ -141,7 +158,9 @@ export const createLookupClients = (options: FakeClientOptions = {}) => {
         fetchRecentArtifacts.mock.calls.length +
         fetchNFT.mock.calls.length +
         fetchAccount.mock.calls.length +
-        fetchAccountNFTs.mock.calls.length
+        fetchAccountNFTs.mock.calls.length +
+        fetchArtifactSummary.mock.calls.length +
+        fetchCollectionStats.mock.calls.length
       );
     },
   };

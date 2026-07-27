@@ -19,9 +19,24 @@
  * of state on the same tick cadence, and a second namespace would only add a
  * migration.
  *
- * The two records never interact; each path reads and writes only its own key.
+ * A third record lands under `idleState`: when a human last spoke in
+ * `#general`, and what the bot has posted about the silence since. It is here
+ * for the same reason the sales state is, plus one of its own: two writers
+ * touch it (the gateway on every human message, the hourly nudge cron), so the
+ * read-modify-write has to happen behind the input gate rather than on the
+ * Worker side. That is why this record takes an operation
+ * (`src/channels/idle.ts`) instead of a whole value.
+ *
+ * The three records never interact; each path reads and writes only its own key.
  */
 
+import { applyIdleUpdate, GALLERY_KINDS, NUDGE_KINDS } from "../channels/idle";
+import type {
+  GalleryKind,
+  IdleState,
+  IdleUpdate,
+  NudgeKind,
+} from "../channels/idle";
 import type { SalesFeedState } from "../channels/sales";
 import { createLogger } from "../utils/logger";
 
@@ -29,6 +44,7 @@ const log = createLogger("feed-state-do");
 
 const MINT_CURSOR_KEY = "mintCursor";
 const SALES_STATE_KEY = "salesState";
+const IDLE_STATE_KEY = "idleState";
 
 /**
  * `null` means genuinely absent (cold start, seed and post nothing), which is
@@ -100,6 +116,81 @@ const parseSalesState = (value: unknown): SalesFeedState | null => {
   return { lastEventTimestamp, grouping, deferred };
 };
 
+const isTimestamp = (value: unknown): value is number | null =>
+  value === null || (typeof value === "number" && Number.isFinite(value));
+
+const isNudgeKind = (value: unknown): value is NudgeKind | null =>
+  value === null ||
+  (typeof value === "string" && (NUDGE_KINDS as readonly string[]).includes(value));
+
+const isGalleryKind = (value: unknown): value is GalleryKind | null =>
+  value === null ||
+  (typeof value === "string" &&
+    (GALLERY_KINDS as readonly string[]).includes(value));
+
+/**
+ * Validate the idle record.
+ *
+ * Stricter than the sales one, because it is small enough to check field by
+ * field and because the two failure directions are asymmetric: a record read as
+ * absent seeds and posts nothing, which is safe, while a record with a garbage
+ * timestamp could read as two days of silence and post immediately.
+ */
+const parseIdleState = (value: unknown): IdleState | null => {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+
+  const candidate = value as Partial<IdleState>;
+
+  if (
+    !(
+      isTimestamp(candidate.lastHumanMessageAtMs) &&
+      isTimestamp(candidate.lastNudgeAtMs) &&
+      isTimestamp(candidate.lastGalleryAtMs) &&
+      isNudgeKind(candidate.lastNudgeKind) &&
+      isGalleryKind(candidate.lastGalleryKind)
+    )
+  ) {
+    log.warn("Stored idle state failed validation, treating as absent");
+    return null;
+  }
+
+  return {
+    lastHumanMessageAtMs: candidate.lastHumanMessageAtMs ?? null,
+    lastNudgeAtMs: candidate.lastNudgeAtMs ?? null,
+    lastNudgeKind: candidate.lastNudgeKind ?? null,
+    lastGalleryAtMs: candidate.lastGalleryAtMs ?? null,
+    lastGalleryKind: candidate.lastGalleryKind ?? null,
+  };
+};
+
+/** Reject an operation that did not come from `IdleUpdate`. */
+const parseIdleUpdate = (value: unknown): IdleUpdate | null => {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+
+  const candidate = value as Partial<IdleUpdate>;
+  const { op, atMs } = candidate;
+
+  if (typeof atMs !== "number" || !Number.isFinite(atMs)) {
+    return null;
+  }
+  if (op === "seed" || op === "human-message") {
+    return { op, atMs };
+  }
+  if (op === "nudge") {
+    const { kind } = candidate as { kind?: unknown };
+    return isNudgeKind(kind) && kind !== null ? { op, atMs, kind } : null;
+  }
+  if (op === "gallery") {
+    const { kind } = candidate as { kind?: unknown };
+    return isGalleryKind(kind) && kind !== null ? { op, atMs, kind } : null;
+  }
+  return null;
+};
+
 export class FeedStateDO implements DurableObject {
   private readonly state: DurableObjectState;
 
@@ -128,6 +219,18 @@ export class FeedStateDO implements DurableObject {
       }
       if (req.method === "PUT") {
         return this.writeSalesState(req);
+      }
+      return Promise.resolve(new Response("method not allowed", {
+        status: 405,
+      }));
+    }
+
+    if (url.pathname === "/idle-state") {
+      if (req.method === "GET") {
+        return this.readIdleState();
+      }
+      if (req.method === "POST") {
+        return this.applyIdleState(req);
       }
       return Promise.resolve(new Response("method not allowed", {
         status: 405,
@@ -176,5 +279,34 @@ export class FeedStateDO implements DurableObject {
 
     await this.state.storage.put(SALES_STATE_KEY, state);
     return Response.json({ ok: true });
+  }
+
+  private async readIdleState(): Promise<Response> {
+    const stored = await this.state.storage.get<unknown>(IDLE_STATE_KEY);
+    const state = stored === undefined ? null : parseIdleState(stored);
+    return Response.json({ state });
+  }
+
+  /**
+   * Read, apply one operation, write, all inside the gate.
+   *
+   * The gateway writes here on every human message and the cron writes here
+   * once an hour. Doing the merge on the Worker side instead would let the
+   * cron's write drop a message that landed while it was building an embed,
+   * which is the one failure that would have the bot talking over somebody.
+   */
+  private async applyIdleState(req: Request): Promise<Response> {
+    const update = parseIdleUpdate(await req.json());
+
+    if (!update) {
+      return new Response("invalid idle update", { status: 400 });
+    }
+
+    const stored = await this.state.storage.get<unknown>(IDLE_STATE_KEY);
+    const current = stored === undefined ? null : parseIdleState(stored);
+    const next = applyIdleUpdate(current, update);
+
+    await this.state.storage.put(IDLE_STATE_KEY, next);
+    return Response.json({ state: next });
   }
 }

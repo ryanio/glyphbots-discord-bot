@@ -1,11 +1,12 @@
 /**
  * Cron dispatch.
  *
- * Three crons share one `scheduled()` handler, so the routing is the only thing
- * standing between a six-hourly gallery post and a five-minutely one, and
- * between the sales feed and the mint watcher, which run on the same cadence
- * two minutes apart. The collaborators are mocked because this test is about
- * which of them runs, not what they do.
+ * Four crons share one `scheduled()` handler, so the routing is the only thing
+ * standing between a six-hourly gallery post and a five-minutely one, between
+ * the sales feed and the mint watcher, which run on the same cadence two
+ * minutes apart, and between the hourly idle check and everything else. The
+ * collaborators are mocked because this test is about which of them runs, not
+ * what they do.
  */
 
 import { describe, expect, it, vi } from "vitest";
@@ -14,6 +15,7 @@ const calls = vi.hoisted(() => ({
   gallery: 0,
   mints: 0,
   gateway: 0,
+  nudge: 0,
   sales: 0,
 }));
 
@@ -21,6 +23,13 @@ vi.mock("../src/channels/gallery", () => ({
   postGalleryItem: () => {
     calls.gallery++;
     return Promise.resolve(true);
+  },
+}));
+
+vi.mock("../src/channels/nudge", () => ({
+  runIdleNudge: () => {
+    calls.nudge++;
+    return Promise.resolve("not-quiet");
   },
 }));
 
@@ -54,6 +63,13 @@ vi.mock("../src/durable-objects/gateway-client", () => ({
   }),
 }));
 
+vi.mock("../src/durable-objects/idle-state-store", () => ({
+  createIdleStateStore: () => ({
+    read: () => Promise.resolve(null),
+    apply: () => Promise.resolve(null),
+  }),
+}));
+
 vi.mock("../src/durable-objects/mint-cursor-store", () => ({
   createMintCursorStore: () => ({
     read: () => Promise.resolve(null),
@@ -74,6 +90,7 @@ const reset = () => {
   calls.gallery = 0;
   calls.mints = 0;
   calls.gateway = 0;
+  calls.nudge = 0;
   calls.sales = 0;
 };
 
@@ -85,12 +102,24 @@ describe("cron dispatch", () => {
     expect(calls.gateway).toBe(1);
     expect(calls.gallery).toBe(0);
     expect(calls.sales).toBe(0);
+    expect(calls.nudge).toBe(0);
   });
 
   it("runs only the gallery on the six hour cron", async () => {
     reset();
     await Promise.all(dispatchCron("0 */6 * * *", env));
     expect(calls.gallery).toBe(1);
+    expect(calls.mints).toBe(0);
+    expect(calls.gateway).toBe(0);
+    expect(calls.sales).toBe(0);
+    expect(calls.nudge).toBe(0);
+  });
+
+  it("runs only the idle check on the hourly cron", async () => {
+    reset();
+    await Promise.all(dispatchCron("23 * * * *", env));
+    expect(calls.nudge).toBe(1);
+    expect(calls.gallery).toBe(0);
     expect(calls.mints).toBe(0);
     expect(calls.gateway).toBe(0);
     expect(calls.sales).toBe(0);
@@ -103,6 +132,7 @@ describe("cron dispatch", () => {
     expect(calls.mints).toBe(0);
     expect(calls.gallery).toBe(0);
     expect(calls.gateway).toBe(0);
+    expect(calls.nudge).toBe(0);
   });
 
   it("falls back to the mint tick on an unrecognized expression", async () => {

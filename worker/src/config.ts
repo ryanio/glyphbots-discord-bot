@@ -18,8 +18,11 @@ export const MINTS_CHANNEL_ID = GENERAL_CHANNEL_ID;
 /** #show-and-tell. Inline lookups are allowed here too. */
 export const SHOW_AND_TELL_CHANNEL_ID = "1446248716536123502";
 
-/** #gallery. The six-hourly random post lands here. */
+/** #gallery. The random collection post lands here. */
 export const GALLERY_CHANNEL_ID = "1445943861263208561";
+
+/** Channel the idle nudge posts into, and the channel it watches for silence. */
+export const NUDGE_CHANNEL_ID = GENERAL_CHANNEL_ID;
 
 /** #trading-floor. The OpenSea sales feed lands here. */
 export const TRADING_FLOOR_CHANNEL_ID = "1446247601942036574";
@@ -143,6 +146,48 @@ export const SALES_DEFERRED_QUEUE_MAX = 50;
 
 /** Items listed inside a grouped message (`discord/utils.ts:513`). */
 export const SALES_TOP_ITEMS = 4;
+
+/**
+ * Idle nudge and idle-aware `#gallery` tuning.
+ *
+ * All four numbers are the operator's, and the two that matter are the pair on
+ * the nudge: 48 hours of silence before the first post, then no more than one
+ * post a day for as long as the silence lasts. The threshold is what makes this
+ * a reaction to quiet rather than a schedule; the cooldown is what stops a dead
+ * server turning into an hourly feed.
+ */
+
+/** #general must be silent this long before the nudge will post at all. */
+export const IDLE_QUIET_THRESHOLD_MS = 48 * 60 * 60 * 1000;
+
+/** Shortest gap between two nudges, however long the silence runs. */
+export const NUDGE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The `#gallery` post is gated on the same silence, at half the threshold and
+ * the same cadence. See the note in `src/channels/gallery.ts` for why it is
+ * looser than the nudge in one direction and stricter in the other.
+ */
+export const GALLERY_QUIET_THRESHOLD_MS = 24 * 60 * 60 * 1000;
+export const GALLERY_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Content kinds tried in one nudge tick before it gives up and waits an hour.
+ *
+ * Two, not four. A random token id can be a burned bot and an API can be down,
+ * so one fallback is worth having; beyond that a tick that finds nothing is
+ * better off costing nothing and trying again next hour.
+ */
+export const NUDGE_KIND_ATTEMPTS = 2;
+
+/** Random token ids the "notable bot" pick will look at. */
+export const NUDGE_NOTABLE_SAMPLE = 3;
+
+/** Rank percentile that ends the sample early: top 10% is notable enough. */
+export const NUDGE_NOTABLE_PERCENTILE = 10;
+
+/** Artifacts pulled before picking one for a nudge or a gallery post. */
+export const RANDOM_ARTIFACT_FETCH_LIMIT = 50;
 
 /** GlyphBots brand color for embeds. */
 export const GLYPHBOTS_COLOR = 0x00ff88;

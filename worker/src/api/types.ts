@@ -27,6 +27,22 @@ export type Artifact = {
   type: string | null;
 };
 
+/**
+ * `/api/artifacts/recently-minted?summary=true`.
+ *
+ * Four counts and nothing else, and note what they are not: `last1d` is a
+ * rolling 24 hours rather than "today", and `total` is minted artifacts rather
+ * than anything about bots. Verified live 2026-07-26, which returned
+ * `{"total":173,"last1d":0,"last7d":2,"last30d":2}`. The summary branch answers
+ * a bare object with no `ok` envelope, unlike the list branch below.
+ */
+export type ArtifactSummary = {
+  total: number;
+  last1d: number;
+  last7d: number;
+  last30d: number;
+};
+
 export type ArtifactsListResponse = {
   ok: boolean;
   items: Artifact[];

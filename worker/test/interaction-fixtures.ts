@@ -219,6 +219,7 @@ export const stubGlyphBots = (
 ): GlyphBotsClient => ({
   baseUrl: TEST_ORIGIN,
   fetchArtifact: vi.fn(() => Promise.resolve(null)),
+  fetchArtifactSummary: vi.fn(() => Promise.resolve(null)),
   fetchBot: vi.fn(() => Promise.resolve(null)),
   fetchBotStory: vi.fn(() => Promise.resolve(null)),
   fetchRecentArtifacts: vi.fn(() => Promise.resolve([])),

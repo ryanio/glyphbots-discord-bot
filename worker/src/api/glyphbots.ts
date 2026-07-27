@@ -17,6 +17,7 @@ import type {
   Artifact,
   ArtifactResponse,
   ArtifactsListResponse,
+  ArtifactSummary,
   Bot,
   BotResponse,
   BotStory,
@@ -31,6 +32,8 @@ export type GlyphBotsClient = {
   /** Origin the client is pointed at. */
   baseUrl: string;
   fetchArtifact: (contractTokenId: number) => Promise<Artifact | null>;
+  /** Mint counts for the idle nudge's fun facts. `null` when unavailable. */
+  fetchArtifactSummary: () => Promise<ArtifactSummary | null>;
   fetchBot: (tokenId: number) => Promise<Bot | null>;
   fetchBotStory: (tokenId: number) => Promise<BotStory | null>;
   fetchRecentArtifacts: (limit?: number) => Promise<Artifact[]>;
@@ -107,6 +110,48 @@ export const createGlyphBotsClient = (
     }
   };
 
+  /**
+   * The summary branch of the same endpoint the mint watcher polls.
+   *
+   * Every field is checked before the object is handed back, because the only
+   * consumer prints these numbers as claims about the collection. A response
+   * missing a count reads as no summary at all rather than as a zero.
+   */
+  const fetchArtifactSummary = async (): Promise<ArtifactSummary | null> => {
+    const url = `${baseUrl}/api/artifacts/recently-minted?summary=true`;
+
+    try {
+      const response = await fetch(url, { headers: JSON_HEADERS });
+
+      if (!response.ok) {
+        log.error(`Failed to fetch the artifact summary: ${response.status}`);
+        return null;
+      }
+
+      const data = (await response.json()) as Partial<ArtifactSummary>;
+      const { total, last1d, last7d, last30d } = data;
+
+      if (
+        ![total, last1d, last7d, last30d].every(
+          (count) => typeof count === "number" && Number.isFinite(count)
+        )
+      ) {
+        log.warn("Artifact summary was missing a count, ignoring it");
+        return null;
+      }
+
+      return {
+        total: total as number,
+        last1d: last1d as number,
+        last7d: last7d as number,
+        last30d: last30d as number,
+      };
+    } catch (error) {
+      log.error(`Error fetching the artifact summary: ${getErrorMessage(error)}`);
+      return null;
+    }
+  };
+
   const fetchBot = async (tokenId: number): Promise<Bot | null> => {
     const url = `${baseUrl}/api/bot/${tokenId}`;
     log.debug(`Fetching bot ${tokenId} from ${url}`);
@@ -159,6 +204,7 @@ export const createGlyphBotsClient = (
   return {
     baseUrl,
     fetchArtifact,
+    fetchArtifactSummary,
     fetchBot,
     fetchBotStory,
     fetchRecentArtifacts,
