@@ -175,8 +175,21 @@ export type OpenSeaEvent = {
   buyer?: string;
   from_address?: string;
   to_address?: string;
+  /**
+   * Order fields, present on `event_type: "order"` responses. The v2 API
+   * reports listings and offers under one `order` event type and puts the
+   * real one in `order_type`, which is the quirk
+   * `opensea-activity-bot/src/utils/event-types.ts:15-24` exists to unpick.
+   * Only the sales feed reads these, and only to classify what it is choosing
+   * not to post.
+   */
+  order_type?: string;
+  order_hash?: string;
+  maker?: string;
+  expiration_date?: number;
   nft?: {
     identifier: string;
+    contract?: string;
     name?: string;
     opensea_url?: string;
   };

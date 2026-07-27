@@ -24,6 +24,8 @@ import {
   GLYPHBOTS_CONTRACT,
   OPENSEA_API_BASE,
   OPENSEA_CHAIN,
+  SALES_FETCH_LIMIT,
+  SALES_MAX_PAGES,
 } from "../config";
 import { createLogger, getErrorMessage } from "../utils/logger";
 import type {
@@ -45,6 +47,32 @@ const NOT_FOUND = 404;
 
 export type OpenSeaEventType = "sale" | "transfer" | "listing";
 
+/** Options for one paginated events sweep. */
+export type EventsSinceOptions = {
+  /**
+   * Unix seconds. OpenSea returns events strictly after this, so the caller
+   * subtracts a lag window before passing its cursor in.
+   */
+  after: number;
+  eventTypes: readonly OpenSeaEventType[];
+  /** Events per page. */
+  limit?: number;
+  /** Pages to follow at most, counting the first. */
+  maxPages?: number;
+};
+
+export type EventsSincePage = {
+  /** Oldest first, which is the order the feed posts in. */
+  events: OpenSeaEvent[];
+  pages: number;
+  /**
+   * True when a request came back empty because it failed rather than because
+   * there was nothing there. The caller must not advance its cursor on a
+   * truncated sweep.
+   */
+  failed: boolean;
+};
+
 export type OpenSeaClient = {
   fetchAccount: (address: string) => Promise<OpenSeaAccount | null>;
   fetchAccountNFTs: (address: string, limit?: number) => Promise<AccountNFT[]>;
@@ -52,6 +80,14 @@ export type OpenSeaClient = {
     eventType: OpenSeaEventType,
     limit?: number
   ) => Promise<OpenSeaEvent[]>;
+  /**
+   * `collectPaginatedEvents` from
+   * `opensea-activity-bot/src/opensea.ts:479-556`, with the module-level
+   * config turned into arguments.
+   */
+  fetchCollectionEventsSince: (
+    options: EventsSinceOptions
+  ) => Promise<EventsSincePage>;
   fetchCollectionStats: () => Promise<OpenSeaCollectionStats | null>;
   fetchListings: (limit?: number) => Promise<OpenSeaListing[]>;
   fetchNFT: (tokenId: number) => Promise<OpenSeaNFT | null>;
@@ -112,11 +148,87 @@ export const createOpenSeaClient = (
     return result?.nfts ?? [];
   };
 
+  const eventsUrl = (params: URLSearchParams): string =>
+    `${OPENSEA_API_BASE}/events/collection/${GLYPHBOTS_COLLECTION_SLUG}?${params}`;
+
+  /**
+   * Follow `next` until the collection runs out, a page comes back short, or
+   * the page budget is spent.
+   *
+   * Three guards carried over from the Node version verbatim, because each one
+   * is there for an observed failure: stop when a page returns fewer rows than
+   * the limit (there is nothing behind it), stop when the API hands back the
+   * cursor it was just given (it does), and stop at `maxPages` regardless.
+   *
+   * One deliberate difference. The Node version builds the next URL as
+   * `${getEvents()}?${result.next}`, treating `next` as an entire query string,
+   * which drops `after` and the event type filters on every page after the
+   * first. Here `next` is passed as one parameter alongside the original
+   * filters, which is what the v2 API documents.
+   */
+  const fetchCollectionEventsSince = async (
+    options: EventsSinceOptions
+  ): Promise<EventsSincePage> => {
+    const limit = options.limit ?? SALES_FETCH_LIMIT;
+    const maxPages = options.maxPages ?? SALES_MAX_PAGES;
+
+    const baseParams = (): URLSearchParams => {
+      const params = new URLSearchParams({
+        after: String(Math.max(0, Math.floor(options.after))),
+        limit: String(limit),
+      });
+      for (const eventType of options.eventTypes) {
+        params.append("event_type", eventType);
+      }
+      return params;
+    };
+
+    const collected: OpenSeaEvent[] = [];
+    let cursor: string | undefined;
+    let previousCursor: string | undefined;
+    let pages = 0;
+
+    while (pages < maxPages) {
+      const params = baseParams();
+      if (cursor) {
+        params.set("next", cursor);
+      }
+
+      const page = await get<OpenSeaEventsResponse>(eventsUrl(params));
+      pages += 1;
+
+      if (!page) {
+        log.warn(`Events page ${pages} failed, stopping the sweep here`);
+        return { events: collected.reverse(), pages, failed: true };
+      }
+
+      const batch = page.asset_events ?? [];
+      collected.push(...batch);
+
+      if (batch.length < limit || !page.next || page.next === previousCursor) {
+        break;
+      }
+
+      previousCursor = cursor;
+      cursor = page.next;
+    }
+
+    if (pages > 1) {
+      log.debug(`Events sweep followed ${pages} pages, ${collected.length} events`);
+    }
+
+    // OpenSea serves newest first. The feed posts chronologically, and the
+    // cursor is the max timestamp handled, so reverse once here.
+    return { events: collected.reverse(), pages, failed: false };
+  };
+
   return {
     fetchAccount: (address) =>
       get<OpenSeaAccount>(`${OPENSEA_API_BASE}/accounts/${address}`),
 
     fetchAccountNFTs,
+
+    fetchCollectionEventsSince,
 
     fetchCollectionEvents: async (eventType, limit = 10) => {
       const params = new URLSearchParams({

@@ -7,16 +7,27 @@
   "observability": {
     "enabled": true
   },
-  // Two crons, dispatched on `event.cron` in `scheduled()` so neither runs the
-  // other's work:
+  // Three crons, dispatched on `event.cron` in `scheduled()` so none runs
+  // another's work:
   // - `*/5 * * * *` the mint watcher (MINTS_POLL_INTERVAL_MINUTES = 5 on the
   //   Node bot, src/lib/constants.ts:46), which also pokes the gateway
   //   watchdog.
+  // - `2-59/5 * * * *` the OpenSea sales feed into #trading-floor.
   // - `0 */6 * * *` one random collection item into #gallery, the cadence
   //   RANDOM_INTERVALS ran at before it stopped on 2026-05-02.
-  // Phase 4 adds the one-minute OpenSea tick.
+  //
+  // The sales feed is every five minutes, not the plan's `* * * * *`. Measured
+  // 2026-07-25: sales run 1.24/day, so a per-minute cron is about 1,161 empty
+  // OpenSea calls per real event.
+  //
+  // It is minute 2, 7, 12 … rather than 0, 5, 10 … for two reasons. First,
+  // `event.cron` is the only thing `scheduled()` can dispatch on, and a second
+  // literal `*/5 * * * *` entry would be the same string, so the feed could not
+  // be told apart from the mint tick. Second, offsetting it keeps the two ticks
+  // from contending for the same subrequest budget and the same FeedStateDO
+  // input gate in the same second. Same cadence, two minutes apart.
   "triggers": {
-    "crons": ["*/5 * * * *", "0 */6 * * *"]
+    "crons": ["*/5 * * * *", "2-59/5 * * * *", "0 */6 * * *"]
   },
   "durable_objects": {
     "bindings": [
@@ -62,5 +73,6 @@
   //   force-reconnect the live gateway socket. Unset means those routes answer
   //   503 and do nothing; it is never an open door.
   //
-  // Phase 4 needs no new secrets.
+  // Phase 4 needs no new secrets. The sales feed reads OPENSEA_API_TOKEN
+  // through the same client as the slash commands.
 }

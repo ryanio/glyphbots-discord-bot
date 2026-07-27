@@ -21,6 +21,9 @@ export const SHOW_AND_TELL_CHANNEL_ID = "1446248716536123502";
 /** #gallery. The six-hourly random post lands here. */
 export const GALLERY_CHANNEL_ID = "1445943861263208561";
 
+/** #trading-floor. The OpenSea sales feed lands here. */
+export const TRADING_FLOOR_CHANNEL_ID = "1446247601942036574";
+
 /**
  * The only two channels inline `b#123` / `a#123` / `#username` lookups answer
  * in.
@@ -78,6 +81,68 @@ export const MINTS_POST_DELAY_MS = 1500;
 
 /** How many posted artifact ids the cursor remembers (`src/lib/state.ts:17`). */
 export const MINTS_POSTED_ID_HISTORY = 100;
+
+/**
+ * OpenSea feed event types the sales tick asks for, and posts.
+ *
+ * `sale` only, and that is a measurement, not a simplification. Listings run
+ * about 176/day against this collection (24 events in a 3.3 hour probe on
+ * 2026-07-25, almost all of it one operator's relister), which would put a
+ * message in #trading-floor every eight minutes forever. Sales run 1.24/day.
+ * The listing code path below is left structurally intact so re-enabling it is
+ * adding a string here, but nothing enables it today.
+ */
+export const SALES_EVENT_TYPES: readonly ["sale"] = ["sale"];
+
+/**
+ * Seconds subtracted from the cursor before asking OpenSea for events
+ * (`opensea-activity-bot/src/opensea.ts:41-44`, applied at `:409-412`).
+ *
+ * OpenSea indexes events slightly after they happen, so a query that starts
+ * exactly at the last seen timestamp misses anything that landed late with an
+ * older timestamp. Overlapping the window deliberately re-surfaces events; the
+ * processed key set is what stops them being posted twice.
+ */
+export const SALES_LAG_WINDOW_SECONDS = 120;
+
+/** Events per page. OpenSea's own ceiling is 200. */
+export const SALES_FETCH_LIMIT = 50;
+
+/** Pagination ceiling per tick, so one bad cursor cannot spin forever. */
+export const SALES_MAX_PAGES = 10;
+
+/**
+ * Settle window for actor grouping (`src/utils/constants.ts:13-14`). A buyer
+ * sweeping ten items produces one message rather than ten, and the 60s was
+ * originally chosen to let OpenSea metadata populate for mints.
+ */
+export const SALES_SETTLE_MS = 60_000;
+
+/** Fewest events before a group is a group rather than N singles. */
+export const SALES_MIN_GROUP_SIZE = 2;
+
+/** Under-sized groups are dropped at `settleMs * 3` (`event-grouping.ts:353-360`). */
+export const SALES_GROUP_STALE_MULTIPLIER = 3;
+
+/** Bound on the processed key set, matching the LRU it replaces. */
+export const SALES_PROCESSED_KEY_HISTORY = 2000;
+
+/**
+ * Messages sent per tick.
+ *
+ * The Node bot paced itself with a hardcoded 3,000 ms `await timeout` between
+ * messages (`src/platforms/discord/discord.ts:155-157,208-211`). A cron
+ * invocation must not sleep, so the pacing becomes a cap: send this many, and
+ * carry the rest to the next tick in the deferred queue rather than dropping
+ * them.
+ */
+export const SALES_MAX_MESSAGES_PER_TICK = 5;
+
+/** Ceiling on the deferred queue, so a dead channel cannot grow storage forever. */
+export const SALES_DEFERRED_QUEUE_MAX = 50;
+
+/** Items listed inside a grouped message (`discord/utils.ts:513`). */
+export const SALES_TOP_ITEMS = 4;
 
 /** GlyphBots brand color for embeds. */
 export const GLYPHBOTS_COLOR = 0x00ff88;
