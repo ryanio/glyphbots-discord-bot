@@ -1,9 +1,9 @@
 /**
- * OpenSea v2 client, ported from `src/api/opensea.ts`.
+ * OpenSea v2 client.
  *
- * The Node version destructures `process.env.OPENSEA_API_TOKEN` at module
- * scope (`src/api/opensea.ts:23`) and freezes it into a shared `GET_OPTS`
- * header object (`:24-31`). On Workers the module body runs before any binding
+ * The Node version destructured `process.env.OPENSEA_API_TOKEN` at module
+ * scope (`src/api/opensea.ts:23-31` at `c75d6a8`) and froze it into a shared
+ * `GET_OPTS` header object. On Workers the module body runs before any binding
  * exists, so every call would ship `X-API-KEY: ""` and get rate limited. Here
  * the token is a factory argument, the same shape `createGlyphBotsClient` uses,
  * and the headers are rebuilt per client.
@@ -242,7 +242,9 @@ export const createOpenSeaClient = (
     }
 
     if (pages > 1) {
-      log.debug(`Events sweep followed ${pages} pages, ${collected.length} events`);
+      log.debug(
+        `Events sweep followed ${pages} pages, ${collected.length} events`
+      );
     }
 
     // OpenSea serves newest first. The feed posts chronologically, and the
@@ -299,14 +301,14 @@ export const createOpenSeaClient = (
   };
 };
 
-/** Marketplace URL for one bot (`src/api/opensea.ts:139`). */
+/** Marketplace URL for one bot (`src/api/opensea.ts:139` at `c75d6a8`). */
 export const getOpenSeaUrl = (tokenId: number): string =>
   `https://opensea.io/assets/ethereum/${GLYPHBOTS_CONTRACT}/${tokenId}`;
 
-/** Marketplace URL for one artifact (`src/commands/artifact.ts:83`). */
+/** Marketplace URL for one artifact (`src/commands/artifact.ts:83` at `c75d6a8`). */
 export const getOpenSeaArtifactUrl = (tokenId: number): string =>
   `https://opensea.io/assets/ethereum/${ARTIFACTS_CONTRACT}/${tokenId}`;
 
-/** Marketplace URL for the collection (`src/api/opensea.ts:142`). */
+/** Marketplace URL for the collection (`src/api/opensea.ts:142` at `c75d6a8`). */
 export const getOpenSeaCollectionUrl = (): string =>
   `https://opensea.io/collection/${GLYPHBOTS_COLLECTION_SLUG}`;

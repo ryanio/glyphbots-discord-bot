@@ -8,7 +8,6 @@
  * helper.
  */
 
-import type { APIEmbed } from "discord-api-types/v10";
 import { describe, expect, it, vi } from "vitest";
 import { handleActivity } from "../src/commands/activity";
 import { handleArtifact } from "../src/commands/artifact";
@@ -21,29 +20,25 @@ import { handleRarity } from "../src/commands/rarity";
 import { handleSales } from "../src/commands/sales";
 import type { FollowUp } from "../src/discord/interactions";
 import {
+  createArtifact,
+  createBot,
+  firstEmbed,
+  stubGlyphBots,
+  TEST_ORIGIN,
+} from "./fixtures";
+import {
   boolOption,
   commandContext,
-  createArtifactFixture,
-  createBot,
   createListing,
   createNFT,
   createSaleEvent,
   createStats,
   createStory,
   intOption,
+  partialStats,
   stringOption,
-  stubGlyphBots,
   stubOpenSea,
-  TEST_ORIGIN,
 } from "./interaction-fixtures";
-
-const firstEmbed = (reply: FollowUp): APIEmbed => {
-  const embed = reply.embeds?.[0];
-  if (!embed) {
-    throw new Error("expected an embed");
-  }
-  return embed as APIEmbed;
-};
 
 /** URLs on the reply, so the SVG rule can be asserted in one place. */
 const imageUrls = (reply: FollowUp): string[] => {
@@ -115,7 +110,7 @@ describe("/bot", () => {
     const glyphbots = stubGlyphBots({
       fetchBot: vi.fn(() =>
         Promise.resolve(
-          createBot({
+          createBot(7, {
             traits: [
               { trait_type: "Name", value: "Wanderer" },
               { trait_type: "Head", value: "▲▼▲▼▲" },
@@ -129,7 +124,9 @@ describe("/bot", () => {
     });
     const ctx = commandContext({
       glyphbots,
-      opensea: stubOpenSea({ fetchNFT: vi.fn(() => Promise.resolve(createNFT())) }),
+      opensea: stubOpenSea({
+        fetchNFT: vi.fn(() => Promise.resolve(createNFT())),
+      }),
       options: readOptions([intOption("id", 7)]),
     });
 
@@ -148,12 +145,14 @@ describe("/bot", () => {
       value: "◇".repeat(40),
     }));
     const glyphbots = stubGlyphBots({
-      fetchBot: vi.fn(() => Promise.resolve(createBot({ traits }))),
+      fetchBot: vi.fn(() => Promise.resolve(createBot(7, { traits }))),
       fetchBotStory: vi.fn(() => Promise.resolve(createStory())),
     });
     const ctx = commandContext({
       glyphbots,
-      opensea: stubOpenSea({ fetchNFT: vi.fn(() => Promise.resolve(createNFT())) }),
+      opensea: stubOpenSea({
+        fetchNFT: vi.fn(() => Promise.resolve(createNFT())),
+      }),
       options: readOptions([intOption("id", 7)]),
     });
 
@@ -171,7 +170,9 @@ describe("/bot", () => {
 
     const stats = embed.fields?.find((f) => f.name === "Stats")?.value ?? "";
     // Two rows of three, no bars. Absent stats fall back to zero.
-    expect(stats).toBe("```\nSTR  40  AGI  70  INT   0\nLCK   0  END   0  CHA   0\n```");
+    expect(stats).toBe(
+      "```\nSTR  40  AGI  70  INT   0\nLCK   0  END   0  CHA   0\n```"
+    );
 
     expect(embed.fields?.find((f) => f.name === "Role")?.value).toBe(
       "Driftwatch\nScout"
@@ -188,7 +189,9 @@ describe("/bot", () => {
     });
     const ctx = commandContext({
       glyphbots,
-      opensea: stubOpenSea({ fetchNFT: vi.fn(() => Promise.resolve(createNFT())) }),
+      opensea: stubOpenSea({
+        fetchNFT: vi.fn(() => Promise.resolve(createNFT())),
+      }),
       options: readOptions([intOption("id", 7)]),
     });
 
@@ -233,7 +236,7 @@ describe("/bot", () => {
     });
     const ctx = commandContext({
       glyphbots: stubGlyphBots({
-        fetchBot: vi.fn(() => Promise.resolve(createBot({ tokenId: 77 }))),
+        fetchBot: vi.fn(() => Promise.resolve(createBot(77))),
       }),
       opensea,
       options: readOptions([stringOption("user", "someone")]),
@@ -265,10 +268,10 @@ describe("/bot", () => {
 describe("/artifact", () => {
   const glyphbots = () =>
     stubGlyphBots({
-      fetchArtifact: vi.fn(() => Promise.resolve(createArtifactFixture())),
+      fetchArtifact: vi.fn(() => Promise.resolve(createArtifact())),
       fetchBot: vi.fn(() => Promise.resolve(createBot())),
       fetchRecentArtifacts: vi.fn(() =>
-        Promise.resolve([createArtifactFixture({ id: "only" })])
+        Promise.resolve([createArtifact({ id: "only" })])
       ),
     });
 
@@ -280,7 +283,7 @@ describe("/artifact", () => {
 
     const embed = firstEmbed(await handleArtifact(ctx));
 
-    expect(embed.title).toBe("Signal Bloom");
+    expect(embed.title).toBe("Artifact 12");
     expect(embed.url).toBe(`${TEST_ORIGIN}/artifact/12`);
     // The mint date rides in the footer instead of a fourth inline field.
     // The day depends on the runner's zone, so match the shape, not the date.
@@ -306,7 +309,7 @@ describe("/artifact", () => {
     const reply = await handleArtifact(ctx);
 
     expect(firstEmbed(reply).image?.url).toBe(
-      "https://www.glyphbots.com/artifacts/1.jpg"
+      `${TEST_ORIGIN}/artifacts/12.jpg`
     );
     for (const call of Object.values(opensea)) {
       expect(call).not.toHaveBeenCalled();
@@ -319,7 +322,7 @@ describe("/artifact", () => {
       options: readOptions([boolOption("random", true)]),
     });
 
-    expect(firstEmbed(await handleArtifact(ctx)).title).toBe("Signal Bloom");
+    expect(firstEmbed(await handleArtifact(ctx)).title).toBe("Artifact 12");
   });
 
   it("reports an empty recent list", async () => {
@@ -454,10 +457,12 @@ describe("/floor", () => {
     const ctx = commandContext({
       opensea: stubOpenSea({
         fetchCollectionStats: vi.fn(() =>
-          Promise.resolve({
-            total: { volume: 10 },
-            intervals: [{ interval: "one_day", sales: 4 }],
-          } as never)
+          Promise.resolve(
+            partialStats({
+              total: { volume: 10 },
+              intervals: [{ interval: "one_day", sales: 4 }],
+            })
+          )
         ),
       }),
     });
@@ -479,7 +484,7 @@ describe("/floor", () => {
   it("survives a response with no total or intervals at all", async () => {
     const ctx = commandContext({
       opensea: stubOpenSea({
-        fetchCollectionStats: vi.fn(() => Promise.resolve({} as never)),
+        fetchCollectionStats: vi.fn(() => Promise.resolve(partialStats({}))),
       }),
     });
 
@@ -495,7 +500,9 @@ describe("the remaining four", () => {
   it("/sales lists sales and links to glyphbots.com", async () => {
     const ctx = commandContext({
       opensea: stubOpenSea({
-        fetchCollectionEvents: vi.fn(() => Promise.resolve([createSaleEvent()])),
+        fetchCollectionEvents: vi.fn(() =>
+          Promise.resolve([createSaleEvent()])
+        ),
       }),
     });
 
@@ -594,8 +601,18 @@ describe("the remaining four", () => {
           Promise.resolve(
             createNFT({
               traits: [
-                { trait_type: "Head", value: "Antenna", display_type: null, max_value: null },
-                { trait_type: "Aura", value: "None", display_type: null, max_value: null },
+                {
+                  trait_type: "Head",
+                  value: "Antenna",
+                  display_type: null,
+                  max_value: null,
+                },
+                {
+                  trait_type: "Aura",
+                  value: "None",
+                  display_type: null,
+                  max_value: null,
+                },
               ],
             })
           )
@@ -658,7 +675,11 @@ describe("the remaining four", () => {
         fetchNFT: vi.fn(() =>
           Promise.resolve(
             createNFT({
-              rarity: { strategy_id: "openrarity", strategy_version: "1", rank: 0 },
+              rarity: {
+                strategy_id: "openrarity",
+                strategy_version: "1",
+                rank: 0,
+              },
               traits: [
                 {
                   trait_type: "Head",
@@ -708,7 +729,10 @@ describe("the remaining four", () => {
               event_timestamp: now - 90_000,
               to_address: "0xabcdef1234567890abcdef1234567890abcdef12",
             }),
-            createSaleEvent({ event_type: "listing", event_timestamp: now - 30 }),
+            createSaleEvent({
+              event_type: "listing",
+              event_timestamp: now - 30,
+            }),
           ])
         ),
       }),

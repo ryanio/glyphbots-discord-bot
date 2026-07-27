@@ -20,37 +20,7 @@ import type {
   OpenSeaNFT,
 } from "../src/api/types";
 import type { LookupClients } from "../src/lookups/embeds";
-
-export const createBot = (tokenId: number, overrides: Partial<Bot> = {}): Bot => ({
-  id: `bot-${tokenId}`,
-  name: `GlyphBot #${tokenId} - Vector`,
-  tokenId,
-  traits: [
-    { trait_type: "Core", value: "Plasma" },
-    { trait_type: "Frame", value: "None" },
-  ],
-  rarityRank: 500,
-  burnedAt: null,
-  burnedBy: null,
-  ...overrides,
-});
-
-export const createLookupArtifact = (
-  contractTokenId: number,
-  overrides: Partial<Artifact> = {}
-): Artifact => ({
-  id: `artifact-${contractTokenId}`,
-  botTokenId: 7,
-  imageUrl: "https://www.glyphbots.com/artifacts/1.jpg",
-  title: `Artifact ${contractTokenId}`,
-  createdAt: "2025-01-01T00:00:00Z",
-  mintedAt: "2025-01-01T00:00:00Z",
-  contractTokenId,
-  mintQuantity: 1,
-  minter: "0x1234567890abcdef1234567890abcdef12345678",
-  type: "image",
-  ...overrides,
-});
+import { createArtifact, createBot, TEST_ORIGIN } from "./fixtures";
 
 export const createOpenSeaNFT = (tokenId: number): OpenSeaNFT => ({
   identifier: String(tokenId),
@@ -58,7 +28,9 @@ export const createOpenSeaNFT = (tokenId: number): OpenSeaNFT => ({
   contract: "0xb6c2c2d2999c1b532e089a7ad4cb7f8c91cf5075",
   token_standard: "erc721",
   opensea_url: `https://opensea.io/assets/ethereum/x/${tokenId}`,
-  owners: [{ address: "0xabcdef1234567890abcdef1234567890abcdef12", quantity: 1 }],
+  owners: [
+    { address: "0xabcdef1234567890abcdef1234567890abcdef12", quantity: 1 },
+  ],
   rarity: { strategy_id: "openrarity", strategy_version: "1", rank: 42 },
 });
 
@@ -85,7 +57,7 @@ export const createLookupClients = (options: FakeClientOptions = {}) => {
     Promise.resolve(
       options.artifacts
         ? (options.artifacts[tokenId] ?? null)
-        : createLookupArtifact(tokenId)
+        : createArtifact({ contractTokenId: tokenId })
     )
   );
   const fetchRecentArtifacts = vi.fn(() =>
@@ -114,15 +86,15 @@ export const createLookupClients = (options: FakeClientOptions = {}) => {
   );
 
   const glyphbots = {
-    baseUrl: "https://www.glyphbots.com",
+    baseUrl: TEST_ORIGIN,
     fetchArtifact,
     fetchArtifactSummary,
     fetchBot,
     fetchBotStory: vi.fn(() => Promise.resolve(null)),
     fetchRecentArtifacts,
-    getArtifactUrl: (id: number) => `https://www.glyphbots.com/artifact/${id}`,
-    getBotPngUrl: (id: number) => `https://www.glyphbots.com/bots/pngs/${id}.png`,
-    getBotUrl: (id: number) => `https://www.glyphbots.com/bot/${id}`,
+    getArtifactUrl: (id: number) => `${TEST_ORIGIN}/artifact/${id}`,
+    getBotPngUrl: (id: number) => `${TEST_ORIGIN}/bots/pngs/${id}.png`,
+    getBotUrl: (id: number) => `${TEST_ORIGIN}/bot/${id}`,
   } satisfies GlyphBotsClient;
 
   const opensea = {

@@ -1,11 +1,14 @@
-import type { RESTPostAPIChannelMessageJSONBody } from "discord-api-types/v10";
 import { vi } from "vitest";
 import type { EventsSincePage } from "../src/api/opensea";
 import type { OpenSeaEvent } from "../src/api/types";
-import type { SalesFeedState, SalesPollDeps } from "../src/channels/sales";
+import type {
+  SalesFeedState,
+  SalesPollDeps,
+  SalesUpdate,
+} from "../src/channels/sales";
+import { applySalesUpdate } from "../src/channels/sales";
 import { emptyGroupingState } from "../src/channels/sales-grouping";
-
-export const TEST_ORIGIN = "https://www.glyphbots.com";
+import { stubGlyphBots } from "./fixtures";
 
 /** One sale event. Timestamps are unix seconds, as OpenSea reports them. */
 export const saleEvent = (
@@ -52,40 +55,34 @@ export const salesState = (
   ...overrides,
 });
 
+const roundTrip = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+
 /**
  * In-memory stand-in for FeedStateDO's sales record.
  *
- * `write` round-trips through JSON deliberately: DO storage serializes, and a
- * grouping state that only survives because it shares object identity with the
- * caller would pass a test and fail in production.
+ * `apply` runs the shipped `applySalesUpdate`, which is also what the DO runs,
+ * so the key merge and the cursor arithmetic under test are the ones that
+ * ship. Both directions go through JSON deliberately: DO storage serializes,
+ * and a grouping state that survives only because it shares object identity
+ * with the caller would pass a test and fail in production.
  */
 export const createMemorySalesStore = (initial: SalesFeedState | null) => {
-  let stored = initial === null ? null : JSON.parse(JSON.stringify(initial));
-  const writes: SalesFeedState[] = [];
+  let stored = initial === null ? null : roundTrip(initial);
+  const updates: SalesUpdate[] = [];
+
   return {
-    writes,
+    updates,
     get current(): SalesFeedState | null {
       return stored;
     },
-    read: () =>
-      Promise.resolve(
-        stored === null ? null : (JSON.parse(JSON.stringify(stored)) as SalesFeedState)
-      ),
-    write: (next: SalesFeedState) => {
-      stored = JSON.parse(JSON.stringify(next));
-      writes.push(stored as SalesFeedState);
-      return Promise.resolve();
+    read: () => Promise.resolve(stored === null ? null : roundTrip(stored)),
+    apply: (update: SalesUpdate) => {
+      const wire = roundTrip(update);
+      updates.push(wire);
+      stored = roundTrip(applySalesUpdate(stored, wire));
+      return Promise.resolve(stored as SalesFeedState);
     },
   };
-};
-
-export const createMemoryPoster = () => {
-  const sends: RESTPostAPIChannelMessageJSONBody[] = [];
-  const send = vi.fn((body: RESTPostAPIChannelMessageJSONBody) => {
-    sends.push(body);
-    return Promise.resolve();
-  });
-  return { sends, send };
 };
 
 /**
@@ -141,12 +138,7 @@ export const createSweepStub = (
   ),
 });
 
-export const stubGlyphBots = () => ({
-  getBotPngUrl: (id: number) => `${TEST_ORIGIN}/bots/pngs/${id}.png`,
-  getBotUrl: (id: number) => `${TEST_ORIGIN}/bot/${id}`,
-});
-
-export const pollDeps = (
+export const salesPollDeps = (
   opensea: SalesPollDeps["opensea"],
   poster: SalesPollDeps["poster"],
   store: SalesPollDeps["store"],
@@ -158,15 +150,3 @@ export const pollDeps = (
   store,
   now,
 });
-
-type EmbedJson = {
-  title?: string;
-  url?: string;
-  image?: { url: string };
-  thumbnail?: { url: string };
-  fields?: Array<{ name: string; value: string }>;
-};
-
-export const firstEmbed = (
-  body: RESTPostAPIChannelMessageJSONBody | undefined
-): EmbedJson => (body?.embeds as unknown as EmbedJson[])[0] as EmbedJson;

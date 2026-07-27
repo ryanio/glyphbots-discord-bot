@@ -9,10 +9,10 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  DEFAULT_GROUP_CONFIG,
   actorKeyFor,
   addEvents,
   collectReadyGroups,
+  DEFAULT_GROUP_CONFIG,
   emptyGroupingState,
   eventKeyFor,
   isProcessed,
@@ -24,6 +24,7 @@ import {
   SALES_PROCESSED_KEY_HISTORY,
   SALES_SETTLE_MS,
 } from "../src/config";
+import { at } from "./fixtures";
 import { saleEvent, sweep } from "./sales-fixtures";
 
 const T0 = 1_760_000_000;
@@ -60,26 +61,32 @@ describe("flush predicate", () => {
     const state = emptyGroupingState();
     addEvents(state, sweep(2, T0), 1000);
 
-    expect(collectReadyGroups(state, 1000 + SALES_SETTLE_MS - 1).groups).toHaveLength(
-      0
-    );
-    expect(collectReadyGroups(state, 1000 + SALES_SETTLE_MS).groups).toHaveLength(1);
+    expect(
+      collectReadyGroups(state, 1000 + SALES_SETTLE_MS - 1).groups
+    ).toHaveLength(0);
+    expect(
+      collectReadyGroups(state, 1000 + SALES_SETTLE_MS).groups
+    ).toHaveLength(1);
   });
 
-  it("never flushes a group of one, it is released individually instead", () => {
+  it("holds a group of one back rather than flushing or releasing it", () => {
+    // Neither outcome: `rawCount` is below the minimum, so the settle window
+    // elapsing does nothing at all and the group waits. It is the stale prune
+    // below, at `settleMs * 3`, that eventually drops it.
     const state = emptyGroupingState();
     addEvents(state, [saleEvent({ event_timestamp: T0 })], 1000);
 
     const ready = collectReadyGroups(state, 1000 + SALES_SETTLE_MS);
     expect(ready.groups).toHaveLength(0);
     expect(ready.releasedIndividuals).toHaveLength(0);
+    expect(Object.keys(state.actorGroups)).toHaveLength(1);
   });
 
   it("releases the survivors when a settled group shrinks below the minimum", () => {
     const state = emptyGroupingState();
     const events = sweep(2, T0);
     addEvents(state, events, 1000);
-    markProcessed(state, events[0] as never);
+    markProcessed(state, at(events));
 
     const ready = collectReadyGroups(state, 1000 + SALES_SETTLE_MS);
     expect(ready.groups).toHaveLength(0);
@@ -97,7 +104,9 @@ describe("duplicates", () => {
     // The lag window re-serves the same events on the next tick.
     addEvents(state, events, 1000 + SALES_SETTLE_MS - 1);
 
-    expect(collectReadyGroups(state, 1000 + SALES_SETTLE_MS).groups).toHaveLength(1);
+    expect(
+      collectReadyGroups(state, 1000 + SALES_SETTLE_MS).groups
+    ).toHaveLength(1);
   });
 
   it("still counts a duplicate toward rawCount, matching the source", () => {
@@ -107,7 +116,10 @@ describe("duplicates", () => {
     addEvents(state, one, 1000);
     addEvents(state, one, 1000);
 
-    const key = actorKeyFor(one[0] as never) as string;
+    const key = actorKeyFor(at(one));
+    if (!key) {
+      throw new Error("a sale with a buyer must have an actor key");
+    }
     expect(state.actorGroups[key]?.rawCount).toBe(2);
     expect(state.actorGroups[key]?.events).toHaveLength(1);
   });
@@ -182,7 +194,12 @@ describe("processEvents", () => {
     const state = emptyGroupingState();
     processEvents(state, sweep(3, T0), 1000);
 
-    const result = processEvents(state, [], 1000 + SALES_SETTLE_MS, DEFAULT_GROUP_CONFIG);
+    const result = processEvents(
+      state,
+      [],
+      1000 + SALES_SETTLE_MS,
+      DEFAULT_GROUP_CONFIG
+    );
 
     expect(result.readyGroups).toHaveLength(1);
     expect(result.readyGroups[0]?.events).toHaveLength(3);

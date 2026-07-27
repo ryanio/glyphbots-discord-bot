@@ -3,15 +3,19 @@
   "name": "glyphbots-worker",
   "main": "src/index.ts",
   "compatibility_date": "2026-07-25",
-  "compatibility_flags": ["nodejs_compat"],
+  // No `nodejs_compat`. Nothing in the bundle imports a `node:` module: the
+  // logger is `console`, Ed25519 goes through WebCrypto, and the only
+  // `process.env` read in the package is in `scripts/register-commands.ts`,
+  // which is not bundled. Leaving the flag off keeps that a build failure
+  // rather than something that quietly starts working.
   "observability": {
     "enabled": true
   },
   // Four crons, dispatched on `event.cron` in `scheduled()` so none runs
   // another's work:
   // - `*/5 * * * *` the mint watcher (MINTS_POLL_INTERVAL_MINUTES = 5 on the
-  //   Node bot, src/lib/constants.ts:46), which also pokes the gateway
-  //   watchdog.
+  //   Node bot, src/lib/constants.ts:46 at c75d6a8), which also pokes the
+  //   gateway watchdog.
   // - `2-59/5 * * * *` the OpenSea sales feed into #trading-floor.
   // - `0 */6 * * *` a random collection item into #gallery, the cadence
   //   RANDOM_INTERVALS ran at before it stopped on 2026-05-02. Since the idle
@@ -88,7 +92,4 @@
   // - ADMIN_TOKEN: shared secret for /_admin/gateway/*, which can connect and
   //   force-reconnect the live gateway socket. Unset means those routes answer
   //   503 and do nothing; it is never an open door.
-  //
-  // Phase 4 needs no new secrets. The sales feed reads OPENSEA_API_TOKEN
-  // through the same client as the slash commands.
 }

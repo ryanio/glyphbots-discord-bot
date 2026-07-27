@@ -1,5 +1,5 @@
 /**
- * `/listings`, ported from `src/commands/listings.ts`.
+ * `/listings`.
  *
  * OpenSea's best-listings response carries no token id we can trust to map
  * back to a bot, so the original listed price and seller only. That is kept.
@@ -46,7 +46,11 @@ export const handleListings: CommandHandler = async (ctx) => {
 
   return embedReply(embed, [
     linkButtonRow([
-      { label: "Browse on OpenSea", url: getOpenSeaCollectionUrl(), emoji: "🛒" },
+      {
+        label: "Browse on OpenSea",
+        url: getOpenSeaCollectionUrl(),
+        emoji: "🛒",
+      },
     ]),
   ]);
 };

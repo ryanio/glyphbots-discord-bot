@@ -1,5 +1,5 @@
 /**
- * Link button rows, the raw-builders equivalent of `src/lib/discord/buttons.ts`.
+ * Link button rows.
  *
  * Two differences from the Node bot, both forced by using `@discordjs/builders`
  * directly instead of discord.js:
@@ -27,7 +27,7 @@ export type LinkButton = {
   emoji: string;
 };
 
-export const linkButton = (button: LinkButton): ButtonBuilder =>
+const linkButton = (button: LinkButton): ButtonBuilder =>
   new ButtonBuilder()
     .setStyle(ButtonStyle.Link)
     .setLabel(button.label)

@@ -10,7 +10,8 @@
  * ## The cursor, and the silent failure it used to have
  *
  * The Node cursor resolved through `LAST_EVENT_TIMESTAMP`, then the state file,
- * then **`now`** (`src/opensea.ts:348-385`). That last fallback is the danger:
+ * then **`now`** (`opensea-activity-bot/src/opensea.ts:348-385`). That last
+ * fallback is the danger:
  * losing the cursor did not error, it silently moved the window to the present
  * and every sale during the gap was skipped forever, with nothing in the logs
  * saying so.
@@ -39,6 +40,16 @@
  * lives in DO storage now and the flush predicate is untouched. See
  * `./sales-grouping.ts`.
  *
+ * ## Where the state is merged
+ *
+ * Not here. A tick reads the record, sweeps OpenSea, posts, and then sends a
+ * `commit` operation; `applySalesUpdate` runs it inside `FeedStateDO`. The
+ * cursor arithmetic below decides what to *ask* for, and the DO decides what
+ * the record becomes. `processedKeys` is the reason it has to work that way: it
+ * is the only thing standing between a re-served event and a duplicate post,
+ * and a whole-value write computed out here would drop an overlapping tick's
+ * keys. See `src/durable-objects/feed-stores.ts`.
+ *
  * ## Why there is no sleep
  *
  * The Node bot paced messages with a 3,000 ms `await timeout`
@@ -56,9 +67,12 @@ import {
   SALES_EVENT_TYPES,
   SALES_LAG_WINDOW_SECONDS,
   SALES_MAX_MESSAGES_PER_TICK,
+  SALES_PROCESSED_KEY_HISTORY,
 } from "../config";
 import type { ChannelPoster } from "../discord/channel-poster";
+import type { SalesStateStore } from "../durable-objects/feed-stores";
 import { createLogger, getErrorMessage } from "../utils/logger";
+import { MS_PER_SECOND } from "../utils/time";
 import {
   buildGroupEmbed,
   buildSaleEmbed,
@@ -66,17 +80,15 @@ import {
   type SalesEmbedClients,
 } from "./sales-embeds";
 import {
-  type GroupingState,
   effectiveEventType,
   emptyGroupingState,
+  type GroupingState,
   markGroupProcessed,
   markProcessed,
   processEvents,
 } from "./sales-grouping";
 
 const log = createLogger("Sales");
-
-const MS_PER_SECOND = 1000;
 
 /**
  * A built message waiting to go out.
@@ -101,24 +113,119 @@ export type SalesFeedState = {
 };
 
 /** Where the cursor came from on this tick. Logged every time. */
-export type CursorSource = "stored" | "seeded-from-events" | "seeded-from-clock";
+export type CursorSource =
+  | "stored"
+  | "seeded-from-events"
+  | "seeded-from-clock";
+
+/**
+ * Every mutation the sales record accepts. Applied inside the DO.
+ *
+ * `commit` describes what one tick did rather than handing over a whole
+ * record, because everything between reading the record and writing it back is
+ * network: an OpenSea sweep, up to five Discord posts. A whole-value write
+ * computed on the Worker side is a read-modify-write with all of that in the
+ * middle, and the half that matters is `processedKeys`: lose one tick's keys
+ * and the sale it just posted goes out again.
+ */
+export type SalesUpdate =
+  | { op: "seed"; at: number }
+  | {
+      op: "commit";
+      /** Every key this tick has taken responsibility for delivering. */
+      processedKeys: string[];
+      /** Pending settle-window groups, as this tick left them. */
+      actorGroups: GroupingState["actorGroups"];
+      /** Built but undelivered, oldest first. Sent before anything new. */
+      deferred: PendingMessage[];
+      /**
+       * The furthest the sweep proved it had read, or `null` when the sweep
+       * failed and the cursor must not move at all.
+       */
+      advanceTo: number | null;
+    };
 
 export type SalesPollDeps = {
   opensea: Pick<OpenSeaClient, "fetchCollectionEventsSince" | "fetchAccount">;
   glyphbots: Pick<GlyphBotsClient, "getBotPngUrl" | "getBotUrl">;
   poster: ChannelPoster;
-  store: {
-    read: () => Promise<SalesFeedState | null>;
-    write: (state: SalesFeedState) => Promise<void>;
-  };
+  store: SalesStateStore;
   /** Injected in tests. */
   now?: () => number;
+};
+
+export const emptySalesState = (at: number): SalesFeedState => ({
+  lastEventTimestamp: at,
+  grouping: emptyGroupingState(),
+  deferred: [],
+});
+
+/**
+ * Apply one operation to the sales record. Pure, and run inside the DO.
+ *
+ * Three rules, and only the first is new arithmetic:
+ *
+ * - **The key sets are unioned, never replaced.** A tick that overlapped this
+ *   one has already posted the sales behind its keys, and replacing the set
+ *   with this tick's view would let the lag window re-serve them.
+ * - **The cursor only moves forward**, whatever `advanceTo` says. It was
+ *   computed against the record as this tick read it, which may be behind the
+ *   record as it now stands.
+ * - **Then it is held back** to at or below the oldest undelivered message,
+ *   the same rewind the mint watcher does on a failed send. Doing it here
+ *   rather than on the Worker side is what makes the hold-back and the queue a
+ *   single write.
+ *
+ * The pending groups and the queue are this tick's view outright. Merging two
+ * half-finished settle windows is not a well-defined operation, and unlike the
+ * key set, getting it wrong delays a message rather than duplicating one.
+ */
+export const applySalesUpdate = (
+  current: SalesFeedState | null,
+  update: SalesUpdate
+): SalesFeedState => {
+  if (update.op === "seed") {
+    // Never overwrites a record that exists: two ticks that both read `null`
+    // would otherwise both seed, and the second would move the cursor to a
+    // point the first had already passed.
+    return current ?? emptySalesState(update.at);
+  }
+
+  const base = current ?? emptySalesState(0);
+
+  const processedKeys = [...base.grouping.processedKeys];
+  for (const key of update.processedKeys) {
+    if (!processedKeys.includes(key)) {
+      processedKeys.push(key);
+    }
+  }
+
+  let lastEventTimestamp =
+    update.advanceTo === null
+      ? base.lastEventTimestamp
+      : Math.max(base.lastEventTimestamp, update.advanceTo);
+
+  for (const message of update.deferred) {
+    if (message.oldestTimestamp < lastEventTimestamp) {
+      lastEventTimestamp = message.oldestTimestamp;
+    }
+  }
+
+  return {
+    lastEventTimestamp,
+    grouping: {
+      actorGroups: update.actorGroups,
+      processedKeys: processedKeys.slice(-SALES_PROCESSED_KEY_HISTORY),
+    },
+    deferred: update.deferred,
+  };
 };
 
 /**
  * Resolve an address to a display name, once per address per tick.
  *
- * The Node bot kept a process-lifetime LRU (`src/opensea.ts:183-193`). A
+ * The Node bot kept a process-lifetime LRU
+ * (`opensea-activity-bot/src/opensea.ts:183-193`). A
  * Worker isolate does not live long enough for that to pay off, and a sweep is
  * one buyer by definition, so the cache is per tick. A lookup failure is not an
  * error: the short address is a perfectly good label.
@@ -142,7 +249,9 @@ const createNameResolver = (
         name = account.username;
       }
     } catch (error) {
-      log.debug(`Username lookup failed for ${address}: ${getErrorMessage(error)}`);
+      log.debug(
+        `Username lookup failed for ${address}: ${getErrorMessage(error)}`
+      );
     }
 
     cache.set(key, name);
@@ -195,15 +304,13 @@ const seedState = async (
     );
   }
 
-  const state: SalesFeedState = {
-    lastEventTimestamp,
-    grouping: emptyGroupingState(),
-    deferred: [],
-  };
-
-  await deps.store.write(state);
+  // The DO refuses to re-seed a record that already exists, so what comes back
+  // is the live cursor rather than necessarily the one computed above. Log the
+  // live one: a tick that lost that race must not claim to have set it.
+  const state = await deps.store.apply({ op: "seed", at: lastEventTimestamp });
+  const at = state.lastEventTimestamp;
   log.info(
-    `Sales cursor seeded: source=${source} at=${lastEventTimestamp} (${new Date(lastEventTimestamp * MS_PER_SECOND).toISOString()}), posted nothing`
+    `Sales cursor seeded: source=${source} at=${at} (${new Date(at * MS_PER_SECOND).toISOString()}), posted nothing`
   );
 
   return state;
@@ -373,7 +480,7 @@ const sendUpToCap = async (
  * Note this runs the grouping pass even when the fetch returned nothing. That
  * empty pass is what flushes a group whose settle window has elapsed, and it is
  * the reason the Node bot called its handlers with empty arrays
- * (`src/index.ts:204-206`).
+ * (`opensea-activity-bot/src/index.ts:204-206`).
  */
 export const pollSales = async (deps: SalesPollDeps): Promise<number> => {
   const now = deps.now?.() ?? Date.now();
@@ -384,7 +491,10 @@ export const pollSales = async (deps: SalesPollDeps): Promise<number> => {
     return 0;
   }
 
-  const after = Math.max(0, stored.lastEventTimestamp - SALES_LAG_WINDOW_SECONDS);
+  const after = Math.max(
+    0,
+    stored.lastEventTimestamp - SALES_LAG_WINDOW_SECONDS
+  );
   log.info(
     `Sales cursor: source=stored at=${stored.lastEventTimestamp} (${new Date(stored.lastEventTimestamp * MS_PER_SECOND).toISOString()}) fetching after=${after} deferred=${stored.deferred.length}`
   );
@@ -396,7 +506,9 @@ export const pollSales = async (deps: SalesPollDeps): Promise<number> => {
 
   const fetched = page.events.filter(isWanted);
   if (fetched.length > 0) {
-    log.info(`Fetched ${fetched.length} in-scope event(s) across ${page.pages} page(s)`);
+    log.info(
+      `Fetched ${fetched.length} in-scope event(s) across ${page.pages} page(s)`
+    );
   }
 
   const state: SalesFeedState = {
@@ -430,14 +542,14 @@ export const pollSales = async (deps: SalesPollDeps): Promise<number> => {
   // advance at all, and a truncated one advances only as far as it actually
   // read: see `advanceSalesCursor`, which is where the newest-first ordering
   // is reasoned about.
-  let lastEventTimestamp = state.lastEventTimestamp;
+  let advanceTo: number | null = null;
   if (!page.failed) {
     const advanced = advanceSalesCursor(
       state.lastEventTimestamp,
       fetched,
       page.truncated
     );
-    lastEventTimestamp = advanced.at;
+    advanceTo = advanced.at;
 
     if (page.truncated) {
       log.warn(
@@ -458,26 +570,25 @@ export const pollSales = async (deps: SalesPollDeps): Promise<number> => {
     );
   }
 
-  // Hold the cursor back to at or below the oldest undelivered event, the same
-  // rewind the mint watcher does on a failed send. Anything already delivered
-  // is in `processedKeys`, so the rewind cannot cause a repost.
-  for (const message of deferred) {
-    if (message.oldestTimestamp < lastEventTimestamp) {
-      lastEventTimestamp = message.oldestTimestamp;
-    }
-  }
-
   if (deferred.length > 0) {
     log.warn(
-      `${deferred.length} message(s) undelivered, cursor held at ${lastEventTimestamp} for the next tick`
+      `${deferred.length} message(s) undelivered, holding the cursor back to the oldest of them for the next tick`
     );
   }
 
-  await deps.store.write({
-    lastEventTimestamp,
-    grouping: state.grouping,
+  // The cursor arithmetic, the hold-back and the key merge all happen inside
+  // the DO. Everything above this line is an OpenSea sweep and up to five
+  // Discord posts, so computing the next record here would make the tick a
+  // read-modify-write with all of that in the middle.
+  const committed = await deps.store.apply({
+    op: "commit",
+    processedKeys: state.grouping.processedKeys,
+    actorGroups: state.grouping.actorGroups,
     deferred,
+    advanceTo,
   });
+
+  log.debug(`Sales cursor committed at ${committed.lastEventTimestamp}`);
 
   return sent;
 };

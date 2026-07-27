@@ -42,15 +42,15 @@
 import type { RESTPostAPIChannelMessageJSONBody } from "discord-api-types/v10";
 import { NUDGE_KIND_ATTEMPTS } from "../config";
 import type { ChannelPoster } from "../discord/channel-poster";
-import type { IdleStateStore } from "../durable-objects/idle-state-store";
+import type { IdleStateStore } from "../durable-objects/feed-stores";
 import type { LookupClients } from "../lookups/embeds";
 import { createLogger, getErrorMessage } from "../utils/logger";
+import { randomInt as defaultRandomInt } from "../utils/random";
+import { MS_PER_HOUR } from "../utils/time";
 import { decideNudge, type IdleSkipReason, nextNudgeKind } from "./idle";
 import { buildNudgePost, type NudgeContentDeps } from "./nudge-content";
 
 const log = createLogger("Nudge");
-
-const MS_PER_HOUR = 3_600_000;
 
 export type NudgeDeps = {
   clients: LookupClients;
@@ -69,9 +69,6 @@ export type NudgeOutcome =
   | "no-content"
   | "send-failed"
   | IdleSkipReason;
-
-const defaultRandomInt = (max: number): number =>
-  Math.floor(Math.random() * max) + 1;
 
 const defaultPick = <T>(items: readonly T[]): T | undefined =>
   items.length === 0

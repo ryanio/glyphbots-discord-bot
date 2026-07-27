@@ -79,8 +79,12 @@ export const readOptions = (
 
 /**
  * Pull the invoking user's id. In a guild it arrives under `member.user`, in a
- * DM under `user`. Only `/bot` ever read this, at `src/commands/bot.ts:181`.
+ * DM under `user`. Only `/bot` ever read it, and only for the wallet lookup
+ * that is not built here (`src/commands/bot.ts:181` at `c75d6a8`).
  */
 export const readUserId = (
-  interaction: Pick<APIChatInputApplicationCommandInteraction, "member" | "user">
+  interaction: Pick<
+    APIChatInputApplicationCommandInteraction,
+    "member" | "user"
+  >
 ): string | null => interaction.member?.user.id ?? interaction.user?.id ?? null;

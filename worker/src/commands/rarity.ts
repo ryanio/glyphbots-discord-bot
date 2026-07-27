@@ -1,9 +1,8 @@
 /**
- * `/rarity`, ported from `src/commands/rarity.ts`.
+ * `/rarity`.
  *
  * Traits and rank come from OpenSea, the thumbnail from the first-party PNG
- * endpoint. That split was already correct on the Node bot
- * (`src/commands/rarity.ts:112`) and is preserved.
+ * endpoint. That split was already correct on the Node bot and is preserved.
  */
 
 import { EmbedBuilder } from "@discordjs/builders";
@@ -75,7 +74,10 @@ export const handleRarity: CommandHandler = async (ctx) => {
   const nft = await ctx.opensea.fetchNFT(tokenId);
 
   if (!nft) {
-    return errorReply("❌ Bot Not Found", `GlyphBot #${tokenId} was not found.`);
+    return errorReply(
+      "❌ Bot Not Found",
+      `GlyphBot #${tokenId} was not found.`
+    );
   }
 
   const botName = nft.name ?? `GlyphBot #${tokenId}`;

@@ -10,8 +10,8 @@
 import { InteractionResponseType } from "discord-api-types/v10";
 import { describe, expect, it, vi } from "vitest";
 import { getHandler, handlers } from "../src/commands";
-import { commandDefinitions } from "../src/commands/definitions";
 import { readOptions, readUserId } from "../src/commands/context";
+import { commandDefinitions } from "../src/commands/definitions";
 import {
   deferAndFollowUp,
   errorFollowUp,
@@ -110,9 +110,9 @@ describe("Ed25519 verification", () => {
     const body = "{}";
     const signature = await sign(timestamp + body);
 
-    await expect(
-      verifySignature("", signature, timestamp, body)
-    ).resolves.toBe(false);
+    await expect(verifySignature("", signature, timestamp, body)).resolves.toBe(
+      false
+    );
     await expect(verifySignature(publicKey, "", timestamp, body)).resolves.toBe(
       false
     );

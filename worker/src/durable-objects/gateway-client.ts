@@ -1,7 +1,7 @@
 /**
  * The narrow interface everything outside the DO uses to reach the gateway.
  *
- * Same reasoning as `mint-cursor-store.ts`: the callers (the admin routes and
+ * Same reasoning as `feed-stores.ts`: the callers (the admin routes and
  * the watchdog on the cron) should not know that a Durable Object stub and a
  * fake origin are involved, and keeping the surface to four verbs means the
  * tests can hand a plain object in.
@@ -9,11 +9,7 @@
 
 import type { WorkerEnv } from "../types";
 
-export type GatewayCommand =
-  | "connect"
-  | "status"
-  | "reconnect"
-  | "health-tick";
+export type GatewayCommand = "connect" | "status" | "reconnect" | "health-tick";
 
 export type GatewayClient = {
   /** Returns the DO's JSON response body, whatever it is. */

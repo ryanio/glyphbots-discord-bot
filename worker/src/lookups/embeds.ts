@@ -5,7 +5,8 @@
  * and `:300-372` (the username embed), with the metadata fan-out cut back.
  *
  * **The cut, and why.** The Node bot's `buildEmbed` fired five sequential or
- * parallel OpenSea calls per embed (`src/index.ts:174-200`): the NFT, the
+ * parallel OpenSea calls per embed
+ * (`discord-nft-embed-bot/src/index.ts:174-200`): the NFT, the
  * collection slug, the last sale, the best offer and the best listing. Six
  * embeds on one message is thirty-plus subrequests against a budget of fifty,
  * before the reply itself. The plan flags exactly this
@@ -36,8 +37,8 @@ import type { GlyphBotsClient } from "../api/glyphbots";
 import { shortAddress } from "../api/glyphbots";
 import type { OpenSeaClient } from "../api/opensea";
 import { getOpenSeaArtifactUrl, getOpenSeaUrl } from "../api/opensea";
-import { COLORS, MAX_BOT_TOKEN_ID } from "../config";
 import { BOT_NAME_PREFIX, formatTraitLine } from "../commands/format";
+import { COLORS, MAX_BOT_TOKEN_ID } from "../config";
 import { createLogger } from "../utils/logger";
 import type { LookupMatch } from "./matcher";
 
@@ -156,11 +157,10 @@ export const buildArtifactLookupEmbed = async (
  * account NFT read is already filtered to the GlyphBots collection by
  * `createOpenSeaClient`.
  */
-export const buildUsernameLookupEmbed = async (
+const buildUsernameLookupEmbed = async (
   username: string,
   clients: LookupClients,
-  pick: (count: number) => number = (count) =>
-    Math.floor(Math.random() * count)
+  pick: (count: number) => number = (count) => Math.floor(Math.random() * count)
 ): Promise<APIEmbed | null> => {
   const account = await clients.opensea.fetchAccount(username);
 

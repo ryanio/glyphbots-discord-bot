@@ -1,7 +1,7 @@
 # glyphbots-worker
 
-The Cloudflare Worker that the three GlyphBots Discord bots are consolidating
-onto. Phases 1 to 4 of [`plans/cloudflare-consolidation.md`](../plans/cloudflare-consolidation.md),
+The Cloudflare Worker the three GlyphBots Discord bots consolidated onto. It
+covers all of [`plans/cloudflare-consolidation.md`](../plans/cloudflare-consolidation.md)
 plus the idle work, which is not in that plan.
 
 **What it does today:**
@@ -36,7 +36,7 @@ history has it at `d668f57`.
 ```
 src/
   index.ts                        Hono app, scheduled() handler, DO export
-  config.ts                       ids, contracts, colors, mint tuning
+  config.ts                       ids, contracts, colors, every tuning number
   types.ts                        WorkerEnv bindings
   api/glyphbots.ts                GlyphBots client, built per invocation
   api/opensea.ts                  OpenSea client, built per invocation
@@ -46,6 +46,9 @@ src/
   channels/nudge.ts               one idle check on #general
   channels/nudge-content.ts       the four things a nudge can say
   channels/mints.ts               cursor logic + one poll
+  channels/sales.ts               the sales cursor, the queue, one tick
+  channels/sales-grouping.ts      the settle-window batcher (pure)
+  channels/sales-embeds.ts        one sale and one sweep, as embeds
   commands/                       the eight handlers
     context.ts                    what a handler is handed, option reading
     definitions.ts                the eight registration bodies
@@ -56,11 +59,10 @@ src/
   discord/embeds.ts               error and single-embed reply shorthands
   discord/interactions.ts         the defer helper and the follow-up PATCH
   discord/verify.ts               Ed25519 verification via WebCrypto
-  durable-objects/feed-state.ts   FeedStateDO, holds the mint cursor
+  durable-objects/feed-state.ts   FeedStateDO, all three feed records
   durable-objects/gateway.ts      GatewayDO, the WebSocket to Discord
   durable-objects/gateway-client.ts      connect / status / reconnect / tick
-  durable-objects/idle-state-store.ts    read + apply-one-operation
-  durable-objects/mint-cursor-store.ts   the narrow read/write interface
+  durable-objects/feed-stores.ts  read + apply, one factory, three records
   lookups/matcher.ts              b#123 / a#123 / #username parsing (pure)
   lookups/embeds.ts               one embed per match
   lookups/rate-limit.ts           per-channel window + cooldown
@@ -69,7 +71,10 @@ src/
   routes/interactions.ts          POST /discord/interactions
   utils/logger.ts                 console logger
 scripts/register-commands.ts      operator-run guild registration (see below)
-test/mints.test.ts                mint watcher coverage, ported from ../test
+test/mints.test.ts                cursor, burst guard, retry on a failed send
+test/sales.test.ts                seeding, exactly-once, hold-back, deferral
+test/sales-grouping.test.ts       the flush predicate and the processed set
+test/opensea.test.ts              the events sweep: pagination and truncation
 test/interactions.test.ts         signature, PING/PONG, defer inversion, wiring
 test/commands.test.ts             per-command response shaping
 test/lookups.test.ts              matcher, allowlist, rate limiter, one message
@@ -77,15 +82,18 @@ test/gateway.test.ts              frames, close codes, heartbeats, routing
 test/gallery.test.ts              the #gallery tick and its idle gate
 test/nudge.test.ts                the idle clock, the rotation, the facts
 test/cron.test.ts                 which cron runs which job
+test/*-fixtures.ts                shared stubs; see the note at the top of each
 ```
 
 ## Environment
 
-Bindings arrive on `env` and are threaded down as arguments. Nothing reads
-`process.env`, and no module captures configuration at import time. The Node
-bot's `src/api/glyphbots.ts:17` does exactly that, which is why it needed
-porting rather than copying: on Workers the module body runs before any binding
-exists, so the capture would always be the fallback.
+Bindings arrive on `env` and are threaded down as arguments. Nothing under
+`src/` reads `process.env`, and no module captures configuration at import
+time. The Node bot did exactly that (`src/api/glyphbots.ts:17` at `c75d6a8`),
+which is why the client needed porting rather than copying: on Workers the
+module body runs before any binding exists, so the capture would always be the
+fallback. `scripts/register-commands.ts` is the one file that reads
+`process.env`, and it is not part of the bundle.
 
 Secrets. **Set these yourself, they are not in this repo and no script here
 writes them:**
@@ -120,12 +128,17 @@ socket, so they are not public. **Unset means 503, never "no auth required."**
 - `FEED_STATE`, the `FeedStateDO` namespace. Durable Objects need Workers Paid.
 - `GATEWAY`, the `GatewayDO` namespace. One instance, `idFromName("singleton")`.
 - `GLYPHBOTS_KV`, reserved for per-user wallet state (`wallet:<userId>`) under
-  decision 7 of the plan. Provisioned, bound, and read by nothing. Create it and
-  paste the id into `wrangler.jsonc` before the first deploy:
+  decision 7 of the plan. Provisioned, bound, and read by nothing. In a fresh
+  account, create it and paste the id into `wrangler.jsonc` before the first
+  deploy:
 
   ```
   wrangler kv namespace create GLYPHBOTS_KV
   ```
+
+There is no `nodejs_compat` compatibility flag, and nothing in the bundle needs
+one. Leaving it off keeps a stray `node:` import a build failure rather than
+something that quietly starts working.
 
 ## The mint cursor, and why it looks the way it does
 
@@ -148,6 +161,46 @@ A DO rather than KV because the tick is a read-modify-write and the DO input
 gate makes it atomic. KV is eventually consistent with no compare-and-set, so
 two overlapping ticks could clobber each other and drop a mint.
 
+### Every record takes an operation
+
+This applies to all three records in `FeedStateDO`, and it is the part worth
+reading before changing any of them.
+
+The input gate serializes each `fetch` into the DO, not a *pair* of them. A tick
+that read a record, spent several seconds fetching an API and posting to
+Discord, and then wrote a whole new value would have its read and its write on
+opposite sides of the gate: a tick that overlapped it would have its record
+silently replaced. That is the failure the Durable Object was chosen to avoid,
+reintroduced one layer up.
+
+So the store interface is `read` and `apply`, never `read` and `write`. The
+caller sends *what changed* and the DO reads, applies and writes with nothing
+awaited in between:
+
+```
+mint cursor   { op: "seed" | "advance", handled: [...], failed: [...] }
+sales state   { op: "seed" | "commit",  processedKeys, actorGroups, deferred, advanceTo }
+idle clock    { op: "seed" | "human-message" | "nudge" | "gallery", atMs, kind }
+```
+
+Three merge rules are worth naming because they only exist on this side of the
+gate. A `seed` never overwrites a record that already exists, so two ticks that
+both read `null` cannot have the second reset the first. The sales key set is
+**unioned** rather than replaced, because a tick that overlapped this one has
+already posted the sales behind its keys and dropping them would repost. And the
+cursors only move forward: `advanceTo` was computed against the record as the
+tick read it, which may be behind the record as it now stands.
+
+There is a second, smaller benefit. Validation now happens on a small operation
+rather than on a whole computed record, so there is no path where a post
+succeeds and the write recording it is rejected as malformed, leaving the next
+tick to post it again.
+
+What is *not* merged: the sales feed's pending settle-window groups and its
+deferred queue are the committing tick's view outright. Merging two
+half-finished settle windows is not a well-defined operation, and unlike the key
+set, getting it wrong delays a message rather than duplicating one.
+
 **The first tick after deploy posts nothing.** With no cursor in storage the
 watcher seeds from the current newest mint and logs how many historical mints it
 skipped. That is the cold-start path working, not a failure. The first real
@@ -156,6 +209,49 @@ post arrives with the next actual mint.
 Above five new mints in one poll the burst guard posts the newest five
 individually plus one summary line for the remainder, and advances the cursor
 past all of them so the burst is never replayed.
+
+## The sales feed
+
+`#trading-floor`, on its own five minute cron offset two minutes from the mint
+watcher. One record in `FeedStateDO` under `salesState` holds the cursor, the
+pending groups, the processed key set and the send queue, so all four move in
+one write and cannot disagree with each other.
+
+`lastEventTimestamp` comes from the events' own `event_timestamp` and never
+from the wall clock. The fetch window reaches 120 seconds behind it on purpose,
+because OpenSea indexes events slightly after they happen and a query starting
+exactly at the cursor misses anything that landed late with an older timestamp.
+That overlap re-serves recent events on every tick; `grouping.processedKeys` is
+what makes it harmless, doing the job `postedArtifactIds` does for mints.
+
+**Sales only.** Listings run about 176 a day against this collection, almost
+all of it one operator's relister, which would put a message in the channel
+every eight minutes forever. Sales run 1.24 a day. Turning listings back on is
+more than adding a string to `SALES_EVENT_TYPES`: the embeds hard-code purchase
+copy and read `buyer`, which a listing has no value for. The comment on that
+constant says what it would actually take.
+
+**A sweep is one message.** A buyer taking ten items produces one grouped embed
+rather than ten posts. The batcher has no timers anywhere in it: a group flushes
+once it holds at least two events and 60 seconds have passed since the last one
+was added, which is a pure function of stored state and `now`. That is the only
+reason grouping survived the move from a process to a cron, and it is why the
+grouping pass runs even on a tick that fetched nothing.
+
+**Nothing sleeps.** The Node bot paced messages with a 3 second wait between
+sends. A cron invocation must not sleep, so the pacing is a cap of five messages
+per tick with the remainder carried in `deferred` and sent first next time.
+Nothing is dropped, it arrives five minutes later. An undelivered message holds
+the cursor back to at or below its oldest event, exactly like a failed mint
+send, and its key is what stops the rewind causing a repost.
+
+A truncated sweep is the case worth knowing about. OpenSea serves newest first,
+so a sweep that runs out of its ten page budget is missing the *oldest* events
+in the window, and advancing to the newest one it saw would step over every one
+of them without a word. It advances only as far as it actually read. If the next
+tick truncates in the same place and so makes no progress, it gives the
+unreachable tail up rather than pinning the cursor forever, and logs that at
+error level naming the timestamp it abandoned.
 
 ## Slash commands
 
@@ -196,7 +292,7 @@ from `artifact.imageUrl` on the GlyphBots API, which is JPEG or PNG.
 
 ### Wallet linking is not built
 
-`src/commands/bot.ts:181` on the Node bot called `getUserWallet` to bias
+The Node bot called `getUserWallet` (`src/commands/bot.ts:181` at `c75d6a8`) to bias
 `/bot random:true` toward bots the caller owns. Decision 7 of the plan reserves
 a KV namespace for per-user state and says to build nothing, so **that variant
 is removed**, not stubbed. `random:true` picks uniformly across the supply,
@@ -230,7 +326,10 @@ its in-memory reference while Discord still believes the connection is up. The
 bot looks healthy and answers nothing, for hours. Two guards exist for it
 anyway, because "should not happen" is not a monitoring strategy:
 
-- `alarm()` treats a null `liveWs` as "reopen", whatever the stored state says.
+- `alarm()` treats a null `liveWs` as "reopen", whatever the stored state says,
+  unless that state is `failed`. `failed` is checked first and parks: the six
+  close codes that reach it are conditions only a human can clear, so an alarm
+  that fired against one would be an infinite reconnect loop.
 - the `/health-tick` watchdog rides the five minute mint cron and reopens
   anything that is not live, or that is live but has heard nothing in 90
   seconds with a heartbeat unacked.
@@ -371,11 +470,13 @@ about it.
 
 Two writers touch the record, the gateway on every human message and the cron
 once an hour, so the read-modify-write happens **inside** the DO: the store
-(`durable-objects/idle-state-store.ts`) sends an operation rather than a whole
-value, and `applyIdleUpdate` runs behind the input gate. A whole-record write
-from the cron would otherwise discard a message that arrived while it was
-building an embed, which is the one failure that would have the bot talking over
-somebody.
+(`durable-objects/feed-stores.ts`) sends an operation rather than a whole value,
+and `applyIdleUpdate` runs behind the input gate. A whole-record write from the
+cron would otherwise discard a message that arrived while it was building an
+embed, which is the one failure that would have the bot talking over somebody.
+
+All three records work this way now, for a version of the same reason. See
+"Every record takes an operation" below.
 
 Two more properties of that merge: a `seed` never overwrites a clock that
 already exists, and a `human-message` takes the maximum rather than the
@@ -517,7 +618,7 @@ Tests cannot reach a real gateway, so this list is the actual verification.
 - **RESUME actually resuming.** The RESUME frame is asserted; that Discord
   accepts it and replays the gap is not.
 - **Discord rendering of the embeds**, including the multi-megabyte artifact
-  images the plan flagged in Phase 1.
+  images the plan's preflight flagged.
 - **Guild permissions.** The bot needs View Channel, Read Message History and
   Send Messages in `#general`, `#show-and-tell` and `#gallery`. Nothing here
   checks that, and a missing permission looks exactly like a broken bot.
@@ -563,11 +664,22 @@ you get "The application did not respond" in front of users.
 
 ```
 npm install
+npm run lint          # biome check: formatting, recommended lints, import order
+npm run lint:fix      # the same, applying what it can
 npm run typecheck
 npm test
 npm run dry-run       # wrangler deploy --dry-run, no auth, no deploy
 npm run dev           # local wrangler dev
 ```
+
+Lint, typecheck and test all run in CI before a deploy.
+
+Biome's config is `biome.jsonc`, and the extension matters: comments in a file
+named `biome.json` make Biome discard the whole config silently, which reads as
+a linter that finds nothing. Recommended rules only, and the formatter block is
+written out rather than left to the defaults because bare Biome formats with
+tabs and this package is 2-space. `wrangler.jsonc` is deliberately outside
+Biome's `files.includes`, so the production config is never reformatted.
 
 Deploying, `wrangler login`, and `wrangler secret put` are the operator's steps.
 

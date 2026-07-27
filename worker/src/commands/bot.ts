@@ -1,11 +1,12 @@
 /**
- * `/bot`, ported from `src/commands/bot.ts`.
+ * `/bot`.
  *
  * Two deliberate changes from the Node handler.
  *
- * **The wallet-backed random variant is gone.** `src/commands/bot.ts:181`
- * called `getUserWallet(interaction.user.id)` from `src/lib/wallet-state`, the
- * only in-scope dependency on per-user storage. Decision 7 of the plan
+ * **The wallet-backed random variant is gone.** It called
+ * `getUserWallet(interaction.user.id)` from `src/lib/wallet-state`
+ * (`src/commands/bot.ts:181` at `c75d6a8`), the only in-scope dependency on
+ * per-user storage. Decision 7 of the plan
  * reserves a KV namespace for that and says to build nothing, so there is no
  * wallet to look up. `random:true` now always picks uniformly from the full
  * supply, which is exactly what the Node handler did whenever no wallet was
@@ -14,8 +15,8 @@
  * address or an OpenSea username and needs no stored state. Nothing here
  * imports `wallet-state`, and nothing fails quietly.
  *
- * **The image is the first-party PNG.** It already was
- * (`src/commands/bot.ts:73`), and it must stay that way: OpenSea's `image_url`
+ * **The image is the first-party PNG.** It already was on the Node bot, and it
+ * must stay that way: OpenSea's `image_url`
  * for this contract is `image/svg+xml`, which Discord will not render. The
  * OpenSea call on this path supplies the owner and the rarity rank only.
  *
@@ -35,6 +36,7 @@ import { COLORS, MAX_BOT_TOKEN_ID } from "../config";
 import { type LinkButton, linkButtonRow } from "../discord/buttons";
 import { embedReply, errorReply } from "../discord/embeds";
 import { createLogger } from "../utils/logger";
+import { randomInt } from "../utils/random";
 import type { CommandHandler } from "./context";
 import {
   BOT_NAME_PREFIX,
@@ -47,8 +49,7 @@ import {
 const log = createLogger("BotCmd");
 
 /** Uniform pick across the supply. The only random source now, see the note. */
-const getRandomTokenId = (): number =>
-  Math.floor(Math.random() * MAX_BOT_TOKEN_ID) + 1;
+const getRandomTokenId = (): number => randomInt(MAX_BOT_TOKEN_ID);
 
 /**
  * The `/bot` embed.

@@ -15,7 +15,13 @@
  * in the README under what remains unverified.
  */
 
+import type { RESTPostAPIChannelMessageJSONBody } from "discord-api-types/v10";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  GENERAL_CHANNEL_ID,
+  GUILD_ID,
+  TRADING_FLOOR_CHANNEL_ID,
+} from "../src/config";
 import {
   BACKOFF_MS,
   classifyClose,
@@ -25,12 +31,8 @@ import {
   parseFrame,
   parseMessageCreate,
 } from "../src/durable-objects/gateway";
-import {
-  GENERAL_CHANNEL_ID,
-  GUILD_ID,
-  TRADING_FLOOR_CHANNEL_ID,
-} from "../src/config";
 import type { WorkerEnv } from "../src/types";
+import { at, firstEmbed } from "./fixtures";
 
 /**
  * One teardown for the whole file rather than a restore at the end of each
@@ -50,12 +52,16 @@ afterEach(() => {
  * posts land in `posted`.
  */
 const posted = vi.hoisted(
-  () => [] as Array<{ channelId: string; body: unknown }>
+  () =>
+    [] as Array<{
+      channelId: string;
+      body: RESTPostAPIChannelMessageJSONBody;
+    }>
 );
 
 vi.mock("../src/discord/channel-poster", () => ({
   createChannelPoster: (_env: unknown, channelId: string) => ({
-    send: (body: unknown) => {
+    send: (body: RESTPostAPIChannelMessageJSONBody) => {
       posted.push({ channelId, body });
       return Promise.resolve();
     },
@@ -230,12 +236,14 @@ const frame = (payload: Record<string, unknown>): string =>
 
 describe("frame parsing", () => {
   it("reads a well-formed frame", () => {
-    expect(parseFrame(frame({ op: 0, s: 5, t: "READY", d: { a: 1 } }))).toEqual({
-      op: 0,
-      s: 5,
-      t: "READY",
-      d: { a: 1 },
-    });
+    expect(parseFrame(frame({ op: 0, s: 5, t: "READY", d: { a: 1 } }))).toEqual(
+      {
+        op: 0,
+        s: 5,
+        t: "READY",
+        d: { a: 1 },
+      }
+    );
   });
 
   it("rejects anything that is not a frame", () => {
@@ -541,7 +549,10 @@ describe("dispatches and heartbeats", () => {
 
   it("keeps the session on a resumable INVALID_SESSION", async () => {
     vi.useFakeTimers();
-    const { doInstance, ws, state } = harness({ sessionId: "sess", lastSeq: 5 });
+    const { doInstance, ws, state } = harness({
+      sessionId: "sess",
+      lastSeq: 5,
+    });
 
     await doInstance.handleSocketMessage(
       ws as unknown as WebSocket,
@@ -784,9 +795,7 @@ describe("MESSAGE_CREATE routing", () => {
     expect(urls.some((url) => url.includes("/api/bot/1"))).toBe(true);
     expect(posted).toHaveLength(1);
     expect(posted[0]?.channelId).toBe(GENERAL_CHANNEL_ID);
-    expect(
-      (posted[0]?.body as { embeds: { title?: string }[] }).embeds[0]?.title
-    ).toBe("GlyphBot #1");
+    expect(firstEmbed(at(posted).body).title).toBe("GlyphBot #1");
   });
 
   it("spends nothing on a message in a channel it does not serve", async () => {

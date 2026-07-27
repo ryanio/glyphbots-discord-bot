@@ -12,7 +12,8 @@
  * and this package does not depend on discord.js. The shape is the REST body,
  * so it is what Discord validates anyway.
  *
- * One copy change from `src/commands/index.ts:126-129`: `/bot`'s `random`
+ * One copy change from the Node bot's registration payload
+ * (`src/commands/index.ts:126-129` at `c75d6a8`): `/bot`'s `random`
  * option no longer says "uses your owned bots if wallet connected". Per-user
  * wallet storage is not built (decision 7), so the description must not
  * advertise it. See the note in `./bot.ts`.

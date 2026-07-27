@@ -1,14 +1,12 @@
 /**
- * GlyphBots API client, ported from `src/api/glyphbots.ts`.
+ * GlyphBots API client.
  *
- * The Node version reads `process.env.GLYPHBOTS_API_URL` at module scope
- * (`src/api/glyphbots.ts:17`), which on Workers is `undefined` at import time
- * no matter what the binding says. Here the base URL is a constructor
- * argument: the scheduled handler builds a client from its `env` and passes it
- * down. No module-level singleton reads the environment.
- *
- * Phase 2 adds `fetchBot`, `fetchBotStory` and `fetchArtifact` for the slash
- * commands. Everything still hangs off the same per-invocation factory.
+ * The base URL is a constructor argument rather than a module-level read of
+ * the environment. The Node bot did the latter (`src/api/glyphbots.ts:17` at
+ * `c75d6a8`), which on Workers resolves to `undefined` at import time no
+ * matter what the binding says, because the module body runs before any
+ * binding exists. Here the request or scheduled handler builds a client from
+ * its `env` and passes it down, and no singleton captures anything.
  */
 
 import { DEFAULT_GLYPHBOTS_API_URL } from "../config";
@@ -16,8 +14,8 @@ import { createLogger, getErrorMessage } from "../utils/logger";
 import type {
   Artifact,
   ArtifactResponse,
-  ArtifactsListResponse,
   ArtifactSummary,
+  ArtifactsListResponse,
   Bot,
   BotResponse,
   BotStory,
@@ -147,7 +145,9 @@ export const createGlyphBotsClient = (
         last30d: last30d as number,
       };
     } catch (error) {
-      log.error(`Error fetching the artifact summary: ${getErrorMessage(error)}`);
+      log.error(
+        `Error fetching the artifact summary: ${getErrorMessage(error)}`
+      );
       return null;
     }
   };
@@ -216,8 +216,10 @@ export const createGlyphBotsClient = (
 };
 
 /**
- * Shorten an address for display, identical to `src/api/opensea.ts:131`.
- * Lives here so Phase 1 does not need the OpenSea module at all.
+ * Shorten an address for display.
+ *
+ * Lives here rather than in `./opensea.ts` so the mint watcher, which touches
+ * no OpenSea endpoint, does not have to import that module for one helper.
  */
 export const shortAddress = (addr: string): string =>
   `${addr.slice(0, 7)}…${addr.slice(37, 42)}`;

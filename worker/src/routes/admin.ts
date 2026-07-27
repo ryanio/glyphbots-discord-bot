@@ -35,8 +35,10 @@ const secretEquals = (a: string, b: string): boolean => {
     return false;
   }
   let diff = 0;
+  // Bitwise on purpose: XOR every pair and OR the differences together, so the
+  // loop runs the full length whatever it finds instead of returning at the
+  // first mismatch.
   for (let i = 0; i < a.length; i++) {
-    // biome-ignore lint/suspicious/noBitwiseOperators: constant-time compare
     diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   }
   return diff === 0;

@@ -64,7 +64,11 @@ describe("the repeat-cursor guard", () => {
     // cursor it was just given". Compared against the cursor from the request
     // before that, it was an A-B-A detector: it spent a third request and
     // collected the same 50 events twice.
-    const urls = stubFetch([page(50, "same"), page(50, "same"), page(50, "same")]);
+    const urls = stubFetch([
+      page(50, "same"),
+      page(50, "same"),
+      page(50, "same"),
+    ]);
 
     const result = await sweep(10);
 
@@ -76,11 +80,7 @@ describe("the repeat-cursor guard", () => {
   });
 
   it("still follows a cursor that actually changes", async () => {
-    const urls = stubFetch([
-      page(50, "a"),
-      page(50, "b"),
-      page(10, "c"),
-    ]);
+    const urls = stubFetch([page(50, "a"), page(50, "b"), page(10, "c")]);
 
     await sweep(10);
 

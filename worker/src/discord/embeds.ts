@@ -1,5 +1,5 @@
 /**
- * Embed shorthands, the raw-builders equivalent of `src/lib/discord/embeds.ts`.
+ * Embed shorthands, built on `@discordjs/builders` rather than discord.js.
  *
  * The handlers all built the same "red embed, title, description, done" shape
  * for their not-found and bad-input branches, so it lives here once.

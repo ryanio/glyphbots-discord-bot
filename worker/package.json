@@ -3,8 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "GlyphBots Cloudflare Worker: mint watcher posting to #general.",
+  "description": "GlyphBots Cloudflare Worker: mint, sales, gallery and idle feeds, eight slash commands, and the Discord gateway socket.",
   "scripts": {
+    "lint": "biome check",
+    "lint:fix": "biome check --write",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -19,6 +21,7 @@
     "hono": "^4.12.18"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.5",
     "@cloudflare/workers-types": "^5.20260722.1",
     "typescript": "^5.9.0",
     "vitest": "^3.2.4",

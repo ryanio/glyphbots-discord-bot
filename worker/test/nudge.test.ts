@@ -24,12 +24,16 @@ import {
   NUDGE_KINDS,
   nextNudgeKind,
 } from "../src/channels/idle";
-import { collectionFacts } from "../src/channels/nudge-content";
 import { runIdleNudge } from "../src/channels/nudge";
+import { collectionFacts } from "../src/channels/nudge-content";
 import { GENERAL_CHANNEL_ID, GUILD_ID, MAX_BOT_TOKEN_ID } from "../src/config";
-import { FeedStateDO } from "../src/durable-objects/feed-state";
 import type { LookupMessage } from "../src/lookups/handle";
-import { createMemoryPoster } from "./fixtures";
+import {
+  createArtifact,
+  createFeedStateDO,
+  createMemoryPoster,
+  firstEmbed,
+} from "./fixtures";
 import {
   createMemoryIdleStore,
   DAY_MS,
@@ -37,7 +41,7 @@ import {
   idleState,
   NOW,
 } from "./idle-fixtures";
-import { createLookupArtifact, createLookupClients } from "./lookup-fixtures";
+import { createLookupClients } from "./lookup-fixtures";
 
 const SELF_ID = "oracle-bot";
 
@@ -58,8 +62,8 @@ const STATS = {
 /** Clients where every one of the four kinds has something to say. */
 const richClients = () =>
   createLookupClients({
-    recentArtifacts: [createLookupArtifact(5)],
-    artifacts: { 5: createLookupArtifact(5) },
+    recentArtifacts: [createArtifact({ contractTokenId: 5 })],
+    artifacts: { 5: createArtifact({ contractTokenId: 5 }) },
     collectionStats: STATS,
     artifactSummary: { total: 173, last1d: 0, last7d: 2, last30d: 2 },
   });
@@ -82,7 +86,7 @@ const nudgeDeps = (
       store,
       now: () => options.now ?? NOW,
       randomInt: (max: number) => Math.min(1234, max),
-      pick: <T,>(items: readonly T[]): T | undefined => items[0],
+      pick: <T>(items: readonly T[]): T | undefined => items[0],
     },
     clients,
     poster,
@@ -119,7 +123,10 @@ describe("what counts as the server being awake", () => {
 
   it("ignores other channels, other guilds and DMs", () => {
     expect(
-      isHumanActivity(humanMessage({ channel_id: "1446247601942036574" }), SELF_ID)
+      isHumanActivity(
+        humanMessage({ channel_id: "1446247601942036574" }),
+        SELF_ID
+      )
     ).toBe(false);
     expect(isHumanActivity(humanMessage({ guild_id: "999" }), SELF_ID)).toBe(
       false
@@ -165,10 +172,14 @@ describe("the clock and the cooldown", () => {
     expect(decideNudge(state, NOW)).toEqual({ post: true, kind: "artifact" });
   });
 
-  it("reports a cold start rather than infinite silence", () => {
+  it("does not read an unset clock as infinite silence", () => {
+    // `runIdleNudge` seeds before it ever gets here, so this is the floor under
+    // that rather than a path anything takes. It matters which way the floor
+    // falls: read as "silent since the epoch", a fresh record would fire on the
+    // first check after every deploy.
     expect(decideNudge(idleState(), NOW)).toEqual({
       post: false,
-      reason: "no-clock",
+      reason: "not-quiet",
     });
   });
 });
@@ -239,8 +250,7 @@ describe("one idle check", () => {
     expect(await runIdleNudge(deps)).toBe("posted");
     expect(poster.sends).toHaveLength(1);
 
-    const [body] = poster.sends as Array<{ embeds: { title?: string }[] }>;
-    expect(body?.embeds[0]?.title).toBe("GlyphBot #1234");
+    expect(firstEmbed(poster.sends[0]).title).toBe("GlyphBot #1234");
     expect(store.current?.lastNudgeAtMs).toBe(NOW);
     expect(store.current?.lastNudgeKind).toBe("bot");
   });
@@ -344,8 +354,8 @@ describe("one idle check", () => {
     // API calls. Unwrapped, the throw abandoned the tick and the fallback
     // kind, which exists for exactly this, was never reached.
     const clients = createLookupClients({
-      recentArtifacts: [createLookupArtifact(5)],
-      artifacts: { 5: createLookupArtifact(5) },
+      recentArtifacts: [createArtifact({ contractTokenId: 5 })],
+      artifacts: { 5: createArtifact({ contractTokenId: 5 }) },
     });
     clients.fetchBot.mockRejectedValueOnce(new Error("glyphbots 500"));
 
@@ -381,10 +391,7 @@ describe("one idle check", () => {
     const store = createMemoryIdleStore(
       idleState({ lastHumanMessageAtMs: NOW - 49 * HOUR_MS })
     );
-    const poster = {
-      sends: [],
-      send: () => Promise.reject(new Error("500")),
-    };
+    const poster = createMemoryPoster({ failWith: new Error("500") });
     const clients = createLookupClients();
 
     const outcome = await runIdleNudge({
@@ -393,7 +400,7 @@ describe("one idle check", () => {
       store,
       now: () => NOW,
       randomInt: () => 1234,
-      pick: <T,>(items: readonly T[]): T | undefined => items[0],
+      pick: <T>(items: readonly T[]): T | undefined => items[0],
     });
 
     expect(outcome).toBe("send-failed");
@@ -454,44 +461,20 @@ describe("the record itself", () => {
  * pass without exercising.
  */
 describe("the idle record inside FeedStateDO", () => {
-  const createDO = () => {
-    const store = new Map<string, unknown>();
-    const state = {
-      storage: {
-        get: <T>(key: string) => Promise.resolve(store.get(key) as T | undefined),
-        put: (key: string, value: unknown) => {
-          // Through JSON on the way in, which is what DO storage does to a
-          // structured value it has to persist.
-          store.set(key, JSON.parse(JSON.stringify(value)) as unknown);
-          return Promise.resolve();
-        },
-      },
-    };
-    return new FeedStateDO(state as unknown as DurableObjectState);
-  };
+  const read = (feed: ReturnType<typeof createFeedStateDO>) =>
+    feed.read<IdleState>("idle-state");
 
-  const read = async (feed: FeedStateDO) => {
-    const response = await feed.fetch(
-      new Request("https://feed-state/idle-state")
-    );
-    return ((await response.json()) as { state: IdleState | null }).state;
-  };
-
-  const apply = (feed: FeedStateDO, update: IdleUpdate) =>
-    feed.fetch(
-      new Request("https://feed-state/idle-state", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(update),
-      })
-    );
+  const apply = (
+    feed: ReturnType<typeof createFeedStateDO>,
+    update: IdleUpdate
+  ) => feed.apply("idle-state", update);
 
   it("reads as absent before anything is written", async () => {
-    expect(await read(createDO())).toBeNull();
+    expect(await read(createFeedStateDO())).toBeNull();
   });
 
   it("round-trips a full record through storage", async () => {
-    const feed = createDO();
+    const feed = createFeedStateDO();
 
     await apply(feed, { op: "seed", atMs: NOW - 3 * DAY_MS });
     await apply(feed, { op: "nudge", atMs: NOW - DAY_MS, kind: "notable" });
@@ -507,7 +490,7 @@ describe("the idle record inside FeedStateDO", () => {
   });
 
   it("merges a message and a nudge that arrive from different callers", async () => {
-    const feed = createDO();
+    const feed = createFeedStateDO();
 
     await apply(feed, { op: "seed", atMs: NOW - 3 * DAY_MS });
     await apply(feed, { op: "nudge", atMs: NOW - DAY_MS, kind: "bot" });
@@ -519,49 +502,38 @@ describe("the idle record inside FeedStateDO", () => {
   });
 
   it("rejects an operation it does not recognize", async () => {
-    const feed = createDO();
-
-    const bad = await feed.fetch(
-      new Request("https://feed-state/idle-state", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ op: "wipe", atMs: NOW }),
-      })
-    );
+    const feed = createFeedStateDO();
+    const bad = await feed.apply("idle-state", { op: "wipe", atMs: NOW });
 
     expect(bad.status).toBe(400);
     expect(await read(feed)).toBeNull();
   });
 
   it("rejects a nudge carrying a kind that is not in the rotation", async () => {
-    const feed = createDO();
-    const bad = await feed.fetch(
-      new Request("https://feed-state/idle-state", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ op: "nudge", atMs: NOW, kind: "haiku" }),
-      })
-    );
+    const feed = createFeedStateDO();
+    const bad = await feed.apply("idle-state", {
+      op: "nudge",
+      atMs: NOW,
+      kind: "haiku",
+    });
     expect(bad.status).toBe(400);
   });
 
   it("treats a corrupt stored record as absent rather than as silence", async () => {
-    const store = new Map<string, unknown>([
-      ["idleState", { lastHumanMessageAtMs: "ages ago" }],
-    ]);
-    const feed = new FeedStateDO({
-      storage: {
-        get: <T>(key: string) => Promise.resolve(store.get(key) as T | undefined),
-        put: (key: string, value: unknown) => {
-          store.set(key, value);
-          return Promise.resolve();
-        },
-      },
-    } as unknown as DurableObjectState);
+    const feed = createFeedStateDO({
+      idleState: { lastHumanMessageAtMs: "ages ago" },
+    });
 
     // Absent, not "silent since the epoch", so the next tick seeds instead of
     // firing.
     expect(await read(feed)).toBeNull();
+  });
+
+  it("answers 404 for a record it does not have and 405 for a write it does not take", async () => {
+    const feed = createFeedStateDO();
+
+    expect((await feed.request("nope", "GET")).status).toBe(404);
+    expect((await feed.request("idle-state", "PUT")).status).toBe(405);
   });
 });
 

@@ -29,6 +29,7 @@
  */
 
 import { MAX_ARTIFACT_TOKEN_ID, MAX_BOT_TOKEN_ID } from "../config";
+import { randomInt as defaultRandomInt } from "../utils/random";
 
 export type LookupMatch =
   | { kind: "bot"; tokenId: number }
@@ -60,9 +61,6 @@ export type LookupParseOptions = {
   /** Injected for tests. Returns an integer in `[1, max]`. */
   randomInt?: (max: number) => number;
 };
-
-const defaultRandomInt = (max: number): number =>
-  Math.floor(Math.random() * max) + 1;
 
 const keyOf = (match: LookupMatch): string =>
   match.kind === "username"

@@ -1,8 +1,8 @@
 /**
- * GlyphBots and OpenSea API shapes, copied from `src/lib/types.ts`.
+ * GlyphBots and OpenSea API shapes.
  *
  * One deliberate omission: the OpenSea types below drop `image_url` and
- * `display_image_url`, which the Node types carry. OpenSea serves
+ * `display_image_url`, which the Node types carried. OpenSea serves
  * `image/svg+xml` for this contract (verified live on token 1) and Discord
  * renders nothing for SVG, so an OpenSea image URL must never reach an embed.
  * Leaving the fields off the type makes that a compile error rather than a

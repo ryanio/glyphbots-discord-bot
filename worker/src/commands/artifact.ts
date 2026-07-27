@@ -1,5 +1,5 @@
 /**
- * `/artifact`, ported from `src/commands/artifact.ts`.
+ * `/artifact`.
  *
  * `artifact.imageUrl` stays on the embed. It is worth being explicit about why
  * that does not violate the no-SVG rule: this field comes from the GlyphBots
@@ -84,7 +84,9 @@ export const buildArtifactEmbed = async (
     : null;
 
   return embed.setFooter({
-    text: minted ? `GlyphBots Artifacts · Minted ${minted}` : "GlyphBots Artifacts",
+    text: minted
+      ? `GlyphBots Artifacts · Minted ${minted}`
+      : "GlyphBots Artifacts",
   });
 };
 
@@ -125,7 +127,9 @@ export const artifactButtons = (
 /** Resolve the artifact this invocation is about, or an error body. */
 const resolveArtifact = async (
   ctx: CommandContext
-): Promise<{ artifact: Artifact } | { error: ReturnType<typeof errorReply> }> => {
+): Promise<
+  { artifact: Artifact } | { error: ReturnType<typeof errorReply> }
+> => {
   const tokenIdOption = ctx.options.getInteger("id");
   const isRandom = ctx.options.getBoolean("random") ?? false;
 

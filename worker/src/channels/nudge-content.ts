@@ -41,7 +41,11 @@ import {
   formatNumber,
   formatTraitLine,
 } from "../commands/format";
-import { getRarityEmoji, getRarityTier, percentileOf } from "../commands/rarity";
+import {
+  getRarityEmoji,
+  getRarityTier,
+  percentileOf,
+} from "../commands/rarity";
 import {
   COLORS,
   DEFAULT_GLYPHBOTS_API_URL,
@@ -277,7 +281,11 @@ const buildFactPost = async (
     embeds: [asEmbed(embed)],
     components: [
       linkButtonRow([
-        { label: "View on OpenSea", url: getOpenSeaCollectionUrl(), emoji: "🌊" },
+        {
+          label: "View on OpenSea",
+          url: getOpenSeaCollectionUrl(),
+          emoji: "🌊",
+        },
         { label: "GlyphBots", url: DEFAULT_GLYPHBOTS_API_URL, emoji: "🤖" },
       ]),
     ],

@@ -3,7 +3,8 @@
  * `opensea-activity-bot/src/platforms/discord/utils.ts`.
  *
  * **No image bytes are fetched, ever.** The Node bot ran every embed image
- * through `fetchImageBuffer` (`src/utils/utils.ts:228-266`), which rasterized
+ * through `fetchImageBuffer`
+ * (`opensea-activity-bot/src/utils/utils.ts:228-266`), which rasterized
  * SVG to PNG with `sharp` (`:198-221`) and attached the result as an
  * `AttachmentBuilder` referenced by `attachment://`. That existed because
  * OpenSea serves `image/svg+xml` for these contracts and Discord renders
@@ -37,7 +38,8 @@ const TRAILING_ZEROS = /(\.\d*?)0+$/;
 const TRAILING_DOT = /\.$/;
 
 /**
- * `formatAmount` from `src/utils/utils.ts:111-136`, without `ethers`.
+ * `formatAmount` from `opensea-activity-bot/src/utils/utils.ts:111-136`,
+ * without `ethers`.
  *
  * The original went through `formatUnits` then `Number.parseFloat`, which
  * loses precision above 2^53 wei. This does the scaling in `BigInt` and rounds
@@ -45,7 +47,7 @@ const TRAILING_DOT = /\.$/;
  * the original got right and stays exact for the ones it did not. WETH still
  * prints as ETH.
  */
-export const formatAmount = (
+const formatAmount = (
   quantity: string,
   decimals: number,
   symbol: string
@@ -75,10 +77,12 @@ export const formatAmount = (
 };
 
 const priceOf = (payment: OpenSeaPayment | undefined): string | null =>
-  payment ? formatAmount(payment.quantity, payment.decimals, payment.symbol) : null;
+  payment
+    ? formatAmount(payment.quantity, payment.decimals, payment.symbol)
+    : null;
 
 /** Numeric price for sorting, `getPurchasePrice` (`event-grouping.ts:456-468`). */
-export const priceValue = (event: OpenSeaEvent): bigint => {
+const priceValue = (event: OpenSeaEvent): bigint => {
   if (!event.payment?.quantity) {
     return 0n;
   }
@@ -90,7 +94,7 @@ export const priceValue = (event: OpenSeaEvent): bigint => {
 };
 
 /** Highest first, `sortEventsByPrice` (`event-grouping.ts:471-484`). */
-export const sortByPriceDesc = (events: OpenSeaEvent[]): OpenSeaEvent[] =>
+const sortByPriceDesc = (events: OpenSeaEvent[]): OpenSeaEvent[] =>
   [...events].sort((a, b) => {
     const left = priceValue(a);
     const right = priceValue(b);
@@ -104,7 +108,7 @@ export const sortByPriceDesc = (events: OpenSeaEvent[]): OpenSeaEvent[] =>
  * `calculateTotalSpent` (`event-grouping.ts:642-673`), minus the runtime
  * `require("./utils")` at `:671`.
  */
-export const totalSpent = (events: OpenSeaEvent[]): string | null => {
+const totalSpent = (events: OpenSeaEvent[]): string | null => {
   const payments = events
     .map((event) => event.payment)
     .filter(
@@ -150,7 +154,9 @@ const itemLabel = (event: OpenSeaEvent): string => {
 
 const itemUrl = (event: OpenSeaEvent): string | null => {
   const tokenId = tokenIdOf(event);
-  return tokenId === null ? (event.nft?.opensea_url ?? null) : getOpenSeaUrl(tokenId);
+  return tokenId === null
+    ? (event.nft?.opensea_url ?? null)
+    : getOpenSeaUrl(tokenId);
 };
 
 /**
@@ -158,7 +164,7 @@ const itemUrl = (event: OpenSeaEvent): string | null => {
  * (`discord/utils.ts:51-52`). OpenSea usernames are user-chosen and regularly
  * contain underscores.
  */
-export const escapeMarkdown = (text: string): string =>
+const escapeMarkdown = (text: string): string =>
   text.replace(/(?<special>[_*~`|>])/g, "\\$<special>");
 
 /** One sale, `buildSaleEmbed` + `buildEmbed` (`discord/utils.ts:122-135,347-382`). */

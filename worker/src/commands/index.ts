@@ -3,8 +3,8 @@
  *
  * Every entry here must have a matching entry in `./definitions.ts` and the
  * other way round; `test/commands.test.ts` asserts that so the two cannot
- * drift. A registered command with no handler is a user-visible dead command,
- * which is precisely the failure Phase 2 exists to remove.
+ * drift. A registered command with no handler is a dead command in front of
+ * users, which is the failure this map exists to make impossible.
  */
 
 import { handleActivity } from "./activity";

@@ -1,9 +1,16 @@
 /**
- * Guild ids and mint-watcher tuning.
+ * Guild ids, contracts, colors and the tuning numbers every feed reads.
  *
  * Discord ids are inline constants, never env vars, matching Coral's rule in
  * `/Users/rg/dev/coral/AGENTS.md`. The only environment values are the bot's
  * own credentials.
+ *
+ * Several numbers below carry the file and line they were taken from. Anything
+ * of the form `src/...` at `c75d6a8` is the Node bot that used to live in this
+ * repo and was deleted at `0333bac`; anything prefixed with a repo name is one
+ * of the two retired bots (`opensea-activity-bot`, `discord-nft-embed-bot`).
+ * None of those paths resolve today, which is the point of the qualifier: they
+ * are evidence for why a number is what it is, not somewhere to go and look.
  */
 
 /** GlyphBots guild. */
@@ -31,8 +38,8 @@ export const TRADING_FLOOR_CHANNEL_ID = "1446247601942036574";
  * The only two channels inline `b#123` / `a#123` / `#username` lookups answer
  * in.
  *
- * The Node bot this is ported from replied in every channel it could see and
- * in DMs (`discord-nft-embed-bot/src/index.ts`, no channel check anywhere).
+ * The bot this is ported from replied in every channel it could see and in DMs
+ * (`discord-nft-embed-bot/src/index.ts`, no channel check anywhere).
  * That is the largest subrequest risk in the migration: one embed is several
  * sequential OpenSea calls and a single message can carry six of them, so an
  * unbounded surface is an unbounded bill. Two ids, checked before any network
@@ -43,7 +50,7 @@ export const LOOKUP_CHANNEL_IDS: readonly string[] = [
   SHOW_AND_TELL_CHANNEL_ID,
 ];
 
-/** Discord's own ceiling, and the Node bot's (`src/config/constants.ts:6`). */
+/** Discord's own ceiling, and the Node bot's (`src/config/constants.ts:6` at `c75d6a8`). */
 export const MAX_EMBEDS_PER_MESSAGE = 6;
 
 /**
@@ -73,16 +80,16 @@ export const MAX_ARTIFACT_TOKEN_ID = 100_000;
  */
 export const DEFAULT_GLYPHBOTS_API_URL = "https://www.glyphbots.com";
 
-/** Artifacts pulled per poll (`src/channels/mints.ts` FETCH_LIMIT). */
+/** Artifacts pulled per poll (`src/channels/mints.ts` FETCH_LIMIT at `c75d6a8`). */
 export const MINTS_FETCH_LIMIT = 50;
 
-/** Burst guard ceiling (`src/lib/constants.ts:49`). */
+/** Burst guard ceiling (`src/lib/constants.ts:49` at `c75d6a8`). */
 export const MINTS_MAX_POSTS_PER_POLL = 5;
 
 /** Pause between individual mint posts, to stay clear of the channel bucket. */
 export const MINTS_POST_DELAY_MS = 1500;
 
-/** How many posted artifact ids the cursor remembers (`src/lib/state.ts:17`). */
+/** How many posted artifact ids the cursor remembers (`src/lib/state.ts:17` at `c75d6a8`). */
 export const MINTS_POSTED_ID_HISTORY = 100;
 
 /**
@@ -92,8 +99,16 @@ export const MINTS_POSTED_ID_HISTORY = 100;
  * about 176/day against this collection (24 events in a 3.3 hour probe on
  * 2026-07-25, almost all of it one operator's relister), which would put a
  * message in #trading-floor every eight minutes forever. Sales run 1.24/day.
- * The listing code path below is left structurally intact so re-enabling it is
- * adding a string here, but nothing enables it today.
+ *
+ * The fetch, the settle-window grouping and the actor keys all still
+ * understand listings, so that half of the path survives. The embeds do not.
+ * `buildSaleEmbed` writes `Purchased:` into the title, `buildGroupEmbed`
+ * writes `N items purchased` and labels its actor field `Buyer`, and both read
+ * `event.buyer`, which a listing has no value for at all (it carries `maker`).
+ * Adding `"listing"` to this array and nothing else would post listings
+ * labelled as purchases, with the actor missing. Re-enabling means branching
+ * those three strings and the actor lookup on `effectiveEventType` in
+ * `src/channels/sales-embeds.ts` first.
  */
 export const SALES_EVENT_TYPES: readonly ["sale"] = ["sale"];
 
@@ -115,7 +130,8 @@ export const SALES_FETCH_LIMIT = 50;
 export const SALES_MAX_PAGES = 10;
 
 /**
- * Settle window for actor grouping (`src/utils/constants.ts:13-14`). A buyer
+ * Settle window for actor grouping
+ * (`opensea-activity-bot/src/utils/constants.ts:13-14`). A buyer
  * sweeping ten items produces one message rather than ten, and the 60s was
  * originally chosen to let OpenSea metadata populate for mints.
  */
@@ -124,7 +140,10 @@ export const SALES_SETTLE_MS = 60_000;
 /** Fewest events before a group is a group rather than N singles. */
 export const SALES_MIN_GROUP_SIZE = 2;
 
-/** Under-sized groups are dropped at `settleMs * 3` (`event-grouping.ts:353-360`). */
+/**
+ * Under-sized groups are dropped at `settleMs * 3`
+ * (`opensea-activity-bot/src/utils/event-grouping.ts:353-360`).
+ */
 export const SALES_GROUP_STALE_MULTIPLIER = 3;
 
 /** Bound on the processed key set, matching the LRU it replaces. */
@@ -134,7 +153,9 @@ export const SALES_PROCESSED_KEY_HISTORY = 2000;
  * Messages sent per tick.
  *
  * The Node bot paced itself with a hardcoded 3,000 ms `await timeout` between
- * messages (`src/platforms/discord/discord.ts:155-157,208-211`). A cron
+ * messages
+ * (`opensea-activity-bot/src/platforms/discord/discord.ts:155-157,208-211`).
+ * A cron
  * invocation must not sleep, so the pacing becomes a cap: send this many, and
  * carry the rest to the next tick in the deferred queue rather than dropping
  * them.
@@ -144,7 +165,10 @@ export const SALES_MAX_MESSAGES_PER_TICK = 5;
 /** Ceiling on the deferred queue, so a dead channel cannot grow storage forever. */
 export const SALES_DEFERRED_QUEUE_MAX = 50;
 
-/** Items listed inside a grouped message (`discord/utils.ts:513`). */
+/**
+ * Items listed inside a grouped message
+ * (`opensea-activity-bot/src/platforms/discord/utils.ts:513`).
+ */
 export const SALES_TOP_ITEMS = 4;
 
 /**
@@ -189,22 +213,32 @@ export const NUDGE_NOTABLE_PERCENTILE = 10;
 /** Artifacts pulled before picking one for a nudge or a gallery post. */
 export const RANDOM_ARTIFACT_FETCH_LIMIT = 50;
 
+/**
+ * Discord's REST root, pinned to v10.
+ *
+ * Three callers, and the version has to be the same for all of them: the
+ * gateway DO's `/gateway/bot` discovery, the interaction follow-up PATCH, and
+ * the operator's command registration. The gateway socket carries `v=10` in
+ * its query string for the same reason.
+ */
+export const DISCORD_API = "https://discord.com/api/v10";
+
 /** GlyphBots brand color for embeds. */
 export const GLYPHBOTS_COLOR = 0x00ff88;
 
 /** Etherscan transaction base URL. */
 export const ETHERSCAN_TX_URL = "https://etherscan.io/tx/";
 
-/** OpenSea v2 API root (`src/api/opensea.ts:18`). */
+/** OpenSea v2 API root (`src/api/opensea.ts:18` at `c75d6a8`). */
 export const OPENSEA_API_BASE = "https://api.opensea.io/api/v2";
 
-/** Bot contract (`src/api/opensea.ts:19`). */
+/** Bot contract (`src/api/opensea.ts:19` at `c75d6a8`). */
 export const GLYPHBOTS_CONTRACT = "0xb6c2c2d2999c1b532e089a7ad4cb7f8c91cf5075";
 
-/** Artifact contract (`src/commands/artifact.ts:23`). */
+/** Artifact contract (`src/commands/artifact.ts:23` at `c75d6a8`). */
 export const ARTIFACTS_CONTRACT = "0x3c64dc415de60ee9a25f67fb48e7c9a234a4b6d1";
 
-/** OpenSea collection slug (`src/api/opensea.ts:20`). */
+/** OpenSea collection slug (`src/api/opensea.ts:20` at `c75d6a8`). */
 export const GLYPHBOTS_COLLECTION_SLUG = "glyphbots";
 
 /** Chain every OpenSea path is scoped to. */
@@ -214,27 +248,21 @@ export const OPENSEA_CHAIN = "ethereum";
 export const MAX_BOT_TOKEN_ID = 11_111;
 
 /**
- * Embed colors, ported from the per-command `HexColorString` constants. They
- * are numbers here because `@discordjs/builders`'s `setColor` takes a number
- * or an RGB tuple; the `"#rrggbb"` overload is a discord.js addition.
+ * Embed colors, carried over from the Node bot's per-command
+ * `HexColorString` constants (`src/commands/*.ts` at `c75d6a8`) so no reply
+ * changes color. They are numbers here because `@discordjs/builders`'s
+ * `setColor` takes a number or an RGB tuple; the `"#rrggbb"` overload is a
+ * discord.js addition.
  */
 export const COLORS = {
-  /** `src/commands/activity.ts:15` */
   activity: 0xe6_7e_22,
-  /** `src/commands/artifact.ts:21` */
   artifact: 0x9b_59_b6,
-  /** `src/commands/bot.ts:27` */
   bot: 0x00_ff_88,
-  /** Shared error red, `src/commands/*.ts` */
+  /** Shared by every not-found and bad-input reply. */
   error: 0xff_44_44,
-  /** `src/commands/owner.ts:20` */
   info: 0x58_65_f2,
-  /** `src/commands/listings.ts:18` */
   listing: 0x34_98_db,
-  /** `src/commands/rarity.ts:15` */
   rarity: 0x9b_59_b6,
-  /** `src/commands/sales.ts:19` */
   sale: 0x2e_cc_71,
-  /** `src/commands/floor.ts:14` */
   stats: 0xf5_a6_23,
 } as const;

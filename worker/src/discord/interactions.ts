@@ -29,12 +29,10 @@ import {
   InteractionResponseType,
   type RESTPatchAPIInteractionOriginalResponseJSONBody,
 } from "discord-api-types/v10";
-import { COLORS } from "../config";
+import { COLORS, DISCORD_API } from "../config";
 import { createLogger, getErrorMessage } from "../utils/logger";
 
 const log = createLogger("Interactions");
-
-const DISCORD_API = "https://discord.com/api/v10";
 
 /** Body of the message that replaces the deferred placeholder. */
 export type FollowUp = RESTPatchAPIInteractionOriginalResponseJSONBody;

@@ -8,11 +8,12 @@
  * thresholds unchanged so output does not shift.
  */
 
+import { MS_PER_SECOND } from "../utils/time";
+
 const SECONDS_PER_MINUTE = 60;
 const SECONDS_PER_HOUR = 3600;
 const SECONDS_PER_DAY = 86_400;
 const SECONDS_PER_WEEK = 604_800;
-const MS_PER_SECOND = 1000;
 
 const TINY = 0.0001;
 const THOUSAND = 1000;
@@ -26,10 +27,11 @@ const PERCENT_DIGITS = 1;
 const PERCENT_SCALE = 100;
 
 /**
- * Scaled-value flavor, from `src/commands/floor.ts:17`. Three decimals there
- * were two; the difference is preserved via `digits`.
+ * Scaled-value flavor, from the Node bot's `/floor` (`src/commands/floor.ts:17`
+ * at `c75d6a8`). Three decimals there were two; the difference is preserved via
+ * `digits`.
  */
-export const formatEthValue = (value: number, digits = PRICE_DIGITS): string => {
+const formatEthValue = (value: number, digits = PRICE_DIGITS): string => {
   if (value === 0) {
     return "0 ETH";
   }
@@ -42,15 +44,15 @@ export const formatEthValue = (value: number, digits = PRICE_DIGITS): string => 
   return `${value.toFixed(digits)} ETH`;
 };
 
-/** Raw on-chain quantity flavor, from `src/commands/sales.ts:22`. */
+/** Raw on-chain quantity flavor (`src/commands/sales.ts:22` at `c75d6a8`). */
 export const formatEthAmount = (quantity: string, decimals: number): string =>
   formatEthValue(Number(quantity) / 10 ** decimals);
 
-/** Collection stats use two decimals (`src/commands/floor.ts:27`). */
+/** Collection stats use two decimals (`src/commands/floor.ts:27` at `c75d6a8`). */
 export const formatEthStat = (value: number): string =>
   formatEthValue(value, STAT_DIGITS);
 
-/** `src/commands/floor.ts:30` */
+/** `src/commands/floor.ts:30` at `c75d6a8`. */
 export const formatNumber = (value: number): string => {
   if (value >= MILLION) {
     return `${(value / MILLION).toFixed(PERCENT_DIGITS)}M`;
@@ -69,7 +71,9 @@ export const formatNumber = (value: number): string => {
  * sends: fields go missing on a partial index and `undefined` sails straight
  * into `toFixed` as a thrown handler.
  */
-export const finiteNumber = (value: number | null | undefined): number | null =>
+export const finiteNumber = (
+  value: number | null | undefined
+): number | null =>
   typeof value === "number" && Number.isFinite(value) ? value : null;
 
 /**
@@ -89,13 +93,18 @@ export const ethFloorPrice = (
     | undefined
 ): number | null => {
   const symbol = total?.floor_price_symbol;
-  if (symbol !== undefined && symbol !== null && symbol !== "" && symbol !== "ETH") {
+  if (
+    symbol !== undefined &&
+    symbol !== null &&
+    symbol !== "" &&
+    symbol !== "ETH"
+  ) {
     return null;
   }
   return finiteNumber(total?.floor_price);
 };
 
-/** `src/commands/floor.ts:40` */
+/** `src/commands/floor.ts:40` at `c75d6a8`. */
 export const formatPercentChange = (change: number): string => {
   if (change === 0) {
     return "—";
@@ -105,9 +114,9 @@ export const formatPercentChange = (change: number): string => {
 };
 
 /**
- * `src/commands/activity.ts:29`, the longer of the two copies (it carries the
- * week bucket that `sales.ts` lacked). `now` is injectable so tests are not
- * clock-dependent.
+ * `src/commands/activity.ts:29` at `c75d6a8`, the longer of the two copies (it
+ * carries the week bucket that `sales.ts` lacked). `now` is injectable so tests
+ * are not clock-dependent.
  */
 export const formatTimeAgo = (timestamp: number, now = Date.now()): string => {
   const seconds = Math.floor(now / MS_PER_SECOND - timestamp);
@@ -157,7 +166,7 @@ const SKIPPED_TRAIT_TYPES = new Set(["name"]);
 const EMPTY_TRAIT_VALUES = new Set(["None", "No"]);
 
 /** Traits worth rendering: no placeholders, no duplicate of the description. */
-export const displayTraits = <T extends { trait_type: string; value: string }>(
+const displayTraits = <T extends { trait_type: string; value: string }>(
   traits: readonly T[]
 ): T[] =>
   traits.filter(
@@ -184,7 +193,8 @@ export const formatTraitLine = (
 
   for (const trait of displayTraits(traits)) {
     const part = `**${trait.trait_type}** ${trait.value}`;
-    const added = parts.length === 0 ? part.length : part.length + TRAIT_SEPARATOR.length;
+    const added =
+      parts.length === 0 ? part.length : part.length + TRAIT_SEPARATOR.length;
     if (length + added > TRAIT_LINE_BUDGET) {
       parts.push(ELLIPSIS);
       break;
@@ -194,7 +204,9 @@ export const formatTraitLine = (
   }
 
   const line = parts.join(TRAIT_SEPARATOR);
-  return line.length > FIELD_VALUE_LIMIT ? line.slice(0, FIELD_VALUE_LIMIT) : line;
+  return line.length > FIELD_VALUE_LIMIT
+    ? line.slice(0, FIELD_VALUE_LIMIT)
+    : line;
 };
 
 const STAT_COLUMNS = 3;

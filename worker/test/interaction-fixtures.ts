@@ -1,6 +1,10 @@
 /**
- * Fixtures for the Phase 2 interaction tests, kept apart from `fixtures.ts`
- * (which is the mint watcher's) so the two suites do not entangle.
+ * Fixtures only the interaction and slash command suites need: the raw
+ * interaction payloads, the OpenSea-side stubs, and the `waitUntil` and
+ * follow-up recorders.
+ *
+ * Anything shared with another suite lives in `./fixtures`, which is where
+ * `stubGlyphBots`, `createBot`, `createArtifact` and `TEST_ORIGIN` come from.
  */
 
 import type {
@@ -13,11 +17,8 @@ import {
   InteractionType,
 } from "discord-api-types/v10";
 import { vi } from "vitest";
-import type { GlyphBotsClient } from "../src/api/glyphbots";
 import type { OpenSeaClient } from "../src/api/opensea";
 import type {
-  Artifact,
-  Bot,
   BotStory,
   OpenSeaCollectionStats,
   OpenSeaEvent,
@@ -27,9 +28,9 @@ import type {
 import type { CommandContext } from "../src/commands/context";
 import { readOptions } from "../src/commands/context";
 import type { EditOriginal, FollowUp } from "../src/discord/interactions";
+import { stubGlyphBots } from "./fixtures";
 
 export const APP_ID = "111111111111111111";
-export const TEST_ORIGIN = "https://www.glyphbots.com";
 
 /** Option literals, so tests read like the slash command they stand for. */
 export const intOption = (
@@ -83,20 +84,6 @@ export const commandInteraction = (
       user: { id: "user-1", username: "tester", discriminator: "0" },
     },
   }) as unknown as APIChatInputApplicationCommandInteraction;
-
-export const createBot = (overrides: Partial<Bot> = {}): Bot => ({
-  id: "bot-1",
-  name: "GlyphBot #7 - Wanderer",
-  tokenId: 7,
-  traits: [
-    { trait_type: "Head", value: "Antenna" },
-    { trait_type: "Aura", value: "None" },
-  ],
-  rarityRank: 500,
-  burnedAt: null,
-  burnedBy: null,
-  ...overrides,
-});
 
 export const createStory = (overrides: Partial<BotStory> = {}): BotStory => ({
   arc: {
@@ -197,37 +184,18 @@ export const createListing = (value = "45000000000000000"): OpenSeaListing => ({
   protocol_address: "0xseaport",
 });
 
-export const createArtifactFixture = (
-  overrides: Partial<Artifact> = {}
-): Artifact => ({
-  id: "artifact-1",
-  botTokenId: 7,
-  imageUrl: "https://www.glyphbots.com/artifacts/1.jpg",
-  title: "Signal Bloom",
-  createdAt: "2025-01-01T00:00:00Z",
-  mintedAt: "2025-01-02T00:00:00Z",
-  contractTokenId: 12,
-  mintQuantity: 1,
-  minter: "0x1234567890abcdef1234567890abcdef12345678",
-  type: "image",
-  ...overrides,
-});
-
-/** A GlyphBots client with every method stubbed and the real URL helpers. */
-export const stubGlyphBots = (
-  overrides: Partial<GlyphBotsClient> = {}
-): GlyphBotsClient => ({
-  baseUrl: TEST_ORIGIN,
-  fetchArtifact: vi.fn(() => Promise.resolve(null)),
-  fetchArtifactSummary: vi.fn(() => Promise.resolve(null)),
-  fetchBot: vi.fn(() => Promise.resolve(null)),
-  fetchBotStory: vi.fn(() => Promise.resolve(null)),
-  fetchRecentArtifacts: vi.fn(() => Promise.resolve([])),
-  getArtifactUrl: (id: number) => `${TEST_ORIGIN}/artifact/${id}`,
-  getBotPngUrl: (id: number) => `${TEST_ORIGIN}/bots/pngs/${id}.png`,
-  getBotUrl: (id: number) => `${TEST_ORIGIN}/bot/${id}`,
-  ...overrides,
-});
+/**
+ * Collection stats as OpenSea actually serves them on a partial index, which
+ * is not what `OpenSeaCollectionStats` declares.
+ *
+ * The cast is the whole point of the fixture: `/floor` has to survive fields
+ * the type says are always numbers. Taking a `Partial` rather than `never`
+ * keeps the field *names* checked, so a test cannot pass by misspelling one.
+ */
+export const partialStats = (stats: {
+  total?: Partial<OpenSeaCollectionStats["total"]>;
+  intervals?: Array<Partial<OpenSeaCollectionStats["intervals"][number]>>;
+}): OpenSeaCollectionStats => stats as OpenSeaCollectionStats;
 
 export const stubOpenSea = (
   overrides: Partial<OpenSeaClient> = {}

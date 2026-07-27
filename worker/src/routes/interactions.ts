@@ -21,7 +21,10 @@ import type {
   APIChatInputApplicationCommandInteraction,
   APIInteraction,
 } from "discord-api-types/v10";
-import { InteractionResponseType, InteractionType } from "discord-api-types/v10";
+import {
+  InteractionResponseType,
+  InteractionType,
+} from "discord-api-types/v10";
 import { Hono } from "hono";
 import { createGlyphBotsClient } from "../api/glyphbots";
 import { createOpenSeaClient } from "../api/opensea";

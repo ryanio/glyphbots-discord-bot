@@ -9,19 +9,21 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { advanceSalesCursor, pollSales } from "../src/channels/sales";
+import type { SalesFeedState } from "../src/channels/sales";
 import {
-  SALES_MAX_MESSAGES_PER_TICK,
-  SALES_SETTLE_MS,
-} from "../src/config";
+  advanceSalesCursor,
+  applySalesUpdate,
+  emptySalesState,
+  pollSales,
+} from "../src/channels/sales";
+import { SALES_MAX_MESSAGES_PER_TICK, SALES_SETTLE_MS } from "../src/config";
+import { createFeedStateDO, createMemoryPoster, firstEmbed } from "./fixtures";
 import {
-  createMemoryPoster,
   createMemorySalesStore,
   createOpenSea,
   createSweepStub,
-  firstEmbed,
-  pollDeps,
   saleEvent,
+  salesPollDeps,
   salesState,
   sweep,
 } from "./sales-fixtures";
@@ -37,7 +39,7 @@ describe("cold start", () => {
     const store = createMemorySalesStore(null);
 
     const sent = await pollSales(
-      pollDeps(opensea, poster, store, () => LATER)
+      salesPollDeps(opensea, poster, store, () => LATER)
     );
 
     expect(sent).toBe(0);
@@ -50,7 +52,12 @@ describe("cold start", () => {
     const store = createMemorySalesStore(null);
 
     await pollSales(
-      pollDeps(createOpenSea([[]]), createMemoryPoster(), store, () => LATER)
+      salesPollDeps(
+        createOpenSea([[]]),
+        createMemoryPoster(),
+        store,
+        () => LATER
+      )
     );
 
     expect(store.current?.lastEventTimestamp).toBe(Math.floor(LATER / 1000));
@@ -74,10 +81,10 @@ describe("cold start", () => {
     const poster = createMemoryPoster();
     const store = createMemorySalesStore(null);
 
-    await pollSales(pollDeps(opensea, poster, store, () => LATER));
+    await pollSales(salesPollDeps(opensea, poster, store, () => LATER));
     expect(poster.sends).toHaveLength(0);
 
-    await pollSales(pollDeps(opensea, poster, store, () => LATER));
+    await pollSales(salesPollDeps(opensea, poster, store, () => LATER));
 
     // The lag window reaches 120 seconds behind the seeded cursor, so the
     // seeding event itself comes back and posts. The one 200 seconds behind it
@@ -86,7 +93,7 @@ describe("cold start", () => {
     expect(firstEmbed(poster.sends[0]).title).toContain("#222");
 
     // A third tick with the same payload adds nothing: the key set rejects it.
-    await pollSales(pollDeps(opensea, poster, store, () => LATER));
+    await pollSales(salesPollDeps(opensea, poster, store, () => LATER));
     expect(poster.sends).toHaveLength(1);
     expect(store.current?.lastEventTimestamp).toBe(T0);
   });
@@ -99,7 +106,7 @@ describe("a new sale", () => {
     const store = createMemorySalesStore(salesState(T0));
 
     const sent = await pollSales(
-      pollDeps(createOpenSea([[event]]), poster, store, () => LATER)
+      salesPollDeps(createOpenSea([[event]]), poster, store, () => LATER)
     );
 
     expect(sent).toBe(1);
@@ -116,7 +123,7 @@ describe("a new sale", () => {
     const poster = createMemoryPoster();
 
     await pollSales(
-      pollDeps(
+      salesPollDeps(
         createOpenSea([[event]]),
         poster,
         createMemorySalesStore(salesState(T0)),
@@ -142,7 +149,7 @@ describe("a new sale", () => {
     });
 
     await pollSales(
-      pollDeps(
+      salesPollDeps(
         createOpenSea([[event]]),
         poster,
         createMemorySalesStore(salesState(T0)),
@@ -160,9 +167,9 @@ describe("a new sale", () => {
     const poster = createMemoryPoster();
     const store = createMemorySalesStore(salesState(T0));
 
-    await pollSales(pollDeps(opensea, poster, store, () => LATER));
-    await pollSales(pollDeps(opensea, poster, store, () => LATER));
-    await pollSales(pollDeps(opensea, poster, store, () => LATER));
+    await pollSales(salesPollDeps(opensea, poster, store, () => LATER));
+    await pollSales(salesPollDeps(opensea, poster, store, () => LATER));
+    await pollSales(salesPollDeps(opensea, poster, store, () => LATER));
 
     expect(poster.sends).toHaveLength(1);
   });
@@ -180,7 +187,7 @@ describe("a new sale", () => {
     const store = createMemorySalesStore(salesState(T0));
 
     await pollSales(
-      pollDeps(createOpenSea([[listing]]), poster, store, () => LATER)
+      salesPollDeps(createOpenSea([[listing]]), poster, store, () => LATER)
     );
 
     expect(poster.sends).toHaveLength(0);
@@ -195,7 +202,7 @@ describe("send failure", () => {
     const store = createMemorySalesStore(salesState(T0));
 
     const sent = await pollSales(
-      pollDeps(createOpenSea([[event]]), poster, store, () => LATER)
+      salesPollDeps(createOpenSea([[event]]), poster, store, () => LATER)
     );
 
     expect(sent).toBe(0);
@@ -210,8 +217,10 @@ describe("send failure", () => {
     poster.send.mockRejectedValueOnce(new Error("discord 500"));
     const store = createMemorySalesStore(salesState(T0));
 
-    await pollSales(pollDeps(opensea, poster, store, () => LATER));
-    const sent = await pollSales(pollDeps(opensea, poster, store, () => LATER));
+    await pollSales(salesPollDeps(opensea, poster, store, () => LATER));
+    const sent = await pollSales(
+      salesPollDeps(opensea, poster, store, () => LATER)
+    );
 
     expect(sent).toBe(1);
     // Two attempts, one delivery, no second copy built from the re-fetch.
@@ -228,7 +237,7 @@ describe("send failure", () => {
     });
 
     await pollSales(
-      pollDeps(opensea, createMemoryPoster(), store, () => LATER)
+      salesPollDeps(opensea, createMemoryPoster(), store, () => LATER)
     );
 
     expect(store.current?.lastEventTimestamp).toBe(T0);
@@ -256,7 +265,7 @@ describe("an event the embed builders reject", () => {
 
     await expect(
       pollSales(
-        pollDeps(
+        salesPollDeps(
           createOpenSea([[poison(T0 + 10)]]),
           createMemoryPoster(),
           store,
@@ -277,7 +286,7 @@ describe("an event the embed builders reject", () => {
     const store = createMemorySalesStore(salesState(T0));
 
     const sent = await pollSales(
-      pollDeps(
+      salesPollDeps(
         createOpenSea([[poison(T0 + 10), good]]),
         poster,
         store,
@@ -293,7 +302,7 @@ describe("an event the embed builders reject", () => {
     const store = createMemorySalesStore(salesState(T0));
 
     await pollSales(
-      pollDeps(
+      salesPollDeps(
         createOpenSea([[poison(T0 + 10)]]),
         createMemoryPoster(),
         store,
@@ -328,7 +337,7 @@ describe("a truncated sweep", () => {
     const store = createMemorySalesStore(salesState(T0));
 
     await pollSales(
-      pollDeps(
+      salesPollDeps(
         createSweepStub({ events: fetched, pages: 10, truncated: true }),
         createMemoryPoster(),
         store,
@@ -348,7 +357,7 @@ describe("a truncated sweep", () => {
     const store = createMemorySalesStore(salesState(T0 + 100));
 
     await pollSales(
-      pollDeps(
+      salesPollDeps(
         createSweepStub({ events: fetched, pages: 10, truncated: true }),
         createMemoryPoster(),
         store,
@@ -364,7 +373,7 @@ describe("a truncated sweep", () => {
     const store = createMemorySalesStore(salesState(T0));
 
     await pollSales(
-      pollDeps(
+      salesPollDeps(
         createSweepStub({ events: fetched, pages: 10, truncated: false }),
         createMemoryPoster(),
         store,
@@ -412,12 +421,17 @@ describe("grouping", () => {
 
     // Tick one ingests the sweep. The group is not settled yet, and its members
     // are held back rather than posted individually.
-    await pollSales(pollDeps(opensea, poster, store, () => firstTick));
+    await pollSales(salesPollDeps(opensea, poster, store, () => firstTick));
     expect(poster.sends).toHaveLength(0);
 
     // Tick two, past the settle window, flushes it as one message.
     await pollSales(
-      pollDeps(opensea, poster, store, () => firstTick + SALES_SETTLE_MS + 1000)
+      salesPollDeps(
+        opensea,
+        poster,
+        store,
+        () => firstTick + SALES_SETTLE_MS + 1000
+      )
     );
 
     expect(poster.sends).toHaveLength(1);
@@ -435,7 +449,7 @@ describe("grouping", () => {
 
     // Tick one: a fresh set of deps, as a cron invocation always is.
     await pollSales(
-      pollDeps(
+      salesPollDeps(
         createOpenSea([events]),
         createMemoryPoster(),
         store,
@@ -451,7 +465,7 @@ describe("grouping", () => {
     // and OpenSea has nothing new to say. The flush still happens.
     const poster = createMemoryPoster();
     await pollSales(
-      pollDeps(
+      salesPollDeps(
         createOpenSea([[]]),
         poster,
         store,
@@ -468,7 +482,7 @@ describe("grouping", () => {
     const poster = createMemoryPoster();
 
     await pollSales(
-      pollDeps(
+      salesPollDeps(
         createOpenSea([[saleEvent({ event_timestamp: T0 + 10 })]]),
         poster,
         createMemorySalesStore(salesState(T0)),
@@ -489,14 +503,21 @@ describe("grouping", () => {
     const firstTick = (T0 + 30) * 1000;
 
     await pollSales(
-      pollDeps(createOpenSea([events]), createMemoryPoster(), store, () => firstTick)
+      salesPollDeps(
+        createOpenSea([events]),
+        createMemoryPoster(),
+        store,
+        () => firstTick
+      )
     );
 
-    expect(Object.keys(store.current?.grouping.actorGroups ?? {})).toHaveLength(2);
+    expect(Object.keys(store.current?.grouping.actorGroups ?? {})).toHaveLength(
+      2
+    );
 
     const poster = createMemoryPoster();
     await pollSales(
-      pollDeps(
+      salesPollDeps(
         createOpenSea([[]]),
         poster,
         store,
@@ -526,7 +547,7 @@ describe("per-tick message cap", () => {
     const store = createMemorySalesStore(salesState(T0));
 
     const sent = await pollSales(
-      pollDeps(createOpenSea([events, []]), poster, store, () => LATER)
+      salesPollDeps(createOpenSea([events, []]), poster, store, () => LATER)
     );
 
     expect(sent).toBe(SALES_MAX_MESSAGES_PER_TICK);
@@ -540,8 +561,8 @@ describe("per-tick message cap", () => {
     const poster = createMemoryPoster();
     const store = createMemorySalesStore(salesState(T0));
 
-    await pollSales(pollDeps(opensea, poster, store, () => LATER));
-    await pollSales(pollDeps(opensea, poster, store, () => LATER));
+    await pollSales(salesPollDeps(opensea, poster, store, () => LATER));
+    await pollSales(salesPollDeps(opensea, poster, store, () => LATER));
 
     expect(poster.sends).toHaveLength(total);
     expect(store.current?.deferred).toHaveLength(0);
@@ -557,7 +578,7 @@ describe("per-tick message cap", () => {
     const store = createMemorySalesStore(salesState(T0));
 
     await pollSales(
-      pollDeps(
+      salesPollDeps(
         createOpenSea([events]),
         createMemoryPoster(),
         store,
@@ -567,5 +588,136 @@ describe("per-tick message cap", () => {
 
     const oldestDeferred = store.current?.deferred[0]?.oldestTimestamp;
     expect(store.current?.lastEventTimestamp).toBe(oldestDeferred);
+  });
+});
+
+describe("applySalesUpdate", () => {
+  const commit = (
+    overrides: Partial<
+      Extract<Parameters<typeof applySalesUpdate>[1], { op: "commit" }>
+    > = {}
+  ) => ({
+    op: "commit" as const,
+    processedKeys: [],
+    actorGroups: {},
+    deferred: [],
+    advanceTo: null,
+    ...overrides,
+  });
+
+  it("refuses to re-seed a record that already exists", () => {
+    const existing = salesState(T0);
+    expect(applySalesUpdate(existing, { op: "seed", at: T0 - 500 })).toEqual(
+      existing
+    );
+  });
+
+  it("seeds an absent record", () => {
+    expect(applySalesUpdate(null, { op: "seed", at: T0 })).toEqual(
+      emptySalesState(T0)
+    );
+  });
+
+  it("unions the processed keys rather than replacing them", () => {
+    // The one merge that has to be a merge. A tick that overlapped this one has
+    // already posted the sale behind its key, and dropping it would let the lag
+    // window re-serve the event and post it a second time.
+    const current = salesState(T0, {
+      grouping: { actorGroups: {}, processedKeys: ["from-the-other-tick"] },
+    });
+
+    const next = applySalesUpdate(current, commit({ processedKeys: ["mine"] }));
+
+    expect(next.grouping.processedKeys).toEqual([
+      "from-the-other-tick",
+      "mine",
+    ]);
+  });
+
+  it("never moves the cursor backwards", () => {
+    // `advanceTo` was computed against the record as this tick read it, which
+    // may be behind the record as it now stands.
+    const next = applySalesUpdate(
+      salesState(T0 + 100),
+      commit({ advanceTo: T0 })
+    );
+
+    expect(next.lastEventTimestamp).toBe(T0 + 100);
+  });
+
+  it("leaves the cursor alone when the sweep failed", () => {
+    expect(
+      applySalesUpdate(salesState(T0), commit({ advanceTo: null }))
+        .lastEventTimestamp
+    ).toBe(T0);
+  });
+
+  it("holds the cursor back below the oldest undelivered message", () => {
+    const next = applySalesUpdate(
+      salesState(T0),
+      commit({
+        advanceTo: T0 + 500,
+        deferred: [{ body: {}, oldestTimestamp: T0 + 20, label: "held" }],
+      })
+    );
+
+    expect(next.lastEventTimestamp).toBe(T0 + 20);
+  });
+});
+
+describe("the sales record inside FeedStateDO", () => {
+  const read = (feed: ReturnType<typeof createFeedStateDO>) =>
+    feed.read<SalesFeedState>("sales-state");
+
+  it("reads as absent before anything is written", async () => {
+    expect(await read(createFeedStateDO())).toBeNull();
+  });
+
+  it("applies the merge on its own side of the input gate", async () => {
+    const feed = createFeedStateDO();
+
+    await feed.apply("sales-state", { op: "seed", at: T0 });
+    await feed.apply("sales-state", {
+      op: "commit",
+      processedKeys: ["one"],
+      actorGroups: {},
+      deferred: [],
+      advanceTo: T0 + 30,
+    });
+
+    expect(await read(feed)).toEqual({
+      lastEventTimestamp: T0 + 30,
+      grouping: { actorGroups: {}, processedKeys: ["one"] },
+      deferred: [],
+    });
+  });
+
+  it("rejects an operation it does not recognize", async () => {
+    const feed = createFeedStateDO();
+    const bad = await feed.apply("sales-state", { op: "wipe" });
+
+    expect(bad.status).toBe(400);
+    expect(await read(feed)).toBeNull();
+  });
+
+  it("rejects a commit whose advanceTo is not a number", async () => {
+    const feed = createFeedStateDO();
+    const bad = await feed.apply("sales-state", {
+      op: "commit",
+      processedKeys: [],
+      actorGroups: {},
+      deferred: [],
+      advanceTo: "now",
+    });
+
+    expect(bad.status).toBe(400);
+  });
+
+  it("treats a corrupt stored record as absent, which re-seeds", async () => {
+    const feed = createFeedStateDO({
+      salesState: { lastEventTimestamp: "recently" },
+    });
+
+    expect(await read(feed)).toBeNull();
   });
 });

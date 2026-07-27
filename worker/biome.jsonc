@@ -1,0 +1,53 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  // The file is `biome.jsonc`, not `biome.json`, and that matters: comments in
+  // a file named `biome.json` make Biome discard the entire config without
+  // saying so, which reads as "the linter found nothing".
+  //
+  // Recommended rules only. `ultracite` was tried in two sibling repos and
+  // removed from both: it generated noise rather than catching bugs.
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  // TypeScript only. `wrangler.jsonc` is deliberately outside this: it is the
+  // production config, its comments carry most of its content, and the only
+  // thing the formatter would do to it is collapse the cron array onto one
+  // line. `test/cron.test.ts` parses that file, so how it is laid out is not
+  // load bearing for anything but reading it.
+  "files": {
+    "includes": [
+      "src/**/*.ts",
+      "scripts/**/*.ts",
+      "test/**/*.ts",
+      "vitest.config.ts",
+      "biome.jsonc"
+    ]
+  },
+  // Written out rather than left to the defaults. Bare Biome formats with
+  // tabs and this package is 2-space throughout, so relying on defaults would
+  // reformat every file in it on the first save.
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 80,
+    "lineEnding": "lf"
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "semicolons": "always",
+      "trailingCommas": "es5",
+      "arrowParentheses": "always",
+      "bracketSpacing": true
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended"
+    }
+  }
+}

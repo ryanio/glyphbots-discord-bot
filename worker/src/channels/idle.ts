@@ -33,6 +33,10 @@
  * the one bug that would make the bot talk over somebody. `applyIdleUpdate` is
  * applied *inside* the DO, so the read and the write sit on the same side of
  * the input gate, and each operation only touches its own fields.
+ *
+ * All three records in `FeedStateDO` work this way now; this one is where the
+ * argument is easiest to see, because it is the only one with two writers. The
+ * general case is in `src/durable-objects/feed-stores.ts`.
  */
 
 import {
@@ -76,7 +80,7 @@ export type IdleState = {
   lastGalleryKind: GalleryKind | null;
 };
 
-export const EMPTY_IDLE_STATE: IdleState = {
+const EMPTY_IDLE_STATE: IdleState = {
   lastHumanMessageAtMs: null,
   lastNudgeAtMs: null,
   lastNudgeKind: null,
@@ -120,7 +124,11 @@ export const applyIdleUpdate = (
         ),
       };
     case "nudge":
-      return { ...base, lastNudgeAtMs: update.atMs, lastNudgeKind: update.kind };
+      return {
+        ...base,
+        lastNudgeAtMs: update.atMs,
+        lastNudgeKind: update.kind,
+      };
     case "gallery":
       return {
         ...base,
@@ -172,8 +180,16 @@ export const nextNudgeKind = (previous: NudgeKind | null): NudgeKind => {
 export const nextGalleryKind = (previous: GalleryKind | null): GalleryKind =>
   previous === "bot" ? "artifact" : "bot";
 
-/** Why a tick decided to stay quiet. */
-export type IdleSkipReason = "no-clock" | "not-quiet" | "cooling-down";
+/**
+ * Why a tick decided to stay quiet.
+ *
+ * There is deliberately no "the clock has never been set" reason. Both callers
+ * check that themselves before deciding, because a cold start has to *write*
+ * the seed and these functions are pure, so the case can never reach here.
+ * A reason nothing can produce is a branch nobody can test and a value every
+ * consumer has to keep handling.
+ */
+export type IdleSkipReason = "not-quiet" | "cooling-down";
 
 export type IdleDecision<Kind> =
   | { post: true; kind: Kind }
@@ -183,7 +199,7 @@ export type IdleDecision<Kind> =
  * How long the guild has been silent, or `null` when the clock has never been
  * set (cold start).
  */
-export const quietForMs = (state: IdleState, now: number): number | null =>
+const quietForMs = (state: IdleState, now: number): number | null =>
   state.lastHumanMessageAtMs === null
     ? null
     : Math.max(0, now - state.lastHumanMessageAtMs);
@@ -205,10 +221,10 @@ export const decideNudge = (
 ): IdleDecision<NudgeKind> => {
   const quiet = quietForMs(state, now);
 
-  if (quiet === null) {
-    return { post: false, reason: "no-clock" };
-  }
-  if (quiet < IDLE_QUIET_THRESHOLD_MS) {
+  // An unset clock reads as "not quiet", so the fallback direction is silence.
+  // `runIdleNudge` seeds and returns before it gets here, so this is a floor
+  // rather than a path.
+  if (quiet === null || quiet < IDLE_QUIET_THRESHOLD_MS) {
     return { post: false, reason: "not-quiet" };
   }
   if (
@@ -228,10 +244,9 @@ export const decideGallery = (
 ): IdleDecision<GalleryKind> => {
   const quiet = quietForMs(state, now);
 
-  if (quiet === null) {
-    return { post: false, reason: "no-clock" };
-  }
-  if (quiet < GALLERY_QUIET_THRESHOLD_MS) {
+  // Same floor as `decideNudge`: `postGalleryItem` seeds first, and an unset
+  // clock must never read as silence long enough to post.
+  if (quiet === null || quiet < GALLERY_QUIET_THRESHOLD_MS) {
     return { post: false, reason: "not-quiet" };
   }
   if (

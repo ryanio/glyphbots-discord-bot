@@ -6,34 +6,32 @@
  * client to mock.
  */
 
-import type { RESTPostAPIChannelMessageJSONBody } from "discord-api-types/v10";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { MintsCursorState } from "../src/channels/mints";
 import {
   advanceCursor,
+  applyMintCursorUpdate,
   pollMints,
   selectNewMints,
+  toMintRecords,
 } from "../src/channels/mints";
 import {
   contentSends,
   createApi,
   createArtifact,
+  createFeedStateDO,
   createMemoryPoster,
   createMemoryStore,
   cursor,
   embedSends,
+  firstEmbed,
   mintedArtifact,
-  pollDeps,
+  mintPollDeps,
 } from "./fixtures";
 
-type EmbedJson = {
-  title?: string;
-  url?: string;
-  image?: { url: string };
-  fields?: Array<{ name: string; value: string }>;
-};
-
-const firstEmbed = (sends: RESTPostAPIChannelMessageJSONBody[]): EmbedJson =>
-  (embedSends(sends)[0]?.embeds as unknown as EmbedJson[])[0] as EmbedJson;
+/** The first embed across every send that carries one. */
+const firstEmbedSend = (sends: Parameters<typeof embedSends>[0]) =>
+  firstEmbed(embedSends(sends)[0]);
 
 describe("cold start", () => {
   it("seeds the cursor and posts nothing", async () => {
@@ -45,7 +43,7 @@ describe("cold start", () => {
     const poster = createMemoryPoster();
     const store = createMemoryStore(null);
 
-    await pollMints(pollDeps(api, poster, store));
+    await pollMints(mintPollDeps(api, poster, store));
 
     expect(poster.sends).toHaveLength(0);
     expect(store.current).toEqual({
@@ -61,7 +59,7 @@ describe("cold start", () => {
     ]);
     const store = createMemoryStore(null);
 
-    await pollMints(pollDeps(api, createMemoryPoster(), store));
+    await pollMints(mintPollDeps(api, createMemoryPoster(), store));
 
     expect(store.current).toEqual({
       lastMintedAtMs: new Date("2025-01-01T00:00:00Z").getTime(),
@@ -72,11 +70,13 @@ describe("cold start", () => {
 
 describe("new mint detection", () => {
   it("posts a newly detected mint exactly once", async () => {
-    const api = createApi([mintedArtifact("new-1", "2025-06-01T00:00:00Z", 10)]);
+    const api = createApi([
+      mintedArtifact("new-1", "2025-06-01T00:00:00Z", 10),
+    ]);
     const poster = createMemoryPoster();
     const store = createMemoryStore(cursor(0));
 
-    const posted = await pollMints(pollDeps(api, poster, store));
+    const posted = await pollMints(mintPollDeps(api, poster, store));
 
     expect(posted).toBe(1);
     expect(embedSends(poster.sends)).toHaveLength(1);
@@ -92,7 +92,7 @@ describe("new mint detection", () => {
     const poster = createMemoryPoster();
     const store = createMemoryStore(cursor(0));
 
-    await pollMints(pollDeps(api, poster, store));
+    await pollMints(mintPollDeps(api, poster, store));
 
     expect(store.current?.postedArtifactIds).toEqual([
       "oldest",
@@ -106,12 +106,12 @@ describe("new mint detection", () => {
     const poster = createMemoryPoster();
     const store = createMemoryStore(cursor(0));
 
-    await pollMints(pollDeps(api, poster, store));
+    await pollMints(mintPollDeps(api, poster, store));
     expect(embedSends(poster.sends)).toHaveLength(1);
 
     // Second tick, identical API payload. The inclusive timestamp re-surfaces
     // the artifact; the id set is what rejects it.
-    await pollMints(pollDeps(api, poster, store));
+    await pollMints(mintPollDeps(api, poster, store));
 
     expect(embedSends(poster.sends)).toHaveLength(1);
     expect(store.current?.postedArtifactIds).toContain("dupe");
@@ -121,7 +121,7 @@ describe("new mint detection", () => {
     const poster = createMemoryPoster();
     const cold = createMemoryStore(null);
 
-    await pollMints(pollDeps(createApi([]), poster, cold));
+    await pollMints(mintPollDeps(createApi([]), poster, cold));
 
     expect(poster.sends).toHaveLength(0);
     // The empty-artifacts guard runs before the cursor is even read, and a
@@ -129,12 +129,12 @@ describe("new mint detection", () => {
     // response seeds the cursor to "nothing minted yet", and the next response
     // that does carry artifacts has no floor to diff against, so the whole
     // backlog posts.
-    expect(cold.writes).toHaveLength(0);
+    expect(cold.updates).toHaveLength(0);
     expect(cold.current).toBeNull();
 
     const warm = createMemoryStore(cursor(0));
-    await pollMints(pollDeps(createApi([]), poster, warm));
-    expect(warm.writes).toHaveLength(0);
+    await pollMints(mintPollDeps(createApi([]), poster, warm));
+    expect(warm.updates).toHaveLength(0);
   });
 });
 
@@ -145,7 +145,7 @@ describe("unminted artifacts", () => {
     ]);
     const poster = createMemoryPoster();
 
-    await pollMints(pollDeps(api, poster, createMemoryStore(cursor(0))));
+    await pollMints(mintPollDeps(api, poster, createMemoryStore(cursor(0))));
 
     expect(poster.sends).toHaveLength(0);
   });
@@ -160,7 +160,7 @@ describe("unminted artifacts", () => {
     ]);
     const poster = createMemoryPoster();
 
-    await pollMints(pollDeps(api, poster, createMemoryStore(cursor(0))));
+    await pollMints(mintPollDeps(api, poster, createMemoryStore(cursor(0))));
 
     expect(poster.sends).toHaveLength(0);
   });
@@ -179,7 +179,7 @@ describe("burst guard", () => {
     const poster = createMemoryPoster();
 
     await pollMints(
-      pollDeps(createApi(burst), poster, createMemoryStore(cursor(0)))
+      mintPollDeps(createApi(burst), poster, createMemoryStore(cursor(0)))
     );
 
     expect(embedSends(poster.sends)).toHaveLength(5);
@@ -191,7 +191,9 @@ describe("burst guard", () => {
   it("advances the cursor past every mint in the burst", async () => {
     const store = createMemoryStore(cursor(0));
 
-    await pollMints(pollDeps(createApi(burst), createMemoryPoster(), store));
+    await pollMints(
+      mintPollDeps(createApi(burst), createMemoryPoster(), store)
+    );
 
     expect(store.current?.lastMintedAtMs).toBe(Date.UTC(2025, 5, 9));
     for (let i = 0; i < 9; i++) {
@@ -206,15 +208,17 @@ describe("embed content", () => {
     const poster = createMemoryPoster();
 
     await pollMints(
-      pollDeps(createApi([artifact]), poster, createMemoryStore(cursor(0)))
+      mintPollDeps(createApi([artifact]), poster, createMemoryStore(cursor(0)))
     );
 
-    const embed = firstEmbed(poster.sends);
+    const embed = firstEmbedSend(poster.sends);
     expect(embed.image?.url).toBe(artifact.imageUrl);
     expect(embed.url).toBe("https://glyphbots.com/artifact/77");
     expect(embed.title).toContain("#77");
     const values = (embed.fields ?? []).map((f) => f.value).join(" ");
-    expect(values).toContain("https://glyphbots.com/bot/42");
+    expect(values).toContain(
+      `https://glyphbots.com/bot/${artifact.botTokenId}`
+    );
   });
 
   it("links the mint transaction on Etherscan when present", async () => {
@@ -228,9 +232,9 @@ describe("embed content", () => {
       }),
     ]);
 
-    await pollMints(pollDeps(api, poster, createMemoryStore(cursor(0))));
+    await pollMints(mintPollDeps(api, poster, createMemoryStore(cursor(0))));
 
-    const values = (firstEmbed(poster.sends).fields ?? [])
+    const values = (firstEmbedSend(poster.sends).fields ?? [])
       .map((f) => f.value)
       .join(" ");
     expect(values).toContain("https://etherscan.io/tx/0xdeadbeef");
@@ -249,7 +253,7 @@ describe("retry on send failure", () => {
     const store = createMemoryStore(cursor(1000));
     const api = createApi([mintedArtifact("boom", "2025-06-01T00:00:00Z", 1)]);
 
-    await pollMints(pollDeps(api, poster, store));
+    await pollMints(mintPollDeps(api, poster, store));
 
     // The failed mint must not be recorded as posted, and the timestamp must
     // not move past it, otherwise it is dropped forever.
@@ -277,7 +281,7 @@ describe("retry on send failure", () => {
       mintedArtifact("bad", "2025-06-02T00:00:00Z", 2),
     ]);
 
-    await pollMints(pollDeps(api, poster, store));
+    await pollMints(mintPollDeps(api, poster, store));
 
     expect(store.current?.postedArtifactIds).toContain("ok");
     expect(store.current?.postedArtifactIds).not.toContain("bad");
@@ -293,11 +297,11 @@ describe("retry on send failure", () => {
       mintedArtifact("bad", "2025-06-02T00:00:00Z", 2),
     ];
 
-    await pollMints(pollDeps(createApi(artifacts), poster, store));
+    await pollMints(mintPollDeps(createApi(artifacts), poster, store));
 
     poster.send.mockImplementation(() => Promise.resolve());
     const retryPoster = createMemoryPoster();
-    await pollMints(pollDeps(createApi(artifacts), retryPoster, store));
+    await pollMints(mintPollDeps(createApi(artifacts), retryPoster, store));
 
     // Only the previously failed mint goes out on the retry.
     expect(embedSends(retryPoster.sends)).toHaveLength(1);
@@ -313,9 +317,7 @@ describe("an artifact the embed builders reject", () => {
    * API, so both are reachable in production.
    */
   const bad = (id: string, mintedAt: string, tokenId: number) => ({
-    ...(mintedArtifact(id, mintedAt, tokenId) as ReturnType<
-      typeof createArtifact
-    >),
+    ...mintedArtifact(id, mintedAt, tokenId),
     imageUrl: "/artifacts/relative.png",
   });
 
@@ -323,7 +325,9 @@ describe("an artifact the embed builders reject", () => {
     const api = createApi([bad("bad", "2025-06-01T00:00:00Z", 1)]);
 
     await expect(
-      pollMints(pollDeps(api, createMemoryPoster(), createMemoryStore(cursor(0))))
+      pollMints(
+        mintPollDeps(api, createMemoryPoster(), createMemoryStore(cursor(0)))
+      )
     ).resolves.toBe(0);
   });
 
@@ -333,20 +337,20 @@ describe("an artifact the embed builders reject", () => {
     const store = createMemoryStore(cursor(0));
     const first = createMemoryPoster();
 
-    await pollMints(pollDeps(createApi(artifacts), first, store));
+    await pollMints(mintPollDeps(createApi(artifacts), first, store));
 
     // The good one went out and the cursor was written, which is the whole
     // point: built outside the try, the bad one threw all the way out of
     // `pollMints` and the write below never happened.
     expect(embedSends(first.sends)).toHaveLength(1);
-    expect(store.writes).toHaveLength(1);
+    expect(store.updates).toHaveLength(1);
     expect(store.current?.postedArtifactIds).toContain("good");
     expect(store.current?.postedArtifactIds).not.toContain("bad");
 
     // Five minutes later, the same payload. Without the fix this is where the
     // good mint posted a second time, and it did so on every tick forever.
     const second = createMemoryPoster();
-    await pollMints(pollDeps(createApi(artifacts), second, store));
+    await pollMints(mintPollDeps(createApi(artifacts), second, store));
 
     expect(embedSends(second.sends)).toHaveLength(0);
   });
@@ -358,7 +362,9 @@ describe("an artifact the embed builders reject", () => {
       bad("bad", "2025-06-02T00:00:00Z", 2),
     ];
 
-    await pollMints(pollDeps(createApi(artifacts), createMemoryPoster(), store));
+    await pollMints(
+      mintPollDeps(createApi(artifacts), createMemoryPoster(), store)
+    );
 
     expect(store.current?.lastMintedAtMs).toBeLessThanOrEqual(
       new Date("2025-06-02T00:00:00Z").getTime()
@@ -379,20 +385,16 @@ describe("a burst summary that does not reach Discord", () => {
   );
 
   /** Fails only the summary line, which is the send carrying `content`. */
-  const summaryFails = () => {
-    const poster = createMemoryPoster();
-    poster.send.mockImplementation((body: RESTPostAPIChannelMessageJSONBody) =>
-      body.content === undefined
-        ? Promise.resolve()
-        : Promise.reject(new Error("discord 500"))
-    );
-    return poster;
-  };
+  const summaryFails = () =>
+    createMemoryPoster({
+      failWith: (body) =>
+        body.content === undefined ? null : new Error("discord 500"),
+    });
 
   it("does not mark the summarized mints as posted", async () => {
     const store = createMemoryStore(cursor(0));
 
-    await pollMints(pollDeps(createApi(burst), summaryFails(), store));
+    await pollMints(mintPollDeps(createApi(burst), summaryFails(), store));
 
     // Three mints were only ever going to be represented by that one line. It
     // did not go out, so nothing has told the channel about them.
@@ -407,7 +409,7 @@ describe("a burst summary that does not reach Discord", () => {
   it("holds the cursor back so they are selectable again", async () => {
     const store = createMemoryStore(cursor(0));
 
-    await pollMints(pollDeps(createApi(burst), summaryFails(), store));
+    await pollMints(mintPollDeps(createApi(burst), summaryFails(), store));
 
     expect(store.current?.lastMintedAtMs).toBeLessThanOrEqual(
       Date.UTC(2025, 5, 1)
@@ -420,10 +422,10 @@ describe("a burst summary that does not reach Discord", () => {
   it("posts them individually on the retry", async () => {
     const store = createMemoryStore(cursor(0));
 
-    await pollMints(pollDeps(createApi(burst), summaryFails(), store));
+    await pollMints(mintPollDeps(createApi(burst), summaryFails(), store));
 
     const retry = createMemoryPoster();
-    await pollMints(pollDeps(createApi(burst), retry, store));
+    await pollMints(mintPollDeps(createApi(burst), retry, store));
 
     expect(embedSends(retry.sends)).toHaveLength(3);
     expect(contentSends(retry.sends)).toHaveLength(0);
@@ -434,7 +436,11 @@ describe("a burst summary that does not reach Discord", () => {
 
   it("still counts only the mints posted individually", async () => {
     const posted = await pollMints(
-      pollDeps(createApi(burst), summaryFails(), createMemoryStore(cursor(0)))
+      mintPollDeps(
+        createApi(burst),
+        summaryFails(),
+        createMemoryStore(cursor(0))
+      )
     );
 
     expect(posted).toBe(5);
@@ -445,10 +451,12 @@ describe("error handling", () => {
   it("does not throw when every send fails", async () => {
     const poster = createMemoryPoster();
     poster.send.mockRejectedValue(new Error("Discord API error"));
-    const api = createApi([mintedArtifact("fails", "2025-06-01T00:00:00Z", 10)]);
+    const api = createApi([
+      mintedArtifact("fails", "2025-06-01T00:00:00Z", 10),
+    ]);
 
     await expect(
-      pollMints(pollDeps(api, poster, createMemoryStore(cursor(0))))
+      pollMints(mintPollDeps(api, poster, createMemoryStore(cursor(0))))
     ).resolves.toBe(0);
   });
 
@@ -458,7 +466,7 @@ describe("error handling", () => {
 
     await expect(
       pollMints(
-        pollDeps(api, createMemoryPoster(), createMemoryStore(cursor(0)))
+        mintPollDeps(api, createMemoryPoster(), createMemoryStore(cursor(0)))
       )
     ).rejects.toThrow("network down");
   });
@@ -467,9 +475,10 @@ describe("error handling", () => {
 describe("advanceCursor", () => {
   it("caps the posted id history at 100", () => {
     const existing = Array.from({ length: 100 }, (_, i) => `old-${i}`);
-    const next = advanceCursor(cursor(0, existing), [
-      mintedArtifact("fresh", "2025-06-01T00:00:00Z", 1) as never,
-    ]);
+    const next = advanceCursor(
+      cursor(0, existing),
+      toMintRecords([mintedArtifact("fresh", "2025-06-01T00:00:00Z", 1)])
+    );
 
     expect(next.postedArtifactIds).toHaveLength(100);
     expect(next.postedArtifactIds).toContain("fresh");
@@ -478,9 +487,10 @@ describe("advanceCursor", () => {
 
   it("never derives the timestamp from wall clock", () => {
     const mintedAt = new Date("2020-01-01T00:00:00Z").getTime();
-    const next = advanceCursor(cursor(null), [
-      mintedArtifact("old", "2020-01-01T00:00:00Z", 1) as never,
-    ]);
+    const next = advanceCursor(
+      cursor(null),
+      toMintRecords([mintedArtifact("old", "2020-01-01T00:00:00Z", 1)])
+    );
 
     expect(next.lastMintedAtMs).toBe(mintedAt);
   });
@@ -500,6 +510,97 @@ describe("selectNewMints", () => {
     const cutoff = new Date("2025-06-01T00:00:00Z").getTime();
 
     expect(selectNewMints([backfilled], cursor(cutoff))).toHaveLength(1);
+  });
+});
+
+describe("applyMintCursorUpdate", () => {
+  const record = (id: string, mintedAtMs: number) => ({ id, mintedAtMs });
+
+  it("seeds an absent cursor", () => {
+    expect(
+      applyMintCursorUpdate(null, {
+        op: "seed",
+        handled: [record("a", 1000), record("b", 2000)],
+      })
+    ).toEqual({ lastMintedAtMs: 2000, postedArtifactIds: ["a", "b"] });
+  });
+
+  it("refuses to re-seed a cursor that already exists", () => {
+    // Two ticks that both read `null` would otherwise both seed, and the second
+    // would reset the first one's position back over mints it had posted.
+    const existing = cursor(5000, ["already"]);
+
+    expect(
+      applyMintCursorUpdate(existing, {
+        op: "seed",
+        handled: [record("late", 1000)],
+      })
+    ).toEqual(existing);
+  });
+
+  it("advances and holds back in one operation", () => {
+    expect(
+      applyMintCursorUpdate(cursor(1000), {
+        op: "advance",
+        handled: [record("ok", 3000)],
+        failed: [record("boom", 2000)],
+      })
+    ).toEqual({ lastMintedAtMs: 2000, postedArtifactIds: ["ok"] });
+  });
+});
+
+describe("the mint cursor inside FeedStateDO", () => {
+  const read = (feed: ReturnType<typeof createFeedStateDO>) =>
+    feed.read<MintsCursorState>("mint-cursor");
+
+  it("reads as absent before anything is written", async () => {
+    expect(await read(createFeedStateDO())).toBeNull();
+  });
+
+  it("applies the merge on its own side of the input gate", async () => {
+    const feed = createFeedStateDO();
+
+    await feed.apply("mint-cursor", {
+      op: "seed",
+      handled: [{ id: "a", mintedAtMs: 1000 }],
+    });
+    await feed.apply("mint-cursor", {
+      op: "advance",
+      handled: [{ id: "b", mintedAtMs: 2000 }],
+      failed: [],
+    });
+
+    expect(await read(feed)).toEqual({
+      lastMintedAtMs: 2000,
+      postedArtifactIds: ["a", "b"],
+    });
+  });
+
+  it("rejects an operation it does not recognize", async () => {
+    const feed = createFeedStateDO();
+    const bad = await feed.apply("mint-cursor", { op: "wipe", handled: [] });
+
+    expect(bad.status).toBe(400);
+    expect(await read(feed)).toBeNull();
+  });
+
+  it("rejects a record that is not two fields of the right shape", async () => {
+    const feed = createFeedStateDO();
+    const bad = await feed.apply("mint-cursor", {
+      op: "advance",
+      handled: [{ id: 7, mintedAtMs: "soon" }],
+      failed: [],
+    });
+
+    expect(bad.status).toBe(400);
+  });
+
+  it("treats a corrupt stored cursor as absent", async () => {
+    const feed = createFeedStateDO({
+      mintCursor: { lastMintedAtMs: "yesterday", postedArtifactIds: [] },
+    });
+
+    expect(await read(feed)).toBeNull();
   });
 });
 

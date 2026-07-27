@@ -14,8 +14,12 @@
  */
 
 import { vi } from "vitest";
-import { applyIdleUpdate, type IdleState, type IdleUpdate } from "../src/channels/idle";
-import type { IdleStateStore } from "../src/durable-objects/idle-state-store";
+import {
+  applyIdleUpdate,
+  type IdleState,
+  type IdleUpdate,
+} from "../src/channels/idle";
+import type { IdleStateStore } from "../src/durable-objects/feed-stores";
 
 const roundTrip = (state: IdleState | null): IdleState | null =>
   state === null ? null : (JSON.parse(JSON.stringify(state)) as IdleState);

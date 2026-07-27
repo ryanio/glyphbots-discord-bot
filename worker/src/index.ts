@@ -1,12 +1,11 @@
 /**
  * GlyphBots Worker.
  *
- * Phases 1 to 4 of plans/cloudflare-consolidation.md: crons post new artifact
- * mints into #general, a random collection item into #gallery and OpenSea
- * sales into #trading-floor, `POST /discord/interactions` serves eight slash
- * commands, and the gateway DO answers inline lookups. A fourth cron checks
- * whether the guild has gone quiet and, only if it has, posts one item into
- * #general.
+ * Crons post new artifact mints into #general, a random collection item into
+ * #gallery and OpenSea sales into #trading-floor, `POST /discord/interactions`
+ * serves eight slash commands, and the gateway DO answers inline lookups. A
+ * fourth cron checks whether the guild has gone quiet and, only if it has,
+ * posts one item into #general.
  *
  * Bindings are read off `env` inside the handlers and threaded down as
  * explicit arguments. No module here captures the environment at import time.
@@ -28,10 +27,12 @@ import {
   TRADING_FLOOR_CHANNEL_ID,
 } from "./config";
 import { createChannelPoster } from "./discord/channel-poster";
+import {
+  createIdleStateStore,
+  createMintCursorStore,
+  createSalesStateStore,
+} from "./durable-objects/feed-stores";
 import { createGatewayClient } from "./durable-objects/gateway-client";
-import { createIdleStateStore } from "./durable-objects/idle-state-store";
-import { createMintCursorStore } from "./durable-objects/mint-cursor-store";
-import { createSalesStateStore } from "./durable-objects/sales-state-store";
 import { admin } from "./routes/admin";
 import { interactions } from "./routes/interactions";
 import type { AppEnv, WorkerEnv } from "./types";
@@ -39,30 +40,6 @@ import { createLogger, getErrorMessage } from "./utils/logger";
 
 export { FeedStateDO } from "./durable-objects/feed-state";
 export { GatewayDO } from "./durable-objects/gateway";
-
-/**
- * Cron expressions, matched against `event.cron` in `scheduled()`.
- *
- * All four entries live in `wrangler.jsonc` and the dispatch is exact-match
- * rather than "if it fired, do everything": crons that run each other's work is
- * how a six-hourly gallery post turns into one every five minutes.
- *
- * The sales feed runs on the same five minute cadence as the mint watcher but
- * on a distinct expression, offset by two minutes. A second entry with the mint
- * watcher's exact expression would be indistinguishable here, since
- * `event.cron` is all the handler gets, and the offset also keeps the two ticks
- * off each other's subrequest budget. The reasoning is spelled out in
- * `wrangler.jsonc`.
- *
- * The nudge cron is hourly, and hourly is a check rather than a cadence: what
- * it posts is bounded by the 48 hour threshold and the 24 hour cooldown in
- * `src/channels/idle.ts`, not by how often it looks. Minute 23 keeps it clear
- * of both five-minute entries, which fire on minutes ending 0 or 5 and 2 or 7.
- */
-const MINTS_CRON = "*/5 * * * *";
-const SALES_CRON = "2-59/5 * * * *";
-const GALLERY_CRON = "0 */6 * * *";
-const NUDGE_CRON = "23 * * * *";
 
 const log = createLogger("WORKER");
 
@@ -84,7 +61,6 @@ app.get("/health", async (c) => {
 
   return c.json({
     ok: true,
-    phase: 4,
     mintsChannelId: MINTS_CHANNEL_ID,
     galleryChannelId: GALLERY_CHANNEL_ID,
     nudgeChannelId: NUDGE_CHANNEL_ID,
@@ -216,22 +192,57 @@ const runSalesFeed = async (env: WorkerEnv): Promise<void> => {
   }
 };
 
-/** Route a cron firing to its own work, and nothing else's. */
+/**
+ * Cron expression to the work it runs, matched against `event.cron` in
+ * `scheduled()`.
+ *
+ * Every key here must appear in `wrangler.jsonc`'s `triggers.crons` and the
+ * other way round. `test/cron.test.ts` reads that file and asserts exactly
+ * that, because these two lists are the only thing standing between a
+ * six-hourly gallery post and a five-minutely one. The dispatch is exact-match
+ * rather than "if something fired, do everything" for the same reason.
+ *
+ * The sales feed runs on the same five minute cadence as the mint watcher but
+ * on a distinct expression, offset by two minutes. A second entry with the mint
+ * watcher's exact expression would be indistinguishable here, since
+ * `event.cron` is all the handler gets, and the offset also keeps the two ticks
+ * off each other's subrequest budget. The reasoning is spelled out in
+ * `wrangler.jsonc`.
+ *
+ * The nudge cron is hourly, and hourly is a check rather than a cadence: what
+ * it posts is bounded by the 48 hour threshold and the 24 hour cooldown in
+ * `src/channels/idle.ts`, not by how often it looks. Minute 23 keeps it clear
+ * of both five-minute entries, which fire on minutes ending 0 or 5 and 2 or 7.
+ */
+export const CRON_JOBS: Record<string, (env: WorkerEnv) => Promise<void>[]> = {
+  "*/5 * * * *": (env) => [runMintWatcher(env), pokeGateway(env)],
+  "2-59/5 * * * *": (env) => [runSalesFeed(env)],
+  "0 */6 * * *": (env) => [runGallery(env)],
+  "23 * * * *": (env) => [runNudge(env)],
+};
+
+/**
+ * Route a cron firing to its own work, and nothing else's.
+ *
+ * An unrecognised expression does nothing at all, loudly. It used to fall
+ * through to the mint watcher, which is the worst available answer: add a
+ * fifth cron and forget to add it here, or have Cloudflare normalise an
+ * expression, and the mint watcher silently runs twice per period while the
+ * job that was actually scheduled never runs at all. Nothing happening is
+ * visible in `wrangler tail` within a period; a double mint tick is not
+ * visible anywhere.
+ */
 export const dispatchCron = (cron: string, env: WorkerEnv): Promise<void>[] => {
-  if (cron === NUDGE_CRON) {
-    return [runNudge(env)];
+  const job = CRON_JOBS[cron];
+
+  if (!job) {
+    log.error(
+      `Unrecognized cron "${cron}", doing nothing. It is in wrangler.jsonc but not in CRON_JOBS (src/index.ts), so whatever it was meant to run is not running.`
+    );
+    return [];
   }
-  if (cron === GALLERY_CRON) {
-    return [runGallery(env)];
-  }
-  if (cron === SALES_CRON) {
-    return [runSalesFeed(env)];
-  }
-  if (cron === MINTS_CRON) {
-    return [runMintWatcher(env), pokeGateway(env)];
-  }
-  log.warn(`Unrecognized cron "${cron}", running the mint tick as a fallback`);
-  return [runMintWatcher(env), pokeGateway(env)];
+
+  return job(env);
 };
 
 export default {

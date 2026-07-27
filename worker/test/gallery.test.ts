@@ -10,10 +10,10 @@
  * would have shown bots and nothing else forever.
  */
 
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { postGalleryItem } from "../src/channels/gallery";
 import { nextGalleryKind } from "../src/channels/idle";
-import { createMemoryPoster } from "./fixtures";
+import { createArtifact, createMemoryPoster, firstEmbed } from "./fixtures";
 import {
   createMemoryIdleStore,
   DAY_MS,
@@ -21,7 +21,7 @@ import {
   idleState,
   NOW,
 } from "./idle-fixtures";
-import { createLookupArtifact, createLookupClients } from "./lookup-fixtures";
+import { createLookupClients } from "./lookup-fixtures";
 
 /** A store whose guild last spoke `hours` ago. */
 const quietFor = (hours: number) =>
@@ -103,8 +103,8 @@ describe("the idle gate", () => {
 
   it("alternates across consecutive days rather than repeating", async () => {
     const fake = createLookupClients({
-      recentArtifacts: [createLookupArtifact(5)],
-      artifacts: { 5: createLookupArtifact(5) },
+      recentArtifacts: [createArtifact({ contractTokenId: 5 })],
+      artifacts: { 5: createArtifact({ contractTokenId: 5 }) },
     });
     const store = quietFor(48);
     const kinds: (string | null | undefined)[] = [];
@@ -139,14 +139,13 @@ describe("one gallery tick", () => {
 
     expect(outcome).toBe("posted");
     expect(poster.sends).toHaveLength(1);
-    const [body] = poster.sends as Array<{ embeds: { title?: string }[] }>;
-    expect(body?.embeds[0]?.title).toBe("GlyphBot #1234");
+    expect(firstEmbed(poster.sends[0]).title).toBe("GlyphBot #1234");
   });
 
   it("posts a random artifact when it is the artifact's turn", async () => {
     const fake = createLookupClients({
-      recentArtifacts: [createLookupArtifact(5)],
-      artifacts: { 5: createLookupArtifact(5) },
+      recentArtifacts: [createArtifact({ contractTokenId: 5 })],
+      artifacts: { 5: createArtifact({ contractTokenId: 5 }) },
     });
     const poster = createMemoryPoster();
     const store = createMemoryIdleStore(
@@ -166,8 +165,7 @@ describe("one gallery tick", () => {
     });
 
     expect(outcome).toBe("posted");
-    const [body] = poster.sends as Array<{ embeds: { title?: string }[] }>;
-    expect(body?.embeds[0]?.title).toBe("Artifact 5");
+    expect(firstEmbed(poster.sends[0]).title).toBe("Artifact 5");
   });
 
   it("retries a miss and gives up quietly", async () => {
@@ -255,9 +253,7 @@ describe("one gallery tick", () => {
   it("does not buy a day of silence when the send fails", async () => {
     const fake = createLookupClients();
     const store = quietFor(48);
-    const poster = {
-      send: vi.fn(() => Promise.reject(new Error("500"))),
-    };
+    const poster = createMemoryPoster({ failWith: new Error("500") });
 
     const outcome = await postGalleryItem({
       clients: fake.clients,

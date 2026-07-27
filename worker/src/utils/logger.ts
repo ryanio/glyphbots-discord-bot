@@ -1,7 +1,7 @@
 /**
- * Scoped console logger, the Workers-safe twin of `src/lib/logger.ts`.
+ * Scoped console logger.
  *
- * The Node bot writes through `process.stdout.write`, which does not exist
+ * The Node bot wrote through `process.stdout.write`, which does not exist
  * here. Workers observability picks console output up on its own, so there is
  * nothing else to wire.
  */

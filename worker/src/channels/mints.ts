@@ -1,10 +1,10 @@
 /**
  * Mint watcher.
  *
- * Ported from `src/channels/mints.ts`. The cursor logic is unchanged in
- * behavior; what moved is where state lives (Durable Object instead of a JSON
- * file), how messages are sent (REST instead of `channel.send`), and how the
- * loop is driven (a cron tick instead of `setInterval`).
+ * The cursor logic came over from the Node bot unchanged in behavior. What
+ * moved is where state lives (a Durable Object instead of a JSON file), how
+ * messages are sent (REST instead of `channel.send`), and how the loop is
+ * driven (a cron tick instead of `setInterval`).
  *
  * The cursor design, restated because it is easy to redo wrong:
  *
@@ -22,6 +22,13 @@
  *   newest mint and posts nothing, so reviving the bot never dumps the
  *   backlog. The first tick after deploy posting nothing is the expected
  *   result, not a failure.
+ *
+ * All of that arithmetic runs *inside* `FeedStateDO`. A poll reads the cursor,
+ * spends a fetch and up to five Discord posts, and then sends an operation
+ * describing what it handled and what failed; `applyMintCursorUpdate` does the
+ * merge behind the input gate. Computing the next cursor out here instead would
+ * put a read and a write on opposite sides of that gate with the entire post
+ * loop in between. See `src/durable-objects/feed-stores.ts`.
  */
 
 import { EmbedBuilder } from "@discordjs/builders";
@@ -38,13 +45,11 @@ import {
   MINTS_POSTED_ID_HISTORY,
 } from "../config";
 import type { ChannelPoster } from "../discord/channel-poster";
-import type { MintsCursorState } from "../durable-objects/feed-state";
-import type { MintCursorStore } from "../durable-objects/mint-cursor-store";
+import type { MintCursorStore } from "../durable-objects/feed-stores";
 import { createLogger, getErrorMessage } from "../utils/logger";
+import { MS_PER_SECOND } from "../utils/time";
 
 const log = createLogger("Mints");
-
-const MS_PER_SECOND = 1000;
 
 /** An artifact known to be minted on chain. */
 export type MintedArtifact = Artifact & {
@@ -52,9 +57,46 @@ export type MintedArtifact = Artifact & {
   contractTokenId: number;
 };
 
+/**
+ * The cursor record, stored in `FeedStateDO` under `mintCursor`.
+ *
+ * `null` from the store means genuinely absent (cold start, seed and post
+ * nothing), which is a different thing from a cursor whose `lastMintedAtMs`
+ * is null.
+ */
+export type MintsCursorState = {
+  lastMintedAtMs: number | null;
+  postedArtifactIds: string[];
+};
+
+export const EMPTY_MINT_CURSOR: MintsCursorState = {
+  lastMintedAtMs: null,
+  postedArtifactIds: [],
+};
+
+/**
+ * The only two things the cursor arithmetic reads off an artifact.
+ *
+ * The update crosses the Durable Object boundary as JSON, and sending whole
+ * artifacts would put several kilobytes of embed material on a hop that needs
+ * an id and a timestamp.
+ */
+export type MintRecord = {
+  id: string;
+  mintedAtMs: number;
+};
+
+/** Every mutation the mint cursor accepts. Applied inside the DO. */
+export type MintCursorUpdate =
+  | { op: "seed"; handled: MintRecord[] }
+  | { op: "advance"; handled: MintRecord[]; failed: MintRecord[] };
+
 /** Everything one poll needs, injected so the logic stays testable. */
 export type MintPollDeps = {
-  api: Pick<GlyphBotsClient, "fetchRecentArtifacts" | "getArtifactUrl" | "getBotUrl">;
+  api: Pick<
+    GlyphBotsClient,
+    "fetchRecentArtifacts" | "getArtifactUrl" | "getBotUrl"
+  >;
   poster: ChannelPoster;
   store: MintCursorStore;
   /** Pause between individual posts. Overridden to a no-op under test. */
@@ -128,26 +170,24 @@ export const selectNewMints = (
  */
 export const advanceCursor = (
   cursor: MintsCursorState,
-  handled: MintedArtifact[],
-  failed: MintedArtifact[] = []
+  handled: readonly MintRecord[],
+  failed: readonly MintRecord[] = []
 ): MintsCursorState => {
   let lastMintedAtMs = cursor.lastMintedAtMs;
   const postedArtifactIds = [...cursor.postedArtifactIds];
 
-  for (const artifact of handled) {
-    const ms = mintedAtMs(artifact);
-    if (ms !== null && (lastMintedAtMs === null || ms > lastMintedAtMs)) {
-      lastMintedAtMs = ms;
+  for (const record of handled) {
+    if (lastMintedAtMs === null || record.mintedAtMs > lastMintedAtMs) {
+      lastMintedAtMs = record.mintedAtMs;
     }
-    if (!postedArtifactIds.includes(artifact.id)) {
-      postedArtifactIds.push(artifact.id);
+    if (!postedArtifactIds.includes(record.id)) {
+      postedArtifactIds.push(record.id);
     }
   }
 
-  for (const artifact of failed) {
-    const ms = mintedAtMs(artifact);
-    if (ms !== null && lastMintedAtMs !== null && ms < lastMintedAtMs) {
-      lastMintedAtMs = ms;
+  for (const record of failed) {
+    if (lastMintedAtMs !== null && record.mintedAtMs < lastMintedAtMs) {
+      lastMintedAtMs = record.mintedAtMs;
     }
   }
 
@@ -155,6 +195,45 @@ export const advanceCursor = (
     lastMintedAtMs,
     postedArtifactIds: postedArtifactIds.slice(-MINTS_POSTED_ID_HISTORY),
   };
+};
+
+/**
+ * Narrow artifacts to what the cursor needs, dropping any whose `mintedAt` is
+ * not a date.
+ *
+ * Dropping rather than carrying a null costs nothing: `selectNewMints` already
+ * refuses an artifact it cannot parse a timestamp from, so one can never reach
+ * a post, and recording its id would only take a slot in a bounded set.
+ */
+export const toMintRecords = (
+  artifacts: readonly MintedArtifact[]
+): MintRecord[] =>
+  artifacts.flatMap((artifact) => {
+    const ms = mintedAtMs(artifact);
+    return ms === null ? [] : [{ id: artifact.id, mintedAtMs: ms }];
+  });
+
+/**
+ * Apply one operation to the cursor. Pure, and run inside the DO.
+ *
+ * `seed` never overwrites a cursor that already exists. Two ticks that both
+ * read `null` would otherwise both seed, and the second would reset the first
+ * one's position; the same rule `applyIdleUpdate` uses, for the same reason.
+ */
+export const applyMintCursorUpdate = (
+  current: MintsCursorState | null,
+  update: MintCursorUpdate
+): MintsCursorState => {
+  switch (update.op) {
+    case "seed":
+      return current ?? advanceCursor(EMPTY_MINT_CURSOR, update.handled);
+    case "advance":
+      return advanceCursor(
+        current ?? EMPTY_MINT_CURSOR,
+        update.handled,
+        update.failed
+      );
+  }
 };
 
 /** Build the embed for a single minted artifact. */
@@ -287,12 +366,10 @@ const seedCursor = async (
   deps: MintPollDeps,
   minted: MintedArtifact[]
 ): Promise<void> => {
-  const seeded = advanceCursor(
-    { lastMintedAtMs: null, postedArtifactIds: [] },
-    minted
-  );
-
-  await deps.store.write(seeded);
+  const seeded = await deps.store.apply({
+    op: "seed",
+    handled: toMintRecords(minted),
+  });
 
   const at = seeded.lastMintedAtMs
     ? new Date(seeded.lastMintedAtMs).toISOString()
@@ -380,7 +457,16 @@ export const pollMints = async (deps: MintPollDeps): Promise<number> => {
   // is never replayed. A mint whose send failed is deliberately left behind the
   // timestamp so the next poll retries it; the posted id set is what keeps the
   // already-sent mints from being posted twice when that rewind happens.
-  await deps.store.write(advanceCursor(cursor, handled, failed));
+  // The merge happens inside the DO. Everything above this line is a network
+  // call and a Discord post, so a read here and a whole-value write there would
+  // be a read-modify-write with seconds and two hops in the middle: a tick that
+  // overlapped this one would have its ids silently dropped. Sending what
+  // changed keeps the read and the write on the same side of the input gate.
+  await deps.store.apply({
+    op: "advance",
+    handled: toMintRecords(handled),
+    failed: toMintRecords(failed),
+  });
 
   if (failed.length > 0) {
     log.warn(

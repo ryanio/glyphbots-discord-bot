@@ -1,9 +1,8 @@
 /**
- * `/owner`, ported from `src/commands/owner.ts`.
+ * `/owner`.
  *
- * The thumbnail was already `getBotPngUrl` on the Node bot
- * (`src/commands/owner.ts:74`) and stays that way. OpenSea supplies the owner
- * address and the rarity rank, never the image.
+ * The thumbnail is `getBotPngUrl`, as it was on the Node bot. OpenSea supplies
+ * the owner address and the rarity rank, never the image.
  */
 
 import { EmbedBuilder } from "@discordjs/builders";
@@ -24,7 +23,10 @@ export const handleOwner: CommandHandler = async (ctx) => {
   const nft = await ctx.opensea.fetchNFT(tokenId);
 
   if (!nft) {
-    return errorReply("❌ Bot Not Found", `GlyphBot #${tokenId} was not found.`);
+    return errorReply(
+      "❌ Bot Not Found",
+      `GlyphBot #${tokenId} was not found.`
+    );
   }
 
   const owner = nft.owners?.[0];

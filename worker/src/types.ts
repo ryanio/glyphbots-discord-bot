@@ -1,14 +1,19 @@
 /**
  * Worker bindings and shared app types.
  *
- * Nothing in this package reads `process.env`. Every value arrives on the
+ * Nothing under `src/` reads `process.env`. Every value arrives on the
  * `env` object handed to `fetch()` / `scheduled()` and is threaded down
  * explicitly, so a module can never capture a stale (or empty) config at
- * import time the way `src/api/glyphbots.ts:17` does on Node.
+ * import time the way the Node bot did (`src/api/glyphbots.ts:17` at
+ * `c75d6a8`).
  */
 
 export type WorkerEnv = {
-  /** Durable Object namespace holding the mint cursor. */
+  /**
+   * Durable Object namespace holding the three feed records: the mint cursor,
+   * the sales state and the idle clock. One instance,
+   * `idFromName("singleton")`.
+   */
   FEED_STATE: DurableObjectNamespace;
   /**
    * Durable Object namespace holding the single gateway WebSocket. One
@@ -18,8 +23,8 @@ export type WorkerEnv = {
   GATEWAY: DurableObjectNamespace;
   /**
    * Reserved for per-user wallet state (`wallet:<userId>`), decision 7 in
-   * plans/cloudflare-consolidation.md. Provisioned and bound, read by nothing
-   * in Phase 1. Do not start writing to it without that decision being made.
+   * plans/cloudflare-consolidation.md. Provisioned and bound, read and written
+   * by nothing. Do not start writing to it without that decision being made.
    */
   GLYPHBOTS_KV: KVNamespace;
   /** Discord bot token. `wrangler secret put DISCORD_TOKEN`. */

@@ -1,5 +1,5 @@
 /**
- * `/floor`, ported from `src/commands/floor.ts`.
+ * `/floor`.
  *
  * The deferral moved out (see `src/discord/interactions.ts`); the handler now
  * returns the message body instead of calling `editReply`. Field order, copy

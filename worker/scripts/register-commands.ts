@@ -3,7 +3,7 @@
  *
  * **This is an operator step. It is not wired into any npm script that runs on
  * its own, nothing in the Worker calls it, and it mutates the live guild.**
- * Run it by hand, once, after Phase 2 is deployed and the Interactions
+ * Run it by hand, once, after the Worker is deployed and the Interactions
  * Endpoint URL is saved in the developer portal.
  *
  *     DISCORD_TOKEN=... DISCORD_APP_ID=... npx tsx scripts/register-commands.ts
@@ -26,7 +26,7 @@
  */
 
 import { commandDefinitions } from "../src/commands/definitions";
-import { GUILD_ID } from "../src/config";
+import { DISCORD_API, GUILD_ID } from "../src/config";
 
 /**
  * Node's `process`, declared locally rather than pulled in with `@types/node`.
@@ -40,7 +40,6 @@ declare const process: {
   exit: (code: number) => never;
 };
 
-const DISCORD_API = "https://discord.com/api/v10";
 const EXPECTED_COMMAND_COUNT = 8;
 
 const fail = (message: string): never => {

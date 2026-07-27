@@ -45,6 +45,9 @@ jobs:
 
       - run: npm ci
 
+      - name: Lint
+        run: npx biome check
+
       - name: Type check
         run: npx tsc --noEmit
 

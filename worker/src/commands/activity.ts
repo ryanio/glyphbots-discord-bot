@@ -1,9 +1,9 @@
 /**
- * `/activity`, ported from `src/commands/activity.ts`.
+ * `/activity`.
  *
- * The event list is OpenSea data, but the thumbnail is the first-party PNG
- * (`src/commands/activity.ts:123`), which is what it must be: the `image_url`
- * OpenSea returns for this contract is SVG and Discord renders nothing for it.
+ * The event list is OpenSea data, but the thumbnail is the first-party PNG,
+ * which is what it must be: the `image_url` OpenSea returns for this contract
+ * is SVG and Discord renders nothing for it.
  */
 
 import { EmbedBuilder } from "@discordjs/builders";
@@ -33,7 +33,7 @@ const getEventEmoji = (eventType: string): string => {
   }
 };
 
-export const formatEventLine = (event: OpenSeaEvent): string => {
+const formatEventLine = (event: OpenSeaEvent): string => {
   const emoji = getEventEmoji(event.event_type);
   const time = formatTimeAgo(event.event_timestamp);
   const price = event.payment

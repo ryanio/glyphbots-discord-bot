@@ -28,8 +28,10 @@
  * was up. The bot would look healthy, answer nothing, and only the heartbeat
  * ack check would eventually notice. That is the "works for hours, then goes
  * quiet" failure, and it is guarded in two places here: `alarm()` treats a
- * null `liveWs` as "reopen", and the `/health-tick` watchdog on the five
- * minute cron reopens anything that is not live.
+ * null `liveWs` as "reopen" whatever the stored `wsState` says, unless that
+ * state is `failed`, and the `/health-tick` watchdog on the five minute cron
+ * reopens anything that is not live. `failed` is checked first in both,
+ * because it is the one state a human has to clear.
  *
  * ## Intents
  *
@@ -52,19 +54,16 @@
 import { createGlyphBotsClient } from "../api/glyphbots";
 import { createOpenSeaClient } from "../api/opensea";
 import { isHumanActivity } from "../channels/idle";
+import { DISCORD_API } from "../config";
 import { createChannelPoster } from "../discord/channel-poster";
-import { createIdleStateStore } from "./idle-state-store";
-import {
-  handleLookupMessage,
-  type LookupMessage,
-} from "../lookups/handle";
+import { handleLookupMessage, type LookupMessage } from "../lookups/handle";
 import { createRateLimiter, type RateLimiter } from "../lookups/rate-limit";
 import type { WorkerEnv } from "../types";
 import { createLogger, getErrorMessage } from "../utils/logger";
+import { createIdleStateStore } from "./feed-stores";
 
 const log = createLogger("gateway-do");
 
-const DISCORD_API = "https://discord.com/api/v10";
 const GATEWAY_QUERY = "?v=10&encoding=json";
 
 const WSS_PREFIX_RE = /^wss:\/\//i;
@@ -542,10 +541,7 @@ export class GatewayDO implements DurableObject {
 
   // ── Frames ───────────────────────────────────────────────────────────────
 
-  private async handleFrame(
-    ws: WebSocket,
-    frame: GatewayFrame
-  ): Promise<void> {
+  private async handleFrame(ws: WebSocket, frame: GatewayFrame): Promise<void> {
     const s = await this.readState();
     const now = Date.now();
     const patch: Partial<GatewayState> = { lastEventAt: now };
@@ -615,9 +611,7 @@ export class GatewayDO implements DurableObject {
     // jitter is one line and it is what the documented protocol asks for.
     const jittered = Math.floor(interval * Math.random());
     await this.state.storage.setAlarm(Date.now() + jittered);
-    log.info(
-      `HELLO interval=${interval}ms first heartbeat in ${jittered}ms`
-    );
+    log.info(`HELLO interval=${interval}ms first heartbeat in ${jittered}ms`);
 
     if (s.sessionId && s.lastSeq !== null) {
       this.sendResume(ws, s.sessionId, s.lastSeq);
@@ -637,7 +631,9 @@ export class GatewayDO implements DurableObject {
     log.warn(`INVALID_SESSION resumable=${resumable} failures=${failures}`);
 
     if (failures >= RESUME_FAILURE_ALARM) {
-      log.error(`${failures} resume failures in a row, session is not sticking`);
+      log.error(
+        `${failures} resume failures in a row, session is not sticking`
+      );
     }
 
     await this.patchState({
@@ -667,8 +663,7 @@ export class GatewayDO implements DurableObject {
       const user = isRecord(data.user) ? data.user : {};
       await this.patchState({
         ...patch,
-        sessionId:
-          typeof data.session_id === "string" ? data.session_id : null,
+        sessionId: typeof data.session_id === "string" ? data.session_id : null,
         resumeUrl:
           typeof data.resume_gateway_url === "string"
             ? data.resume_gateway_url
@@ -850,7 +845,9 @@ export class GatewayDO implements DurableObject {
       // Past a minute the reference is abandoned rather than joined. That is
       // the behaviour from before the guard existed, and it is only reachable
       // in a case that is already broken.
-      log.warn("connect has been in flight for over a minute, starting another");
+      log.warn(
+        "connect has been in flight for over a minute, starting another"
+      );
     }
 
     const attempt = this.connectOnce().finally(() => {
@@ -941,9 +938,11 @@ export class GatewayDO implements DurableObject {
         );
       });
       ws.addEventListener("close", (event: CloseEvent) => {
-        this.handleSocketClose(event.code, event.reason).catch((error: unknown) => {
-          log.warn(`close handler threw: ${getErrorMessage(error)}`);
-        });
+        this.handleSocketClose(event.code, event.reason).catch(
+          (error: unknown) => {
+            log.warn(`close handler threw: ${getErrorMessage(error)}`);
+          }
+        );
       });
       ws.addEventListener("error", (event: Event) => {
         log.warn(`gateway socket error: ${String(event)}`);
@@ -980,9 +979,8 @@ export class GatewayDO implements DurableObject {
   // ── State ────────────────────────────────────────────────────────────────
 
   private async readState(): Promise<GatewayState> {
-    const stored = await this.state.storage.get<Partial<GatewayState>>(
-      STATE_KEY
-    );
+    const stored =
+      await this.state.storage.get<Partial<GatewayState>>(STATE_KEY);
     return { ...INITIAL_STATE, ...(stored ?? {}) };
   }
 

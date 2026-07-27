@@ -1,5 +1,5 @@
 /**
- * `/sales`, ported from `src/commands/sales.ts`.
+ * `/sales`.
  *
  * Bot links point at glyphbots.com rather than OpenSea's asset page, exactly
  * as the original did. Nothing here sets an image, so there is no SVG hazard.

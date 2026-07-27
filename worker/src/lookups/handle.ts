@@ -22,7 +22,11 @@
  */
 
 import type { APIEmbed } from "discord-api-types/v10";
-import { GUILD_ID, LOOKUP_CHANNEL_IDS, MAX_EMBEDS_PER_MESSAGE } from "../config";
+import {
+  GUILD_ID,
+  LOOKUP_CHANNEL_IDS,
+  MAX_EMBEDS_PER_MESSAGE,
+} from "../config";
 import { createLogger, getErrorMessage } from "../utils/logger";
 import { buildLookupEmbed, type LookupClients } from "./embeds";
 import { type LookupMatch, parseLookups } from "./matcher";

@@ -23,11 +23,8 @@ import {
 } from "../src/lookups/handle";
 import { parseLookups } from "../src/lookups/matcher";
 import { createRateLimiter } from "../src/lookups/rate-limit";
-import {
-  createBot,
-  createLookupArtifact,
-  createLookupClients,
-} from "./lookup-fixtures";
+import { createArtifact, createBot } from "./fixtures";
+import { createLookupClients } from "./lookup-fixtures";
 
 describe("the matcher", () => {
   it("reads b#123 as a bot", () => {
@@ -72,9 +69,7 @@ describe("the matcher", () => {
   });
 
   it("collapses a repeated match", () => {
-    expect(parseLookups("b#1 b#1 b#1")).toEqual([
-      { kind: "bot", tokenId: 1 },
-    ]);
+    expect(parseLookups("b#1 b#1 b#1")).toEqual([{ kind: "bot", tokenId: 1 }]);
   });
 
   it("finds nothing in ordinary conversation", () => {
@@ -261,9 +256,9 @@ describe("handling one message", () => {
 
   it("ignores another guild", async () => {
     const { deps: d } = deps();
-    expect(
-      await handleLookupMessage(message({ guild_id: "1" }), d)
-    ).toBe("wrong-guild");
+    expect(await handleLookupMessage(message({ guild_id: "1" }), d)).toBe(
+      "wrong-guild"
+    );
   });
 
   it("ignores a channel outside the allowlist", async () => {
@@ -403,7 +398,7 @@ describe("handling one message", () => {
 
   it("puts the artifact image on an artifact lookup", async () => {
     const fake = createLookupClients({
-      artifacts: { 3: createLookupArtifact(3) },
+      artifacts: { 3: createArtifact({ contractTokenId: 3 }) },
     });
     const send = createSend();
 
@@ -416,7 +411,7 @@ describe("handling one message", () => {
 
     const [, body] = firstCall(send);
     expect(body.embeds[0]?.image?.url).toBe(
-      "https://www.glyphbots.com/artifacts/1.jpg"
+      "https://www.glyphbots.com/artifacts/3.jpg"
     );
   });
 

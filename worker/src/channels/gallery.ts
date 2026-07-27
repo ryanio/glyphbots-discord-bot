@@ -58,13 +58,14 @@
 import type { APIEmbed } from "discord-api-types/v10";
 import { MAX_BOT_TOKEN_ID, RANDOM_ARTIFACT_FETCH_LIMIT } from "../config";
 import type { ChannelPoster } from "../discord/channel-poster";
-import type { IdleStateStore } from "../durable-objects/idle-state-store";
+import type { IdleStateStore } from "../durable-objects/feed-stores";
 import {
   buildArtifactLookupEmbed,
   buildBotLookupEmbed,
   type LookupClients,
 } from "../lookups/embeds";
 import { createLogger, getErrorMessage } from "../utils/logger";
+import { randomInt as defaultRandomInt } from "../utils/random";
 import { decideGallery, type GalleryKind, type IdleSkipReason } from "./idle";
 
 const log = createLogger("Gallery");
@@ -90,9 +91,6 @@ export type GalleryOutcome =
   | "no-content"
   | "send-failed"
   | IdleSkipReason;
-
-const defaultRandomInt = (max: number): number =>
-  Math.floor(Math.random() * max) + 1;
 
 const pickArtifactEmbed = async (
   deps: GalleryDeps
@@ -167,7 +165,9 @@ export const postGalleryItem = async (
     }
 
     if (!embed) {
-      log.warn(`Gallery pick ${attempt}/${MAX_ATTEMPTS} found nothing (${kind})`);
+      log.warn(
+        `Gallery pick ${attempt}/${MAX_ATTEMPTS} found nothing (${kind})`
+      );
       continue;
     }
 

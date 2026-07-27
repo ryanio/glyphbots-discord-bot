@@ -10,8 +10,8 @@
  *
  * - There are no timers anywhere in it. Flushing is entirely poll-driven,
  *   which is why the Node bot calls its platform handlers even when the fetch
- *   returned zero events (`src/index.ts:204-206`): the empty call is the
- *   flush.
+ *   returned zero events (`opensea-activity-bot/src/index.ts:204-206`): the
+ *   empty call is the flush.
  * - The flush predicate is a pure function of persisted state and `now`:
  *   `rawCount >= minGroupSize && now - lastAddedMs >= settleMs`
  *   (`event-grouping.ts:206-225`). It is reproduced here unchanged.
@@ -220,7 +220,10 @@ const pruneStaleGroups = (
 ): void => {
   const ttl = config.settleMs * SALES_GROUP_STALE_MULTIPLIER;
   for (const [key, group] of Object.entries(state.actorGroups)) {
-    if (now - group.lastAddedMs >= ttl && group.rawCount < config.minGroupSize) {
+    if (
+      now - group.lastAddedMs >= ttl &&
+      group.rawCount < config.minGroupSize
+    ) {
       delete state.actorGroups[key];
     }
   }
@@ -286,7 +289,7 @@ const pendingLargeActorKeys = (
 };
 
 /** `filterProcessableEvents`, `event-grouping.ts:319-351`. */
-export const filterProcessableEvents = (
+const filterProcessableEvents = (
   state: GroupingState,
   events: OpenSeaEvent[],
   config: GroupConfig = DEFAULT_GROUP_CONFIG
