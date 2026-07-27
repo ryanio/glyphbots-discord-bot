@@ -1,448 +1,151 @@
 # glyphbots-discord-bot
 
-An AI-enabled Discord bot for the GlyphBots community featuring automated storytelling, interactive arena battles, and community playground content.
-
-## Features
-
-- 📖 **Lore Channel** - Automated AI-generated stories based on GlyphBots artifacts
-- ⚔️ **Arena Battles** - Interactive PvP battles between GlyphBots with spectator mechanics
-- 🎮 **Playground** - Community showcase with bot spotlights, world postcards, and arena recaps
-- 🎯 **User-Triggered Content** - Users can request new playground posts with rate-limited action buttons
-- 🎨 **16 Narrative Styles** - Rotating styles for variety (cinematic, transmission, first-person, poetic, log entries, memory, myth, noir, broadcast, journal, prophecy, technical, dialogue, archive, testimony, dream)
-- 🖼️ **AI Image Generation** - 2K images for epic moments (victories, critical hits, spotlights)
-- 🎲 **Weighted Selection** - Favors recently minted artifacts for fresh content
-- 🤖 **Google AI Integration** - Uses Gemini models for text and image generation
-
-## Table of Contents
-
-- [Features](#features)
-- [Prerequisites](#prerequisites)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [Environment Variables](#environment-variables)
-- [Arena Battles](#arena-battles)
-- [Playground Channel](#playground-channel)
-- [Slash Commands](#slash-commands)
-- [Usage](#usage)
-- [Development](#development)
-- [Testing](#testing)
-- [Deployment](#deployment)
-- [Troubleshooting](#troubleshooting)
-- [Contributing](#contributing)
-
-## Prerequisites
-
-- Node.js 18+
-- Yarn package manager
-- Discord bot token
-- Google AI API key ([get one here](https://aistudio.google.com/app/apikey))
-
-## Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/ryanio/glyphbots-discord-bot.git
-cd glyphbots-discord-bot
-
-# Install dependencies
-yarn install
-
-# Build the project
-yarn build
-```
-
-## Configuration
-
-Create a `.env` file in the root directory with your configuration:
-
-```env
-# Required
-DISCORD_TOKEN=your_discord_bot_token
-DISCORD_CLIENT_ID=your_discord_client_id
-GOOGLE_AI_API_KEY=your_google_ai_api_key
-
-# Optional - Channel IDs
-LORE_CHANNEL_ID=your_lore_channel_id
-ARENA_CHANNEL_ID=your_arena_channel_id
-PLAYGROUND_CHANNEL_ID=your_playground_channel_id
-MINTS_CHANNEL_ID=your_mints_channel_id
-
-# Optional - Other
-GLYPHBOTS_API_URL=https://glyphbots.com
-STATE_DIR=.state
-LOG_LEVEL=info
-```
-
-## Environment Variables
-
-### Required Variables
-
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `DISCORD_TOKEN` | Discord bot token | Get from [Discord Developer Portal](https://discord.com/developers/applications) |
-| `DISCORD_CLIENT_ID` | Discord application client ID | Get from [Discord Developer Portal](https://discord.com/developers/applications) |
-| `LORE_CHANNEL_ID` | Channel ID for lore posts | `1234567890123456789` |
-| `GOOGLE_AI_API_KEY` | Google AI API key | Get from [Google AI Studio](https://aistudio.google.com/app/apikey) |
-
-### Discord Setup
-
-1. [Create a Discord application](https://discord.com/developers/applications)
-2. Go to the **Bot** tab and click "Add Bot"
-3. Copy the bot token to `DISCORD_TOKEN`
-4. Copy the application ID to `DISCORD_CLIENT_ID`
-5. **Invite bot to your server:**
-   - Go to **OAuth2** → **URL Generator**
-   - Under **Scopes**, select `bot` and `applications.commands`
-   - Under **Bot Permissions**, select:
-     - Send Messages
-     - Embed Links
-     - Use Slash Commands
-     - Create Public Threads
-     - Send Messages in Threads
-     - Manage Threads
-   - Copy the generated URL and open it in your browser
-   - Select your server and authorize
-
-**Quick Invite URL** (replace `YOUR_CLIENT_ID`):
-```
-https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=326417591360&scope=bot%20applications.commands
-```
-
-### Optional Configuration
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `GLYPHBOTS_API_URL` | GlyphBots API base URL | `https://glyphbots.com` |
-| `STATE_DIR` | Directory for state persistence | `.state` |
-| `LOG_LEVEL` | Log verbosity | `info` |
-
-### Configuration Constants
-
-The following settings can be changed in `src/lib/constants.ts`:
-
-| Setting | Description | Default |
-|---------|-------------|---------|
-| `LORE_MIN_INTERVAL_MINUTES` | Minimum minutes between lore posts | `240` (4 hours) |
-| `LORE_MAX_INTERVAL_MINUTES` | Maximum minutes between lore posts | `720` (12 hours) |
-| `PLAYGROUND_MIN_INTERVAL_MINUTES` | Minimum minutes between playground posts | `240` (4 hours) |
-| `PLAYGROUND_MAX_INTERVAL_MINUTES` | Maximum minutes between playground posts | `720` (12 hours) |
-| `ARENA_CHALLENGE_TIMEOUT_SECONDS` | Challenge acceptance timeout | `86400` (24 hours) |
-| `ARENA_ROUND_TIMEOUT_SECONDS` | Round action timeout | `86400` (24 hours) |
-| `ARENA_MAX_ROUNDS` | Maximum rounds per battle | `5` |
-
-## Arena Battles
-
-The Arena channel features interactive PvP battles between GlyphBots with strategic gameplay and spectator participation.
-
-### Battle Flow
-
-1. **Challenge Phase** - A player challenges with `/arena challenge bot:<id>`
-2. **Pre-Battle** - Opponent accepts and both fighters choose opening stance
-3. **Combat Rounds** - 3-5 rounds where fighters select abilities
-4. **Victory** - Winner declared with AI-generated narrative
-
-### Spectator Mechanics
-
-Spectators can influence battles through crowd actions:
-
-- **🔴 Cheer Red** - +5% damage to red fighter next round
-- **🔵 Cheer Blue** - +5% damage to blue fighter next round
-- **💀 Bloodlust** - Both fighters get +10% damage, -10% defense
-- **⚡ Surge** - +15 crowd energy
-
-### Arena Events
-
-When crowd energy reaches 100%, random arena events trigger:
-
-- **Power Surge** - Random fighter gains +20% all stats for 2 rounds
-- **Chaos Field** - Both fighters get random bonus effects
-- **Arena Hazard** - Environmental damage to both (favors higher endurance)
-
-### Thread-Based Battles
-
-Each battle runs in its own public thread to keep the main channel clean. Threads auto-archive after 24 hours of inactivity.
-
-## Playground Channel
-
-The Playground channel features rotating community content with user-triggered posts.
-
-### Content Types
-
-- **🌟 Bot Spotlights** - Featured bots with full stats, powers, and lore
-- **🌍 World Postcards** - Atmospheric descriptions of world artifacts
-- **🎒 Item Discovery** - Newly minted items with AI-generated lore
-- **📰 Arena Recaps** - Daily battle summaries and leaderboards
-- **🎲 Random Encounters** - "What if?" scenarios featuring random bots
-- **❓ Help Content** - Tips, guides, and command references
-
-### User Actions
-
-Users can request new content by clicking **Request** buttons on any playground post:
-
-- **Request Spotlight** - Trigger a new bot spotlight
-- **Request Discovery** - Trigger a new item discovery
-- **Request Encounter** - Trigger a new random encounter
-- **Request Postcard** - Trigger a new world postcard
-- **Request Recap** - Trigger a new arena recap
-- **Request Help** - Trigger new help content
-
-**Rate Limits:** Each user can request each content type **once per 6 hours**. This prevents spam while allowing active community engagement.
-
-### Automatic Posting
-
-The bot automatically posts new content at random intervals (default: 4-12 hours). User requests supplement this with on-demand content.
-
-## Slash Commands
-
-### Global Commands
-
-| Command | Description |
-|---------|-------------|
-| `/help [topic]` | Get help with GlyphBots features |
-| `/info bot id:<number>` | Look up a specific bot |
-| `/info artifact id:<number>` | Look up a specific artifact |
-| `/info stats` | Bot statistics and uptime |
-| `/tips` | Show a random helpful tip |
-
-### Arena Commands
-
-| Command | Description |
-|---------|-------------|
-| `/arena challenge bot:<id>` | Start a challenge with your bot |
-| `/arena stats [user]` | View arena battle record |
-| `/arena leaderboard` | Top fighters this season |
-| `/arena history` | Recent battle results |
-
-### Playground Commands
-
-| Command | Description |
-|---------|-------------|
-| `/spotlight` | Show current featured bot |
-| `/random bot` | Get a random bot spotlight |
-| `/random artifact` | Get a random artifact showcase |
-| `/random world` | Get a random world postcard |
-| `/help playground` | Get help about playground features and user actions |
-
-### Stats Commands
-
-| Command | Description |
-|---------|-------------|
-| `/stats me` | Your personal stats overview |
-| `/stats arena [user]` | Arena battle record |
-| `/stats server` | Server-wide activity stats |
-| `/stats bot id:<number>` | Combat stats for a specific bot |
-
-## Usage
-
-```bash
-# Start the bot
-yarn start
-
-# Development mode (with hot reload)
-yarn start:dev
-
-# Deploy slash commands
-yarn commands:deploy
-```
-
-## Development
-
-### Setup Development Environment
-
-```bash
-# Install dependencies
-yarn install
-
-# Run in development mode
-yarn start:dev
-
-# Build the project
-yarn build
-
-# Format code
-yarn format
-
-# Lint code
-yarn lint
-```
-
-### Project Structure
+The GlyphBots Discord bot. It runs as a single Cloudflare Worker, live at
+`https://glyphbots-worker.ryan-2e8.workers.dev`, serving one Discord
+application in one guild.
+
+The code that matters is in [`worker/`](worker/). Everything in
+[`legacy/`](legacy/) is the retired Node bot, kept for reference and for the
+features that are not built yet. See
+[`legacy/README.md`](legacy/README.md) before touching it.
+
+## Repository layout
 
 ```
-src/
-├── index.ts              # Main entry point
-├── api/
-│   ├── glyphbots.ts      # GlyphBots API client
-│   └── google-ai.ts      # Google AI client (text + image)
-├── channels/
-│   ├── lore.ts           # Lore channel handler
-│   ├── arena.ts          # Arena channel handler
-│   └── playground.ts     # Playground channel handler
-├── commands/
-│   ├── index.ts          # Command definitions
-│   ├── deploy.ts         # Command deployment
-│   ├── help.ts           # /help handler
-│   ├── info.ts           # /info handler
-│   ├── arena.ts          # /arena handler
-│   ├── spotlight.ts      # /spotlight handler
-│   ├── random.ts         # /random handler
-│   ├── stats.ts          # /stats handler
-│   └── tips.ts           # /tips handler
-├── arena/
-│   ├── state.ts          # Battle state machine
-│   ├── combat.ts         # Combat resolution
-│   ├── interactions.ts   # Button/menu handlers
-│   ├── spectators.ts     # Spectator mechanics
-│   ├── threads.ts        # Thread management
-│   ├── narrative.ts      # AI battle narration
-│   └── prompts.ts        # Battle prompts
-├── playground/
-│   ├── rotation.ts       # Content rotation
-│   ├── spotlight.ts      # Bot spotlight
-│   ├── postcard.ts       # World postcard
-│   ├── discovery.ts      # Item discovery
-│   ├── encounter.ts      # Random encounters
-│   ├── recap.ts          # Arena recap
-│   ├── interactions.ts   # Button interaction handlers
-│   └── rate-limit.ts     # User action rate limiting
-├── lore/
-│   ├── generate.ts       # Lore generation
-│   └── prompts.ts        # Narrative styles
-├── help/
-│   ├── embeds.ts         # Help embeds
-│   └── scheduler.ts      # Help posting
-└── lib/
-    ├── logger.ts         # Logging utilities
-    ├── state.ts          # State persistence
-    ├── types.ts          # TypeScript types
-    ├── utils.ts          # General utilities
-    └── constants.ts      # Application constants
+worker/    the live Cloudflare Worker (see worker/README.md)
+legacy/    the retired Node bot, not deployed anywhere
+plans/     the consolidation plan and its execution tracker
+.github/   the deploy workflow
 ```
 
-## Testing
+## What the bot does
 
-```bash
-# Run all tests
-yarn test
+### Slash commands
 
-# Run tests with coverage
-yarn test:coverage
+Eight, registered to the guild.
 
-# Run tests in CI mode
-yarn test:ci
-```
+| Command | What it does |
+|---|---|
+| `/bot id:<n>` or `/bot random` or `/bot user:<name>` | A GlyphBot with its traits and OpenSea data |
+| `/artifact id:<n>` or `/artifact random` | An artifact with its details |
+| `/floor` | Collection stats and floor price |
+| `/sales` | Recent GlyphBots sales on OpenSea |
+| `/listings` | The cheapest GlyphBots currently listed |
+| `/owner id:<n>` | Who owns a given bot |
+| `/rarity id:<n>` | A bot's rarity rank and traits |
+| `/activity id:<n>` | Recent activity for one bot |
 
-### Test Coverage Goals
+They arrive over HTTP at `POST /discord/interactions`, which verifies Discord's
+Ed25519 signature, defers, and sends the real reply as a follow-up. The follow-up
+authenticates with the interaction token, so the bot token never enters the slash
+command path.
 
-- Arena combat logic: 90%+
-- Arena state management: 85%+
-- Spectator actions: 80%+
-- API clients: 80%+
+Registration is deliberately not automatic. It mutates the live guild, so it is
+an operator step: `npx tsx scripts/register-commands.ts` from `worker/`.
+
+### Inline lookups
+
+Type `b#123` for a bot, `a#123` for an artifact, or `#username` for an OpenSea
+account, anywhere in a message. The bot replies with an embed per match. A bare
+`#123` means a bot. `#random` (or `#rand`, or `#?`) picks one at random.
+
+This works in `#general` and `#show-and-tell` only, and never in DMs. Bot token
+ids run 1 to 11,111 and artifact ids up to 100,000; anything outside those ranges
+is ignored, as are channel mentions, role mentions and custom emoji. Six matches
+per message maximum, which is Discord's own embed limit, and duplicates in one
+message collapse to a single lookup. Per channel there is a three second cooldown
+and a cap of ten lookups a minute.
+
+A Durable Object holds one WebSocket to the Discord gateway to receive these
+messages. It cannot hibernate (an outbound socket is not eligible), so it stays
+resident.
+
+### Mint feed
+
+Every five minutes the Worker asks the GlyphBots API for recent mints and posts
+anything new into `#general`. The cursor tracks the newest `mintedAt` it has
+handled plus the last 100 posted ids, so a redeploy or a slow poll does not skip
+or repeat. On a cold start it seeds from the current newest mint and posts
+nothing, which is why the first tick after a fresh deploy looks quiet.
+
+### The `#gallery` post
+
+Every six hours, one random item from the collection into `#gallery`. This is the
+old `RANDOM_INTERVALS` feature, at the cadence it ran at before it stopped in May
+2026.
 
 ## Deployment
 
-### Recommended: DigitalOcean
+GitHub Actions deploys `worker/` to Cloudflare on every push to `main` that
+touches it, via [`.github/workflows/deploy-worker.yml`](.github/workflows/deploy-worker.yml).
+The workflow typechecks, runs the tests, validates the bindings with a dry-run
+deploy, deploys, then pokes the gateway health tick, because replacing the isolate
+drops the WebSocket and inline lookups would otherwise stay dark until the next
+cron.
 
-**DigitalOcean Setup ($5/month Basic Droplet):**
+There is no droplet, no PM2, no container. Deploying by hand is
+`npx wrangler deploy` from `worker/`.
 
-1. Create Ubuntu droplet
-2. Install Node.js 22 and Yarn
-3. Clone repository and install dependencies
-4. Install PM2 for process management
-5. Configure environment variables
-6. Deploy slash commands: `yarn commands:deploy`
-7. Start with PM2
+### Secrets
 
-```bash
-# Install PM2 globally
-yarn global add pm2
+Secrets live in Cloudflare and nowhere else. They are set once, by hand, and a
+deploy leaves them alone:
 
-# Start the bot
-pm2 start yarn -- start
-
-# Monitor the bot
-pm2 list
-pm2 logs
-
-# Install log rotation
-pm2 install pm2-logrotate
-
-# Auto-start on reboot
-pm2 startup
-pm2 save
+```
+wrangler secret put DISCORD_TOKEN
+wrangler secret put DISCORD_APP_ID
+wrangler secret put DISCORD_PUBLIC_KEY
+wrangler secret put OPENSEA_API_TOKEN   # optional, public tier works
+wrangler secret put ADMIN_TOKEN         # gates /_admin/gateway/*
 ```
 
-### Alternative: Docker
+Nothing in this repo reads or writes them, and none of them belong in a file
+here. `CLOUDFLARE_API_TOKEN` and `WORKER_ADMIN_TOKEN` are GitHub Actions secrets,
+used only by the workflow.
 
-```dockerfile
-FROM node:22-alpine
-WORKDIR /app
-COPY package.json yarn.lock ./
-RUN yarn install --frozen-lockfile
-COPY . .
-RUN yarn build
-CMD ["yarn", "start"]
-```
+Channel and guild ids are not secrets and are inline constants in
+`worker/src/config.ts`.
 
-## Troubleshooting
+## Health and operator routes
 
-### Common Issues
+- `GET /health` reports liveness and the gateway DO's status.
+- `POST /_admin/gateway/{connect,reconnect,health-tick,status}` opens or repairs
+  the socket. All four require `Authorization: Bearer $ADMIN_TOKEN`. With
+  `ADMIN_TOKEN` unset they answer 503 rather than running unauthenticated.
 
-**Bot not posting messages:**
-- Verify Discord bot has required permissions
-- Check that bot is added to the channels
-- Ensure `DISCORD_TOKEN` is correct
+## Coming soon
 
-**AI generation failing:**
-- Verify `GOOGLE_AI_API_KEY` is valid
-- Check Google AI account has credits/quota
-- Check API key has proper permissions
+Shelved, not deleted. The code is in `legacy/src/` and the conversion path is in
+[`plans/cloudflare-consolidation.md`](plans/cloudflare-consolidation.md) under
+"Conversion path for everything shelved".
 
-**Slash commands not appearing:**
-- Run `yarn commands:deploy` to register commands
-- Wait up to 1 hour for global command propagation
-- Use `--guild` flag for instant guild-only commands
+- **Arena battles.** Never finished. Combat resolution was never written
+  (`legacy/src/arena/interactions.ts:552`), so a round could be started but never
+  resolved. Reviving it means writing that resolution and picking a store for
+  per-battle state, not porting a working feature.
+- **Playground rotation.** Spotlights, postcards, discoveries, encounters and
+  recaps. It posted into a channel that has since been deleted, and it needs a
+  scheduling model to run on crons.
+- **Lore.** AI-generated stories from artifacts. Also posted into a deleted
+  channel, and it needs Google AI and OpenRouter keys.
+- **`/wallet` and `/mybots`.** Not broken, but they wrote wallet bindings to a
+  local state file that went away with the droplet. A KV namespace
+  (`GLYPHBOTS_KV`) is reserved for `wallet:<userId>` keys and is read by nothing
+  until these come back.
+- **An OpenSea sales feed into `#trading-floor`.** In progress.
 
-**No artifacts being selected:**
-- Ensure GlyphBots API is accessible
-- Check `GLYPHBOTS_API_URL` is correct
+The four mechanical changes any of these need are the same ones the Worker port
+already made: raw REST instead of the `Client`/`Channel` object model, cron
+triggers or DO alarms instead of `setInterval`, DO storage or KV instead of local
+state files, and request-scoped `env` instead of module-scope `process.env`.
 
-### Debug Mode
+## Where to read next
 
-Enable debug logging to troubleshoot issues:
-
-```bash
-LOG_LEVEL=debug yarn start
-```
-
-### Logs
-
-The bot provides structured logging with different levels:
-- `debug`: Detailed information for debugging
-- `info`: General information about bot activity
-- `warn`: Warning messages for potential issues
-- `error`: Error messages for failures
-
-## Contributing
-
-### Development Workflow
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Make your changes
-4. Run tests: `yarn test`
-5. Format code: `yarn format`
-6. Commit changes: `git commit -m 'Add amazing feature'`
-7. Push to branch: `git push origin feature/amazing-feature`
-8. Open a Pull Request
-
-### Code Standards
-
-- Follow TypeScript best practices
-- Write tests for new features
-- Use `yarn format` before committing
-- Follow the existing code structure
-- Add JSDoc comments for public APIs
+- [`worker/README.md`](worker/README.md) for the Worker's layout, bindings,
+  cursor design and local development.
+- [`plans/cloudflare-consolidation.md`](plans/cloudflare-consolidation.md) for
+  why the migration looks the way it does.
+- [`plans/EXECUTION.md`](plans/EXECUTION.md) for what is done and what is next.
 
 ---
 

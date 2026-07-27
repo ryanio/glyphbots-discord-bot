@@ -5,10 +5,11 @@
 > [`cloudflare-consolidation.md`](cloudflare-consolidation.md); this file tracks
 > what is done, what is next, and what only a human can do.
 >
-> **Status 2026-07-25.** Phases 0 to 5 not started. Mint watcher and the
-> boot-crash fix are shipped on the Node bot but not deployed anywhere. The
-> guild has been dark for months and there is no time pressure, so correctness
-> beats speed on every call here.
+> **Status 2026-07-26.** Phases 0 to 3 are built, deployed and verified live at
+> `https://glyphbots-worker.ryan-2e8.workers.dev`. Phase 4 (the OpenSea sales
+> feed) is in progress. Phase 5 (decommission and document) is in progress
+> alongside it. The bot answers in the guild again, so from here on a mistake is
+> visible to about 30 people rather than to nobody.
 
 ## The situation in five lines
 
@@ -60,12 +61,12 @@ them, do not try to resolve them.
 
 | Phase | What | Status |
 |---|---|---|
-| 0 | Pre-flight: portal toggles, key checks, Cloudflare provisioning | **done**, except confirming Workers Paid |
-| 1 | Lights on: Worker skeleton, `FeedStateDO`, mints to `#general` | **built** (`6356a29`), not deployed |
-| 2 | Slash commands: Ed25519 endpoint, 8 handlers, prune 17 to 8 | **built** (`f75b454`), not deployed |
-| 3 | Gateway DO, inline `b#`/`a#` lookups, `#gallery` cron | **built** (`39d3c5b`), not deployed |
-| 4 | OpenSea sale/listing feed to `#trading-floor`, drop `sharp` | not started |
-| 5 | Decommission, archive the other two repos, rewrite the README | not started |
+| 0 | Pre-flight: portal toggles, key checks, Cloudflare provisioning | **done**. Workers Paid confirmed by the fact that the DOs are running |
+| 1 | Lights on: Worker skeleton, `FeedStateDO`, mints to `#general` | **deployed**, mint watcher live on the `*/5` cron |
+| 2 | Slash commands: Ed25519 endpoint, 8 handlers, prune 17 to 8 | **deployed**. Discord accepted the interactions endpoint, 8 commands registered in the guild |
+| 3 | Gateway DO, inline `b#`/`a#` lookups, `#gallery` cron | **deployed**. Gateway connected and holding a session, lookups answering in `#general` and `#show-and-tell` |
+| 4 | OpenSea sale feed to `#trading-floor`, drop `sharp` | **in progress** |
+| 5 | Decommission, archive the other two repos, rewrite the README | **in progress**. `src/` and `test/` moved to `legacy/`, root README rewritten, guild notice drafted at `plans/guild-announcement.md`. The two repo archivals are operator work, checklist below |
 
 Definitions of done are per-phase in `cloudflare-consolidation.md`.
 
@@ -79,22 +80,38 @@ These gate real work, so clear them early.
    The guild is far under the 10,000 user threshold that would require review.
    Note that Presence and Server Members are enabled but not needed by anything
    in scope; only Message Content is, and only for the inline lookups.
-2. **Confirm the Cloudflare account is on Workers Paid.** Durable Objects are
-   not available on the free plan, and both the gateway DO and `FeedStateDO` are
-   load bearing. Blocks deploying Phase 1.
-3. **`wrangler kv namespace create GLYPHBOTS_KV`**, then replace the literal
-   `REPLACE_WITH_KV_NAMESPACE_ID` in `worker/wrangler.jsonc`. The dry run accepts
-   the placeholder, a real deploy will not. The namespace is bound but read by
-   nothing, per decision 7.
-4. **`wrangler login` and `wrangler secret put`** for `DISCORD_TOKEN`,
-   `DISCORD_PUBLIC_KEY`, `DISCORD_APP_ID`, `OPENSEA_API_TOKEN`.
-5. **Set the Interactions Endpoint URL** in the Discord Developer Portal to the
-   deployed Worker's `/discord` route, once Phase 2 is deployed. Discord sends a
-   PING to validate it and will refuse a URL that does not verify signatures
-   correctly, so this must happen after the Worker is live, not before.
-4. **Smoke test each phase in the live guild.** Embed rendering, gateway
-   connection stability over days, and the first real OpenSea tick cannot be
-   verified from tests.
+2. ~~**Confirm the Cloudflare account is on Workers Paid.**~~ **Done.** Both DOs
+   are running in production, which is only possible on the paid plan.
+3. ~~**`wrangler kv namespace create GLYPHBOTS_KV`**~~ **Done.** The namespace is
+   created and bound. It is still read by nothing, per decision 7.
+4. ~~**`wrangler login` and `wrangler secret put`**~~ **Done** at least for
+   `DISCORD_TOKEN`, `DISCORD_PUBLIC_KEY` and `DISCORD_APP_ID`, since commands and
+   the gateway both work. `OPENSEA_API_TOKEN` and `ADMIN_TOKEN` are not verified
+   from here; an unset `ADMIN_TOKEN` shows up as a 503 from `/_admin/gateway/*`
+   and as a failed heal step in the deploy workflow. Secrets live in Cloudflare
+   only, and a deploy does not touch them.
+5. ~~**Set the Interactions Endpoint URL**~~ **Done.** Discord's PING probe
+   accepted the deployed `/discord/interactions` route, and the eight commands
+   are registered guild-scoped.
+6. **Smoke test what tests cannot reach, over time.** Slash commands and inline
+   lookups have answered live. Still unconfirmed: gateway connection stability
+   across days rather than hours, Discord's handling of the 7 to 8 MB artifact
+   images in mint embeds (needs a real mint, and mints run at 0.2/day), and the
+   first real OpenSea tick in Phase 4.
+7. **Archive `discord-nft-embed-bot` and `opensea-activity-bot` on GitHub.**
+   Checklist below. Not before Phase 4 lands, because it is still reading the
+   second one.
+8. **Post the guild notice.** Draft at
+   [`guild-announcement.md`](guild-announcement.md). Nobody has posted it.
+
+## A note on paths in this file
+
+Phase 5 moved the Node bot from `src/` and `test/` to `legacy/src/` and
+`legacy/test/`, along with its `package.json`, `jest.config.js`, both tsconfigs
+and `biome.jsonc`. Nothing inside changed. Every bare `src/...` reference below
+and in `cloudflare-consolidation.md` was written before the move and now lives
+under `legacy/`. Paths that name a repo (`opensea-activity-bot/src/...`) or the
+Worker (`worker/src/...`) are unaffected.
 
 ## What is already shipped
 
@@ -110,6 +127,63 @@ On branch `feat/mint-watcher-and-cloudflare-plan`, commit `69ef2cf`:
 Elsewhere: `womptron` on `fix/x-api-costs-and-v2-media` (`7d0eaa75`), and
 `coral` on `docs/always-on-runtime-evaluation` (`aeb1809d`). All three branches
 are unmerged and unpushed.
+
+## Archive checklist for the other two repos
+
+Phase 5 work, but not automatable and not urgent. Archiving on GitHub is a
+one-click, reversible flag that makes a repo read-only. It does not delete
+anything. Do not do it yet: Phase 4 is still reading `opensea-activity-bot` as
+its port source, and archiving mid-port only creates friction.
+
+**Order.** `discord-nft-embed-bot` can be archived as soon as someone wants to.
+`opensea-activity-bot` waits until Phase 4 is deployed and has posted at least
+one real sale.
+
+**Before archiving either one:**
+
+1. Push every local branch. Both repos have unpushed work in the same style as
+   this one did, and an archived repo will not accept a push. Check with
+   `git status` and `git log --branches --not --remotes --oneline` in each.
+2. Confirm nothing is still running from them. Both were supervised by
+   `bot-runner` on the cancelled droplet, so this should be true by default, but
+   check for stray local processes and for any cron or webhook pointing at them.
+3. Confirm their Discord applications are settled. The Activity and Embed
+   applications are superseded by Oracle. Decide per application: leave the bot
+   in the guild but with no token in use, or remove it from the guild so the
+   member list stops showing an offline bot that will never come back. Do not
+   delete the applications; a deleted application id cannot be recovered and the
+   old messages they posted keep referring to them.
+4. Revoke or rotate any credential that only those repos used, wherever it lives.
+   Their `.env` files are local and not in git, but the tokens they held are real.
+   Note that `opensea-activity-bot`'s `.env` currently points at BAYC in a test
+   server, not GlyphBots, so read it before assuming what it holds.
+5. Note the final commit hash of each in this file, so a future reader can find
+   the exact source the Worker was ported from without guessing.
+6. Add a short notice at the top of each README saying the repo is superseded by
+   `glyphbots-discord-bot/worker` and archived on a given date. Do this before
+   flipping the flag, because afterwards the repo is read-only.
+
+**What is preserved by archiving:** all code, all history, all branches and tags,
+issues, pull requests and releases. The repo stays public and cloneable. The flag
+can be lifted at any time by the owner.
+
+**What is lost or changes:**
+
+- No pushes, no new issues or PRs, no comments, no edits to existing ones.
+- Any GitHub Actions workflows stop running, including scheduled ones.
+- Dependabot and code scanning stop. For a repo nobody deploys, that is fine,
+  but it does mean the dependency tree quietly ages.
+- Webhooks stop firing.
+- The port references in this repo's plans and in `worker/src` comments
+  (`discord-nft-embed-bot/src/index.ts:174-200` and friends) stay valid as
+  reading, since history is intact. They are line-number references into a
+  snapshot, so nothing about archiving invalidates them.
+
+**What is genuinely lost if the repos are deleted rather than archived:** the
+Twitter posting path (`opensea-activity-bot/src/platforms/twitter/**`, roughly
+980 lines including the `AsyncQueue`), which decision 1 dropped on the explicit
+grounds that it survives in the archive and is therefore reversible. Deleting
+would make that decision irreversible. Archive, do not delete.
 
 ## The cursor design, because it is the thing most likely to be redone wrong
 

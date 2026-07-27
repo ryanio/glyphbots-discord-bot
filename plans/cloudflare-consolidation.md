@@ -636,6 +636,18 @@ a settled one.
 **Done when:** the README describes only the deployed system, and no shelved
 feature is advertised anywhere a user can see it.
 
+**How it was resolved (2026-07-26).** Archive, not delete, per decision 6. The
+whole Node package moved to `legacy/` unchanged: `src/`, `test/`, `scripts/`,
+`package.json`, `jest.config.js`, both tsconfigs, `biome.jsonc`. The repo root is
+now a container holding `worker/` (live), `legacy/` (retired), `plans/` and the
+deploy workflow. `legacy/` still typechecks and its 251 tests still pass, run from
+inside that directory; keeping them green costs nothing and makes the shelved
+arena, playground and lore code easier to revive along the conversion path above.
+The root README was rewritten around the Worker, and `legacy/README.md` says
+plainly that it is not the live system. The guild notice is drafted at
+`plans/guild-announcement.md` and has not been posted. Archiving the other two
+repos is an operator step with a checklist in `EXECUTION.md`.
+
 ## Risks
 
 | Risk | Likelihood | Impact | Mitigation |
