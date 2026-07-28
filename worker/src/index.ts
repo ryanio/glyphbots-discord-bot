@@ -12,6 +12,7 @@
  */
 
 import { Hono } from "hono";
+import { createDisplayNameResolver } from "./api/display-name";
 import { createGlyphBotsClient } from "./api/glyphbots";
 import { createOpenSeaClient } from "./api/opensea";
 import { postGalleryItem } from "./channels/gallery";
@@ -92,6 +93,10 @@ const runMintWatcher = async (env: WorkerEnv): Promise<void> => {
       api: createGlyphBotsClient(env),
       poster: createChannelPoster(env, MINTS_CHANNEL_ID),
       store: createMintCursorStore(env),
+      // The only OpenSea call the mint watcher makes, and only to put a name on
+      // the minter instead of a hex address. One resolver per tick, so a batch
+      // minted by one wallet costs one lookup.
+      resolveName: createDisplayNameResolver(createOpenSeaClient(env)).resolve,
     });
     log.info(`Mint tick complete, posted ${posted}`);
   } catch (error) {

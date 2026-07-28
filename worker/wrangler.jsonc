@@ -87,7 +87,9 @@
   // - DISCORD_PUBLIC_KEY: Ed25519 key from the developer portal. Without it
   //   /discord/interactions answers 503 rather than trusting anything.
   // - OPENSEA_API_TOKEN: optional. Six of the eight commands read OpenSea, and
-  //   unkeyed requests work but are rate limited much harder.
+  //   unkeyed requests work but are rate limited much harder. OPENSEA_API_KEY
+  //   is accepted as the same thing under OpenSea's own name for it; set
+  //   either. This one is already set on the deployed script.
   //
   // - ADMIN_TOKEN: shared secret for /_admin/gateway/*, which can connect and
   //   force-reconnect the live gateway socket. Unset means those routes answer

@@ -18,11 +18,16 @@
  * their own budget.
  *
  * Cost per lookup, worst case:
- *   b#123      2 subrequests
+ *   b#123      3 subrequests (GlyphBots record, OpenSea NFT, owner's name)
  *   a#123      2 subrequests (artifact + origin bot name)
- *   #username  4 subrequests (account, account NFTs, then a bot lookup)
+ *   #username  5 subrequests (account, account NFTs, then a bot lookup)
  *
- * Six of the most expensive kind is 24, which fits with room to spare.
+ * Six of the most expensive kind is 30, which still fits inside fifty. The
+ * third call on a bot lookup is the owner's name, and it is a third call rather
+ * than a fourth because `clients.names` is shared across every embed in one
+ * message: six lookups of bots held by the same wallet resolve it once. The
+ * `#username` path primes that cache with the account it already fetched, so
+ * looking up a bot the account itself owns does not re-fetch it by address.
  *
  * **No OpenSea image, ever.** `image_url` for these contracts is
  * `image/svg+xml` and Discord renders nothing for it. Bot images come from
@@ -33,12 +38,14 @@
 
 import { EmbedBuilder } from "@discordjs/builders";
 import type { APIEmbed } from "discord-api-types/v10";
+import type { DisplayNameResolver } from "../api/display-name";
+import { createDisplayNameResolver } from "../api/display-name";
 import type { GlyphBotsClient } from "../api/glyphbots";
-import { shortAddress } from "../api/glyphbots";
 import type { OpenSeaClient } from "../api/opensea";
 import { getOpenSeaArtifactUrl, getOpenSeaUrl } from "../api/opensea";
 import { BOT_NAME_PREFIX, formatTraitLine } from "../commands/format";
 import { COLORS, MAX_BOT_TOKEN_ID } from "../config";
+import { formatActor } from "../discord/embeds";
 import { createLogger } from "../utils/logger";
 import type { LookupMatch } from "./matcher";
 
@@ -47,6 +54,14 @@ const log = createLogger("Lookups");
 export type LookupClients = {
   glyphbots: GlyphBotsClient;
   opensea: OpenSeaClient;
+  /**
+   * Owner-name cache, shared across every embed in one message. Optional so the
+   * three other places that hold a `LookupClients` (`../channels/gallery.ts`,
+   * `../channels/nudge.ts`, `./handle.ts`) do not each have to build one; when
+   * it is absent a private resolver is built per embed, which is correct but
+   * caches nothing.
+   */
+  names?: DisplayNameResolver;
 };
 
 /** `GlyphBot #123`, owner, rarity, one line of traits, first-party PNG. */
@@ -73,9 +88,10 @@ export const buildBotLookupEmbed = async (
 
   const ownerAddress = nft?.owners?.[0]?.address ?? null;
   if (ownerAddress) {
+    const names = clients.names ?? createDisplayNameResolver(clients.opensea);
     embed.addFields({
       name: "Owner",
-      value: `\`${shortAddress(ownerAddress)}\``,
+      value: formatActor(await names.resolve(ownerAddress)),
       inline: true,
     });
   }
@@ -187,6 +203,11 @@ const buildUsernameLookupEmbed = async (
     log.info(`Lookup miss: no OpenSea account for ${username}`);
     return null;
   }
+
+  // The bot embed below is about to want a name for whoever owns the token, and
+  // for this path that is nearly always this same account. Priming the cache
+  // with what has already been fetched keeps the lookup at one account call.
+  clients.names?.prime(account);
 
   const nfts = await clients.opensea.fetchAccountNFTs(account.address);
   const chosen = nfts[pick(nfts.length)];

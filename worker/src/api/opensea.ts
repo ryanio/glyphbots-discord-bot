@@ -39,6 +39,8 @@ import type {
   OpenSeaListingsResponse,
   OpenSeaNFT,
   OpenSeaNFTResponse,
+  OpenSeaOrder,
+  OpenSeaOrderResponse,
 } from "./types";
 
 const log = createLogger("OpenSea");
@@ -101,19 +103,36 @@ export type OpenSeaClient = {
   fetchListings: (limit?: number) => Promise<OpenSeaListing[]>;
   fetchNFT: (tokenId: number) => Promise<OpenSeaNFT | null>;
   fetchNFTEvents: (tokenId: number, limit?: number) => Promise<OpenSeaEvent[]>;
+  /**
+   * One filled or live Seaport order, by hash. Both arguments come off the sale
+   * event that references it. Used to tell a filled listing from an accepted
+   * offer; see `../channels/sale-kind.ts`.
+   */
+  fetchOrder: (
+    orderHash: string,
+    protocolAddress: string
+  ) => Promise<OpenSeaOrder | null>;
 };
 
 /**
  * Build a client bound to one API token. Call this from the request handler
  * with the live `env`, never at module scope.
+ *
+ * Two accepted names for the same secret. `OPENSEA_API_TOKEN` is what this
+ * Worker has always read and what is set on the deployed script;
+ * `OPENSEA_API_KEY` is what OpenSea's own docs and dashboard call it, and what
+ * a `.env` copied from anywhere else will be holding. Reading both means the
+ * operator does not have to know which one this repo picked.
  */
 export const createOpenSeaClient = (
-  env: { OPENSEA_API_TOKEN?: string } = {}
+  env: { OPENSEA_API_TOKEN?: string; OPENSEA_API_KEY?: string } = {}
 ): OpenSeaClient => {
-  const token = env.OPENSEA_API_TOKEN ?? "";
+  const token = env.OPENSEA_API_TOKEN || env.OPENSEA_API_KEY || "";
 
   if (!token) {
-    log.warn("OPENSEA_API_TOKEN is not set, falling back to the public tier");
+    log.warn(
+      "Neither OPENSEA_API_TOKEN nor OPENSEA_API_KEY is set, falling back to the public tier"
+    );
   }
 
   const headers: Record<string, string> = { Accept: "application/json" };
@@ -297,6 +316,13 @@ export const createOpenSeaClient = (
         `${OPENSEA_API_BASE}/events/chain/${OPENSEA_CHAIN}/contract/${GLYPHBOTS_CONTRACT}/nfts/${tokenId}?${params}`
       );
       return result?.asset_events ?? [];
+    },
+
+    fetchOrder: async (orderHash, protocolAddress) => {
+      const result = await get<OpenSeaOrderResponse>(
+        `${OPENSEA_API_BASE}/orders/chain/${OPENSEA_CHAIN}/protocol/${protocolAddress}/${orderHash}`
+      );
+      return result?.order ?? null;
     },
   };
 };

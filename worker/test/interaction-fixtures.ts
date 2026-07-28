@@ -225,6 +225,7 @@ export const stubOpenSea = (
   fetchListings: vi.fn(() => Promise.resolve([])),
   fetchNFT: vi.fn(() => Promise.resolve(null)),
   fetchNFTEvents: vi.fn(() => Promise.resolve([])),
+  fetchOrder: vi.fn(() => Promise.resolve(null)),
   ...overrides,
 });
 

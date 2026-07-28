@@ -101,10 +101,26 @@ export type ArtifactResponse = {
 
 /** OpenSea API shapes. See the note at the top about the missing image fields. */
 
+/**
+ * `/accounts/{address_or_username}`.
+ *
+ * Three name fields, and they are not interchangeable. `username` is the handle
+ * the holder picked on OpenSea and most addresses do not have one. `ens_name`
+ * is the reverse record OpenSea resolved for them, which is where nearly every
+ * recognisable name in this collection comes from. `display_name` is OpenSea's
+ * own pick between the two and is read last, purely as a backstop for the case
+ * where it knows a name the other two fields do not carry.
+ *
+ * All three come back as JSON `null` rather than absent for an address OpenSea
+ * has nothing on (verified live 2026-07-27), hence `| null` and not just `?`.
+ * See `preferredName` in `./display-name.ts` for the order they are read in.
+ */
 export type OpenSeaAccount = {
   address: string;
-  username?: string;
-  bio?: string;
+  username?: string | null;
+  ens_name?: string | null;
+  display_name?: string | null;
+  bio?: string | null;
 };
 
 export type OpenSeaNFTOwner = {
@@ -194,6 +210,12 @@ export type OpenSeaEvent = {
   from_address?: string;
   to_address?: string;
   /**
+   * Seaport deployment the order settled through. A sale carries this and
+   * `order_hash` together, and both are needed to look the filled order back up
+   * and find out which side signed it. See `../channels/sale-kind.ts`.
+   */
+  protocol_address?: string;
+  /**
    * Order fields, present on `event_type: "order"` responses. The v2 API
    * reports listings and offers under one `order` event type and puts the
    * real one in `order_type`, which is the quirk
@@ -216,6 +238,50 @@ export type OpenSeaEvent = {
 export type OpenSeaEventsResponse = {
   asset_events: OpenSeaEvent[];
   next?: string;
+};
+
+/** One `offer` or `consideration` entry inside a Seaport order. */
+export type OpenSeaOrderItem = {
+  /** A Seaport `ItemType`. See `SEAPORT_ITEM_TYPE` in `../channels/sale-kind.ts`. */
+  itemType: number;
+  token: string;
+  identifierOrCriteria: string;
+  startAmount: string;
+  endAmount: string;
+};
+
+/**
+ * `/orders/chain/{chain}/protocol/{protocol_address}/{order_hash}`.
+ *
+ * The response has no `side` field, so which side of the trade signed the order
+ * is read off `protocol_data.parameters.offer`: an NFT there is a listing, an
+ * ERC-20 there is a bid. `criteria` is what separates a collection offer from a
+ * trait offer from a plain one, and it is null on listings. Only the sales feed
+ * reads any of this, and only to word the post.
+ *
+ * A filled order still resolves (status `FULFILLED`, verified live 2026-07-27),
+ * which is what makes this usable after the fact rather than only while the
+ * order is live.
+ */
+export type OpenSeaOrder = {
+  order_hash: string;
+  status?: string;
+  criteria?: {
+    collection?: { slug?: string } | null;
+    contract?: { address?: string } | null;
+    trait?: { type?: string; value?: string } | null;
+  } | null;
+  protocol_data?: {
+    parameters?: {
+      offerer?: string;
+      offer?: OpenSeaOrderItem[];
+      consideration?: OpenSeaOrderItem[];
+    };
+  };
+};
+
+export type OpenSeaOrderResponse = {
+  order: OpenSeaOrder;
 };
 
 export type OpenSeaListing = {

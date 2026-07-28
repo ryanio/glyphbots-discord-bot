@@ -108,6 +108,32 @@ describe("/bot", () => {
     );
   });
 
+  it("names the owner rather than printing their address", async () => {
+    const glyphbots = stubGlyphBots({
+      fetchBot: vi.fn(() => Promise.resolve(createBot())),
+      fetchBotStory: vi.fn(() => Promise.resolve(createStory())),
+    });
+    const ctx = commandContext({
+      glyphbots,
+      opensea: stubOpenSea({
+        fetchNFT: vi.fn(() => Promise.resolve(createNFT())),
+        fetchAccount: vi.fn(() =>
+          Promise.resolve({
+            address: "0x12345",
+            username: null,
+            ens_name: "holder.eth",
+          })
+        ),
+      }),
+      options: readOptions([intOption("id", 7)]),
+    });
+
+    const embed = firstEmbed(await handleBot(ctx));
+    expect(embed.fields?.find((f) => f.name === "Owner")?.value).toBe(
+      "holder.eth"
+    );
+  });
+
   it("puts every trait on one line and drops the Name trait", async () => {
     const glyphbots = stubGlyphBots({
       fetchBot: vi.fn(() =>
@@ -551,6 +577,30 @@ describe("the remaining four", () => {
     expect(embed.description).toContain("0.5000 ETH");
   });
 
+  it("/sales names the buyer and looks each address up once", async () => {
+    const fetchAccount = vi.fn(() =>
+      Promise.resolve({ address: "0xbuyer", username: "sweeper" })
+    );
+    const ctx = commandContext({
+      opensea: stubOpenSea({
+        // One buyer taking three, which is what a sweep looks like from here.
+        fetchCollectionEvents: vi.fn(() =>
+          Promise.resolve([
+            createSaleEvent({ buyer: "0xbuyer" }),
+            createSaleEvent({ buyer: "0xbuyer" }),
+            createSaleEvent({ buyer: "0xbuyer" }),
+          ])
+        ),
+        fetchAccount,
+      }),
+    });
+
+    const embed = firstEmbed(await handleSales(ctx));
+    expect(embed.description).toContain("└ Buyer: sweeper");
+    expect(embed.description).not.toContain("0xbuyer");
+    expect(fetchAccount).toHaveBeenCalledTimes(1);
+  });
+
   it("/sales reports an empty feed", async () => {
     expect(firstEmbed(await handleSales(commandContext())).title).toBe(
       "📉 No Recent Sales"
@@ -668,6 +718,50 @@ describe("the remaining four", () => {
     expect(embed.description).toContain("**Owner:** @collector");
     expect(embed.thumbnail?.url).toBe(`${TEST_ORIGIN}/bots/pngs/7.png`);
     expect(imageUrls(reply).every((u) => u.includes("/bots/pngs/"))).toBe(true);
+  });
+
+  it("/owner falls back to the ENS name when there is no username", async () => {
+    // The common case for this collection: no OpenSea handle, a reverse record.
+    // No `@`, since an ENS name is a name rather than a handle.
+    const ctx = commandContext({
+      opensea: stubOpenSea({
+        fetchNFT: vi.fn(() => Promise.resolve(createNFT())),
+        fetchAccount: vi.fn(() =>
+          Promise.resolve({
+            address: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+            username: null,
+            ens_name: "vitalik.eth",
+          })
+        ),
+      }),
+      options: readOptions([intOption("bot", 7)]),
+    });
+
+    const description = firstEmbed(await handleOwner(ctx)).description ?? "";
+    expect(description).toContain("**Owner:** vitalik.eth");
+    // The address keeps its own line whether or not a name was found, and it is
+    // the owner address off the NFT rather than whatever the account echoed.
+    expect(description).toContain("**Address:** `0x12345…45678`");
+  });
+
+  it("/owner shows the ENS name alongside a username when both exist", async () => {
+    const ctx = commandContext({
+      opensea: stubOpenSea({
+        fetchNFT: vi.fn(() => Promise.resolve(createNFT())),
+        fetchAccount: vi.fn(() =>
+          Promise.resolve({
+            address: "0x0f0eae91990140c560d4156db4f00c854dc8f09e",
+            username: "VincentVanDough",
+            ens_name: "vvd.eth",
+          })
+        ),
+      }),
+      options: readOptions([intOption("bot", 7)]),
+    });
+
+    const description = firstEmbed(await handleOwner(ctx)).description ?? "";
+    expect(description).toContain("**Owner:** @VincentVanDough");
+    expect(description).toContain("**ENS:** vvd.eth");
   });
 
   it("/owner reports an unknown bot", async () => {
@@ -901,6 +995,48 @@ describe("the remaining four", () => {
     expect(embed.description).toContain("🏷️ **Listed** for 0.5000 ETH");
     expect(embed.description).toContain("(just now)");
     expect(embed.thumbnail?.url).toBe(`${TEST_ORIGIN}/bots/pngs/7.png`);
+  });
+
+  it("/activity names the buyer and the transfer recipient", async () => {
+    const ctx = commandContext({
+      opensea: stubOpenSea({
+        fetchNFTEvents: vi.fn(() =>
+          Promise.resolve([
+            createSaleEvent({ buyer: "0xbuyer" }),
+            createSaleEvent({ event_type: "transfer", to_address: "0xbuyer" }),
+          ])
+        ),
+        fetchAccount: vi.fn(() =>
+          Promise.resolve({
+            address: "0xbuyer",
+            username: null,
+            ens_name: "holder.eth",
+          })
+        ),
+      }),
+      options: readOptions([intOption("bot", 7)]),
+    });
+
+    const embed = firstEmbed(await handleActivity(ctx));
+    expect(embed.description).toContain(
+      "**Sold** for 0.5000 ETH to holder.eth"
+    );
+    expect(embed.description).toContain("**Transferred** to holder.eth");
+  });
+
+  it("/listings names the seller", async () => {
+    const ctx = commandContext({
+      opensea: stubOpenSea({
+        fetchListings: vi.fn(() => Promise.resolve([createListing()])),
+        fetchAccount: vi.fn(() =>
+          Promise.resolve({ address: "0xseller", username: "lister" })
+        ),
+      }),
+    });
+
+    expect(firstEmbed(await handleListings(ctx)).description).toContain(
+      "└ Seller: lister"
+    );
   });
 
   it("/activity reports an empty history", async () => {

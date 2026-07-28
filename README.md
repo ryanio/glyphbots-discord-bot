@@ -98,6 +98,7 @@ wrangler secret put DISCORD_TOKEN
 wrangler secret put DISCORD_APP_ID
 wrangler secret put DISCORD_PUBLIC_KEY
 wrangler secret put OPENSEA_API_TOKEN   # optional, public tier works
+                                        # OPENSEA_API_KEY works too, same key
 wrangler secret put ADMIN_TOKEN         # gates /_admin/gateway/*
 ```
 

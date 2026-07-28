@@ -22,6 +22,7 @@
  */
 
 import type { APIEmbed } from "discord-api-types/v10";
+import { createDisplayNameResolver } from "../api/display-name";
 import {
   GUILD_ID,
   LOOKUP_CHANNEL_IDS,
@@ -110,10 +111,18 @@ export const handleLookupMessage = async (
     return "rate-limited";
   }
 
+  // One owner-name cache for the whole reply. Six `b#` lookups of bots held by
+  // the same wallet then cost one account call between them rather than six.
+  const clients: LookupClients = {
+    ...deps.clients,
+    names:
+      deps.clients.names ?? createDisplayNameResolver(deps.clients.opensea),
+  };
+
   const embeds: APIEmbed[] = [];
   for (const match of matches.slice(0, MAX_EMBEDS_PER_MESSAGE)) {
     try {
-      const embed = await buildLookupEmbed(match, deps.clients);
+      const embed = await buildLookupEmbed(match, clients);
       if (embed) {
         embeds.push(embed);
       }

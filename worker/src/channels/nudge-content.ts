@@ -30,6 +30,7 @@ import type {
   APIEmbed,
   RESTPostAPIChannelMessageJSONBody,
 } from "discord-api-types/v10";
+import { createDisplayNameResolver } from "../api/display-name";
 import { getOpenSeaCollectionUrl } from "../api/opensea";
 import type { ArtifactSummary, OpenSeaCollectionStats } from "../api/types";
 import { artifactButtons, buildArtifactEmbed } from "../commands/artifact";
@@ -73,7 +74,7 @@ const asEmbed = (embed: EmbedBuilder): APIEmbed => embed.toJSON() as APIEmbed;
 
 // ── A random bot ───────────────────────────────────────────────────────────
 
-/** Three calls, the same three `/bot` makes. */
+/** Four calls, the same four `/bot` makes: three, plus a name for the owner. */
 const buildBotPost = async (
   deps: NudgeContentDeps
 ): Promise<RESTPostAPIChannelMessageJSONBody | null> => {
@@ -91,11 +92,18 @@ const buildBotPost = async (
     return null;
   }
 
+  const ownerAddress = nft?.owners?.[0]?.address ?? null;
+  const owner = ownerAddress
+    ? await (deps.clients.names ?? createDisplayNameResolver(opensea)).resolve(
+        ownerAddress
+      )
+    : null;
+
   const embed = buildBotEmbed(
     tokenId,
     bot,
     story,
-    nft?.owners?.[0]?.address ?? null,
+    owner,
     nft?.rarity?.rank ?? null,
     glyphbots
   );

@@ -27,14 +27,15 @@
  */
 
 import { EmbedBuilder } from "@discordjs/builders";
+import type { ResolvedName } from "../api/display-name";
+import { createDisplayNameResolver } from "../api/display-name";
 import type { GlyphBotsClient } from "../api/glyphbots";
-import { shortAddress } from "../api/glyphbots";
 import type { OpenSeaClient } from "../api/opensea";
 import { getOpenSeaUrl } from "../api/opensea";
 import type { Bot, BotStory } from "../api/types";
 import { COLORS, MAX_BOT_TOKEN_ID } from "../config";
 import { type LinkButton, linkButtonRow } from "../discord/buttons";
-import { embedReply, errorReply } from "../discord/embeds";
+import { embedReply, errorReply, formatActor } from "../discord/embeds";
 import { createLogger } from "../utils/logger";
 import { randomInt } from "../utils/random";
 import type { CommandHandler } from "./context";
@@ -64,7 +65,12 @@ export const buildBotEmbed = (
   tokenId: number,
   bot: Bot,
   story: BotStory | null,
-  ownerAddress: string | null,
+  /**
+   * The owner, already resolved to a name by the caller. Taking a
+   * `ResolvedName` rather than an address keeps this synchronous and leaves the
+   * one network call with whoever is placed to cache it.
+   */
+  owner: ResolvedName | null,
   rarityRank: number | null,
   glyphbots: GlyphBotsClient
 ): EmbedBuilder => {
@@ -75,10 +81,10 @@ export const buildBotEmbed = (
     .setDescription(`**${bot.name.replace(BOT_NAME_PREFIX, "")}**`)
     .setImage(glyphbots.getBotPngUrl(tokenId));
 
-  if (ownerAddress) {
+  if (owner) {
     embed.addFields({
       name: "Owner",
-      value: `\`${shortAddress(ownerAddress)}\``,
+      value: formatActor(owner),
       inline: true,
     });
   }
@@ -197,11 +203,16 @@ export const handleBot: CommandHandler = async (ctx) => {
     );
   }
 
+  const ownerAddress = nft?.owners?.[0]?.address ?? null;
+  const owner = ownerAddress
+    ? await createDisplayNameResolver(ctx.opensea).resolve(ownerAddress)
+    : null;
+
   const embed = buildBotEmbed(
     tokenId,
     bot,
     story,
-    nft?.owners?.[0]?.address ?? null,
+    owner,
     nft?.rarity?.rank ?? null,
     ctx.glyphbots
   );

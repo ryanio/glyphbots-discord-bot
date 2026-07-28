@@ -7,12 +7,13 @@
  */
 
 import { EmbedBuilder } from "@discordjs/builders";
-import { shortAddress } from "../api/glyphbots";
+import type { DisplayNameResolver } from "../api/display-name";
+import { createDisplayNameResolver } from "../api/display-name";
 import { getOpenSeaUrl } from "../api/opensea";
 import type { OpenSeaEvent } from "../api/types";
 import { COLORS } from "../config";
 import { linkButtonRow } from "../discord/buttons";
-import { embedReply, errorReply } from "../discord/embeds";
+import { embedReply, errorReply, formatActor } from "../discord/embeds";
 import type { CommandHandler } from "./context";
 import { formatEthAmount, formatTimeAgo } from "./format";
 
@@ -33,22 +34,28 @@ const getEventEmoji = (eventType: string): string => {
   }
 };
 
-const formatEventLine = (event: OpenSeaEvent): string => {
+/**
+ * One line. `names` is shared across the whole reply, so a bot that changed
+ * hands between the same two wallets four times costs two lookups rather than
+ * eight.
+ */
+const formatEventLine = async (
+  event: OpenSeaEvent,
+  names: DisplayNameResolver
+): Promise<string> => {
   const emoji = getEventEmoji(event.event_type);
   const time = formatTimeAgo(event.event_timestamp);
   const price = event.payment
     ? formatEthAmount(event.payment.quantity, event.payment.decimals)
     : "?";
+  const actor = async (address: string | undefined): Promise<string> =>
+    address ? formatActor(await names.resolve(address)) : "`?`";
 
   switch (event.event_type) {
-    case "sale": {
-      const buyer = event.buyer ? shortAddress(event.buyer) : "?";
-      return `${emoji} **Sold** for ${price} to \`${buyer}\` (${time})`;
-    }
-    case "transfer": {
-      const to = event.to_address ? shortAddress(event.to_address) : "?";
-      return `${emoji} **Transferred** to \`${to}\` (${time})`;
-    }
+    case "sale":
+      return `${emoji} **Sold** for ${price} to ${await actor(event.buyer)} (${time})`;
+    case "transfer":
+      return `${emoji} **Transferred** to ${await actor(event.to_address)} (${time})`;
     case "listing":
     case "order":
       return `${emoji} **Listed** for ${price} (${time})`;
@@ -77,12 +84,16 @@ export const handleActivity: CommandHandler = async (ctx) => {
   // finished indexing, which left the title reading "📊 Activity: ".
   const nftName = events[0]?.nft?.name || `GlyphBot #${tokenId}`;
 
+  const names = createDisplayNameResolver(ctx.opensea);
+  const lines: string[] = [];
+  for (const event of events.slice(0, DISPLAY_LIMIT)) {
+    lines.push(await formatEventLine(event, names));
+  }
+
   const embed = new EmbedBuilder()
     .setColor(COLORS.activity)
     .setTitle(`📊 Activity: ${nftName}`)
-    .setDescription(
-      events.slice(0, DISPLAY_LIMIT).map(formatEventLine).join("\n")
-    )
+    .setDescription(lines.join("\n"))
     .setThumbnail(ctx.glyphbots.getBotPngUrl(tokenId))
     .setFooter({ text: "Data from OpenSea" })
     .setTimestamp();

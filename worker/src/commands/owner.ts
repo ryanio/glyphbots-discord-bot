@@ -6,6 +6,7 @@
  */
 
 import { EmbedBuilder } from "@discordjs/builders";
+import { preferredName } from "../api/display-name";
 import { shortAddress } from "../api/glyphbots";
 import { getOpenSeaUrl } from "../api/opensea";
 import { COLORS } from "../config";
@@ -39,13 +40,23 @@ export const handleOwner: CommandHandler = async (ctx) => {
 
   const account = await ctx.opensea.fetchAccount(owner.address);
 
-  // The username and the bio are text the account holder wrote. Underscores
-  // and asterisks are common in both and Discord reads them as formatting, so
-  // both go through the escape before they reach the description. The address
-  // is hex and needs nothing.
-  const username = account?.username ? escapeMarkdown(account.username) : null;
+  // The name and the bio are text the account holder wrote (or, for an ENS
+  // name, registered). Underscores and asterisks are common in both and Discord
+  // reads them as formatting, so both go through the escape before they reach
+  // the description. The address is hex and needs nothing.
+  //
+  // This is the one place that shows the address whatever happens, since it has
+  // a line of its own. The Owner line is the name: the OpenSea username, else
+  // the ENS name, else the address again.
+  const name = preferredName(account, owner.address);
   const bio = account?.bio ? escapeMarkdown(account.bio) : null;
   const botName = nft.name || `GlyphBot #${tokenId}`;
+
+  // `@handle` reads as a handle; an ENS name is already a name and does not
+  // want the sigil.
+  const ownerLabel = name.isAddress
+    ? name.label
+    : `${name.username ? "@" : ""}${escapeMarkdown(name.label)}`;
 
   // The guard belongs on the number, not on the container: OpenSea sends a
   // `rarity` object with a null rank for a bot it has not ranked, and reading
@@ -59,8 +70,12 @@ export const handleOwner: CommandHandler = async (ctx) => {
     .setTitle(`🤖 ${botName}`)
     .setDescription(
       [
-        `**Owner:** ${username ? `@${username}` : shortAddress(owner.address)}`,
+        `**Owner:** ${ownerLabel}`,
+        // Kept even when the Owner line is already the address: dropping it
+        // there would make the embed change shape depending on whether OpenSea
+        // happened to know a name.
         `**Address:** \`${shortAddress(owner.address)}\``,
+        name.username && name.ens ? `**ENS:** ${escapeMarkdown(name.ens)}` : "",
         "",
         bio ? `*"${bio}"*` : "",
         "",

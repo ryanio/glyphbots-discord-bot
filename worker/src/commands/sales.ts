@@ -6,11 +6,11 @@
  */
 
 import { EmbedBuilder } from "@discordjs/builders";
-import { shortAddress } from "../api/glyphbots";
+import { createDisplayNameResolver } from "../api/display-name";
 import { getOpenSeaCollectionUrl } from "../api/opensea";
 import { COLORS } from "../config";
 import { linkButtonRow } from "../discord/buttons";
-import { embedReply, errorReply } from "../discord/embeds";
+import { embedReply, errorReply, formatActor } from "../discord/embeds";
 import type { CommandHandler } from "./context";
 import { formatEthAmount, formatTimeAgo } from "./format";
 
@@ -27,7 +27,12 @@ export const handleSales: CommandHandler = async (ctx) => {
     );
   }
 
-  const saleLines = events.slice(0, DISPLAY_LIMIT).map((event, i) => {
+  // One resolver for the whole reply. Recent sales are often one sweeper
+  // buying eight times, which is then one account lookup rather than eight.
+  const names = createDisplayNameResolver(ctx.opensea);
+  const saleLines: string[] = [];
+
+  for (const [i, event] of events.slice(0, DISPLAY_LIMIT).entries()) {
     const rawTokenId = event.nft?.identifier;
     // `getBotUrl(Number(undefined))` and `getBotUrl(Number("?"))` both produce
     // `/bot/NaN`, a link to a 404. Without a usable id the item is named but
@@ -42,13 +47,17 @@ export const handleSales: CommandHandler = async (ctx) => {
       ? formatEthAmount(event.payment.quantity, event.payment.decimals)
       : "?";
     const time = formatTimeAgo(event.event_timestamp);
-    const buyer = event.buyer ? shortAddress(event.buyer) : "?";
+    const buyer = event.buyer
+      ? formatActor(await names.resolve(event.buyer))
+      : "`?`";
     const item = linkable
       ? `[${name}](${ctx.glyphbots.getBotUrl(Number(rawTokenId))})`
       : name;
 
-    return `**${i + 1}.** ${item} → ${price} (${time})\n└ Buyer: \`${buyer}\``;
-  });
+    saleLines.push(
+      `**${i + 1}.** ${item} → ${price} (${time})\n└ Buyer: ${buyer}`
+    );
+  }
 
   const embed = new EmbedBuilder()
     .setColor(COLORS.sale)

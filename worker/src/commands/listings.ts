@@ -6,12 +6,12 @@
  */
 
 import { EmbedBuilder } from "@discordjs/builders";
-import { shortAddress } from "../api/glyphbots";
+import { createDisplayNameResolver } from "../api/display-name";
 import { getOpenSeaCollectionUrl } from "../api/opensea";
 import type { OpenSeaListing } from "../api/types";
 import { COLORS } from "../config";
 import { linkButtonRow } from "../discord/buttons";
-import { embedReply, errorReply } from "../discord/embeds";
+import { embedReply, errorReply, formatActor } from "../discord/embeds";
 import type { CommandHandler } from "./context";
 import { formatEthAmount } from "./format";
 
@@ -38,7 +38,13 @@ type LooseListing = {
 
 type ListingRow = { price: string; seller: string };
 
-/** One row, or null when the listing is missing a price or a seller. */
+/**
+ * One row, or null when the listing is missing a price or a seller.
+ *
+ * The seller stays an address here and is named later, because naming costs a
+ * request each and there is no point spending one on a row that is about to be
+ * dropped for having no price.
+ */
 const readListing = (listing: OpenSeaListing): ListingRow | null => {
   const loose = listing as LooseListing;
   const current = loose.price?.current;
@@ -54,7 +60,7 @@ const readListing = (listing: OpenSeaListing): ListingRow | null => {
 
   return {
     price: formatEthAmount(current.value, current.decimals),
-    seller: shortAddress(offerer),
+    seller: offerer,
   };
 };
 
@@ -74,9 +80,14 @@ export const handleListings: CommandHandler = async (ctx) => {
     );
   }
 
-  const listingLines = rows.map(
-    (row, i) => `**${i + 1}.** ${row.price}\n└ Seller: \`${row.seller}\``
-  );
+  // One resolver for the reply: the cheapest eight are frequently the same
+  // seller relisting, so the cache usually collapses this to one or two calls.
+  const names = createDisplayNameResolver(ctx.opensea);
+  const listingLines: string[] = [];
+  for (const [i, row] of rows.entries()) {
+    const seller = formatActor(await names.resolve(row.seller));
+    listingLines.push(`**${i + 1}.** ${row.price}\n└ Seller: ${seller}`);
+  }
 
   const embed = new EmbedBuilder()
     .setColor(COLORS.listing)

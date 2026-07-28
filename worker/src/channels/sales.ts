@@ -59,6 +59,7 @@
  */
 
 import type { RESTPostAPIChannelMessageJSONBody } from "discord-api-types/v10";
+import { createDisplayNameResolver } from "../api/display-name";
 import type { GlyphBotsClient } from "../api/glyphbots";
 import type { OpenSeaClient } from "../api/opensea";
 import type { OpenSeaEvent } from "../api/types";
@@ -73,10 +74,10 @@ import type { ChannelPoster } from "../discord/channel-poster";
 import type { SalesStateStore } from "../durable-objects/feed-stores";
 import { createLogger, getErrorMessage } from "../utils/logger";
 import { MS_PER_SECOND } from "../utils/time";
+import { createSaleClassifier, type SaleKind } from "./sale-kind";
 import {
   buildGroupEmbed,
   buildSaleEmbed,
-  fallbackName,
   type SalesEmbedClients,
 } from "./sales-embeds";
 import {
@@ -146,7 +147,10 @@ export type SalesUpdate =
     };
 
 export type SalesPollDeps = {
-  opensea: Pick<OpenSeaClient, "fetchCollectionEventsSince" | "fetchAccount">;
+  opensea: Pick<
+    OpenSeaClient,
+    "fetchCollectionEventsSince" | "fetchAccount" | "fetchOrder"
+  >;
   glyphbots: Pick<GlyphBotsClient, "getBotPngUrl" | "getBotUrl">;
   poster: ChannelPoster;
   store: SalesStateStore;
@@ -218,44 +222,6 @@ export const applySalesUpdate = (
       processedKeys: processedKeys.slice(-SALES_PROCESSED_KEY_HISTORY),
     },
     deferred: update.deferred,
-  };
-};
-
-/**
- * Resolve an address to a display name, once per address per tick.
- *
- * The Node bot kept a process-lifetime LRU
- * (`opensea-activity-bot/src/opensea.ts:183-193`). A
- * Worker isolate does not live long enough for that to pay off, and a sweep is
- * one buyer by definition, so the cache is per tick. A lookup failure is not an
- * error: the short address is a perfectly good label.
- */
-const createNameResolver = (
-  opensea: SalesPollDeps["opensea"]
-): ((address: string) => Promise<string>) => {
-  const cache = new Map<string, string>();
-
-  return async (address: string): Promise<string> => {
-    const key = address.toLowerCase();
-    const cached = cache.get(key);
-    if (cached !== undefined) {
-      return cached;
-    }
-
-    let name = fallbackName(address);
-    try {
-      const account = await opensea.fetchAccount(address);
-      if (account?.username) {
-        name = account.username;
-      }
-    } catch (error) {
-      log.debug(
-        `Username lookup failed for ${address}: ${getErrorMessage(error)}`
-      );
-    }
-
-    cache.set(key, name);
-    return name;
   };
 };
 
@@ -331,6 +297,11 @@ const seedState = async (
  * error on fixed data, so it will fail identically on every retry; leaving the
  * keys off would only re-throw the same event each tick for as long as the lag
  * window keeps re-serving it. One sale is dropped, loudly, and the feed lives.
+ *
+ * The name resolver and the sale classifier are both built once for the whole
+ * batch rather than per message, which is where the caching lives: a sweep is
+ * one buyer and usually one standing order, so N events cost one account
+ * lookup and one order lookup between them.
  */
 const buildMessages = async (
   deps: SalesPollDeps,
@@ -338,17 +309,25 @@ const buildMessages = async (
   groups: Array<{ events: OpenSeaEvent[] }>,
   individuals: OpenSeaEvent[]
 ): Promise<PendingMessage[]> => {
+  const names = createDisplayNameResolver(deps.opensea);
   const clients: SalesEmbedClients = {
     glyphbots: deps.glyphbots,
-    displayName: createNameResolver(deps.opensea),
+    displayName: names.resolve,
   };
+  const classify = createSaleClassifier(deps.opensea);
 
   const messages: PendingMessage[] = [];
 
   for (const group of groups) {
     try {
+      // Classified before the build so a group of six that all filled one
+      // collection offer is titled as the sweep it was.
+      const kinds: SaleKind[] = [];
+      for (const event of group.events) {
+        kinds.push(await classify(event));
+      }
       messages.push({
-        body: { embeds: [await buildGroupEmbed(group.events, clients)] },
+        body: { embeds: [await buildGroupEmbed(group.events, clients, kinds)] },
         oldestTimestamp: oldestTimestampOf(group.events),
         label: `group of ${group.events.length}`,
       });
@@ -365,10 +344,11 @@ const buildMessages = async (
 
   for (const event of individuals) {
     try {
+      const kind = await classify(event);
       messages.push({
-        body: { embeds: [await buildSaleEmbed(event, clients)] },
+        body: { embeds: [await buildSaleEmbed(event, clients, kind)] },
         oldestTimestamp: event.event_timestamp,
-        label: `sale #${event.nft?.identifier ?? "?"}`,
+        label: `sale #${event.nft?.identifier ?? "?"} (${kind})`,
       });
     } catch (error) {
       log.error(

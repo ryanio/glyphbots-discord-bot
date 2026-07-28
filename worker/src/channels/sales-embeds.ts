@@ -20,18 +20,24 @@
 
 import { EmbedBuilder } from "@discordjs/builders";
 import type { APIEmbed } from "discord-api-types/v10";
+import type { ResolvedName } from "../api/display-name";
 import type { GlyphBotsClient } from "../api/glyphbots";
-import { shortAddress } from "../api/glyphbots";
 import { getOpenSeaCollectionUrl, getOpenSeaUrl } from "../api/opensea";
 import type { OpenSeaEvent, OpenSeaPayment } from "../api/types";
 import { COLORS, SALES_TOP_ITEMS } from "../config";
-import { escapeMarkdown } from "../discord/embeds";
+import { formatActor } from "../discord/embeds";
+import type { SaleKind } from "./sale-kind";
+import { groupTitle, SALE_KIND_TITLES } from "./sale-kind";
 
 /** Clients the embeds need. Narrowed so tests can hand over two functions. */
 export type SalesEmbedClients = {
   glyphbots: Pick<GlyphBotsClient, "getBotPngUrl" | "getBotUrl">;
-  /** Address to display name. Resolved once per address per tick by the caller. */
-  displayName: (address: string) => Promise<string>;
+  /**
+   * Address to name. Resolved once per address per tick by the caller, and
+   * answering the OpenSea username or ENS name where there is one. See
+   * `../api/display-name.ts`.
+   */
+  displayName: (address: string) => Promise<ResolvedName>;
 };
 
 const MAX_DECIMALS = 4;
@@ -162,15 +168,27 @@ const itemUrl = (event: OpenSeaEvent): string | null => {
     : getOpenSeaUrl(tokenId);
 };
 
-/** One sale, `buildSaleEmbed` + `buildEmbed` (`discord/utils.ts:122-135,347-382`). */
+/**
+ * One sale, `buildSaleEmbed` + `buildEmbed` (`discord/utils.ts:122-135,347-382`).
+ *
+ * The title leads with what actually happened rather than always "Purchased":
+ * see `./sale-kind.ts` for how a filled listing is told apart from an accepted
+ * bid. `kind` defaults to `purchase` so a caller that has not classified the
+ * event gets the old wording rather than a wrong one.
+ *
+ * "By" became "Buyer" with the same change. It was fine while every post was a
+ * purchase; under "Offer accepted" it reads as the person who did the
+ * accepting, which is the seller, and the field holds the buyer.
+ */
 export const buildSaleEmbed = async (
   event: OpenSeaEvent,
-  clients: SalesEmbedClients
+  clients: SalesEmbedClients,
+  kind: SaleKind = "purchase"
 ): Promise<APIEmbed> => {
   const tokenId = tokenIdOf(event);
   const embed = new EmbedBuilder()
     .setColor(COLORS.sale)
-    .setTitle(`Purchased: ${itemLabel(event)}`);
+    .setTitle(`${SALE_KIND_TITLES[kind]}: ${itemLabel(event)}`);
 
   const url = itemUrl(event);
   if (url) {
@@ -188,8 +206,8 @@ export const buildSaleEmbed = async (
 
   if (event.buyer) {
     embed.addFields({
-      name: "By",
-      value: escapeMarkdown(await clients.displayName(event.buyer)),
+      name: "Buyer",
+      value: formatActor(await clients.displayName(event.buyer)),
       inline: true,
     });
   }
@@ -208,13 +226,14 @@ export const buildSaleEmbed = async (
 /** One sweep, `buildGroupEmbed` (`discord/utils.ts:484-536`). */
 export const buildGroupEmbed = async (
   events: OpenSeaEvent[],
-  clients: SalesEmbedClients
+  clients: SalesEmbedClients,
+  kinds: SaleKind[] = []
 ): Promise<APIEmbed> => {
   const sorted = sortByPriceDesc(events);
   const count = events.length;
   const embed = new EmbedBuilder()
     .setColor(COLORS.sale)
-    .setTitle(`${count} items purchased`)
+    .setTitle(groupTitle(count, kinds))
     .setURL(getOpenSeaCollectionUrl());
 
   const spent = totalSpent(events);
@@ -226,7 +245,7 @@ export const buildGroupEmbed = async (
   if (buyer) {
     embed.addFields({
       name: "Buyer",
-      value: escapeMarkdown(await clients.displayName(buyer)),
+      value: formatActor(await clients.displayName(buyer)),
       inline: true,
     });
   }
@@ -259,6 +278,3 @@ export const buildGroupEmbed = async (
 
   return embed.toJSON() as APIEmbed;
 };
-
-/** Fallback display name when OpenSea has no account for an address. */
-export const fallbackName = (address: string): string => shortAddress(address);

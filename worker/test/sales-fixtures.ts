@@ -1,6 +1,10 @@
 import { vi } from "vitest";
 import type { EventsSincePage } from "../src/api/opensea";
-import type { OpenSeaEvent } from "../src/api/types";
+import type {
+  OpenSeaAccount,
+  OpenSeaEvent,
+  OpenSeaOrder,
+} from "../src/api/types";
 import type {
   SalesFeedState,
   SalesPollDeps,
@@ -95,7 +99,15 @@ export const createMemorySalesStore = (initial: SalesFeedState | null) => {
  * does not replay a backlog would be asserting nothing, since the backlog
  * would arrive on every tick whatever the cursor said.
  */
-export const createOpenSea = (pages: OpenSeaEvent[][]) => {
+export const createOpenSea = (
+  pages: OpenSeaEvent[][],
+  extras: {
+    /** What the order lookup answers. Null means "OpenSea did not have it". */
+    order?: OpenSeaOrder | null;
+    /** What the account lookup answers, for the buyer's name. */
+    account?: OpenSeaAccount | null;
+  } = {}
+) => {
   let call = 0;
   const fetchCollectionEventsSince = vi.fn(
     (options?: { after?: number }): Promise<EventsSincePage> => {
@@ -112,7 +124,8 @@ export const createOpenSea = (pages: OpenSeaEvent[][]) => {
   );
   return {
     fetchCollectionEventsSince,
-    fetchAccount: vi.fn(() => Promise.resolve(null)),
+    fetchAccount: vi.fn(() => Promise.resolve(extras.account ?? null)),
+    fetchOrder: vi.fn(() => Promise.resolve(extras.order ?? null)),
     get calls() {
       return call;
     },
@@ -127,6 +140,7 @@ export const createSweepStub = (
   page: Partial<EventsSincePage> & { events: OpenSeaEvent[] }
 ) => ({
   fetchAccount: vi.fn(() => Promise.resolve(null)),
+  fetchOrder: vi.fn(() => Promise.resolve(null)),
   fetchCollectionEventsSince: vi.fn(
     (): Promise<EventsSincePage> =>
       Promise.resolve({

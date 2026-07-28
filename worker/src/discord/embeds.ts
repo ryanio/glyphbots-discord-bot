@@ -7,6 +7,7 @@
 
 import type { EmbedBuilder } from "@discordjs/builders";
 import type { APIEmbed } from "discord-api-types/v10";
+import type { ResolvedName } from "../api/display-name";
 import { COLORS } from "../config";
 import type { FollowUp } from "./interactions";
 
@@ -23,6 +24,19 @@ export const errorReply = (title: string, description: string): FollowUp => ({
  */
 export const escapeMarkdown = (text: string): string =>
   text.replace(/(?<special>[_*~`|>])/g, "\\$<special>");
+
+/**
+ * Render a resolved address for display.
+ *
+ * The two cases want different formatting and that is the whole point of the
+ * helper. A bare address is hex nobody reads as a word, so it keeps the code
+ * span it has always had. A username or an ENS name is prose and looks wrong in
+ * one, so it gets escaped instead: both are third-party text and underscores in
+ * them are common enough that leaving the escape off italicises half the names
+ * in the collection.
+ */
+export const formatActor = (name: ResolvedName): string =>
+  name.isAddress ? `\`${name.label}\`` : escapeMarkdown(name.label);
 
 /** One embed plus an optional button row, as a follow-up body. */
 export const embedReply = (

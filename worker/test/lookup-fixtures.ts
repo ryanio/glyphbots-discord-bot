@@ -108,6 +108,7 @@ export const createLookupClients = (options: FakeClientOptions = {}) => {
     fetchListings: vi.fn(() => Promise.resolve([])),
     fetchNFT,
     fetchNFTEvents: vi.fn(() => Promise.resolve([])),
+    fetchOrder: vi.fn(() => Promise.resolve(null)),
   } satisfies OpenSeaClient;
 
   const clients: LookupClients = { glyphbots, opensea };

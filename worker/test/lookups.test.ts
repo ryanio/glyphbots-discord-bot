@@ -212,8 +212,8 @@ describe("handling one message", () => {
       message_id: "m1",
       fail_if_not_exists: false,
     });
-    // One GlyphBots read plus one OpenSea read, and nothing else.
-    expect(fake.subrequests).toBe(2);
+    // One GlyphBots read, one OpenSea NFT read, one name for the owner.
+    expect(fake.subrequests).toBe(3);
   });
 
   it("answers in #show-and-tell too", async () => {
@@ -382,7 +382,44 @@ describe("handling one message", () => {
     expect(outcome).toBe("answered");
     const [, body] = firstCall(send);
     expect(body.embeds[0]?.title).toBe("GlyphBot #77");
-    // account, account NFTs, then the bot lookup's two.
+    // account, account NFTs, the bot lookup's two, and the owner's name. The
+    // fixture's NFT is owned by an address that is not the looked-up account,
+    // which is what makes that last call happen at all; see the test below for
+    // the ordinary case where it does not.
+    expect(fake.subrequests).toBe(5);
+  });
+
+  it("does not re-fetch the account it just resolved to name the owner", async () => {
+    const owner = "0xabcdef1234567890abcdef1234567890abcdef12";
+    const fake = createLookupClients({
+      // The handle resolves to the wallet that actually holds the bot, which is
+      // the normal case: OpenSea answered this account once already, so the
+      // owner field must be served from the primed cache rather than a second
+      // lookup of the same address.
+      account: { address: owner, username: "ryan" },
+      accountNFTs: [
+        {
+          identifier: "77",
+          collection: "glyphbots",
+          contract: "0xb6c2",
+          name: "GlyphBot #77",
+        },
+      ],
+    });
+    const send = createSend();
+
+    await handleLookupMessage(message({ content: "#ryan" }), {
+      clients: fake.clients,
+      limiter: createRateLimiter({ cooldownMs: 0 }),
+      send,
+      selfUserId: "self-bot",
+    });
+
+    const [, body] = firstCall(send);
+    expect(
+      body.embeds[0]?.fields?.find((field) => field.name === "Owner")?.value
+    ).toBe("ryan");
+    expect(fake.fetchAccount).toHaveBeenCalledTimes(1);
     expect(fake.subrequests).toBe(4);
   });
 

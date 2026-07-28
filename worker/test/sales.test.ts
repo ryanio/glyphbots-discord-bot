@@ -32,6 +32,37 @@ const T0 = 1_760_000_000;
 /** Wall clock far enough past the events that any settle window has elapsed. */
 const LATER = (T0 + 3600) * 1000;
 
+const WETH = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
+const SEAPORT = "0x0000000000000068f116a894984e2db1123eb395";
+
+/** The `payment` block of a bid, which is always an ERC-20. */
+const wethPayment = {
+  quantity: "1000000000000000000",
+  token_address: WETH,
+  decimals: 18,
+  symbol: "WETH",
+};
+
+/** An order whose `offer` is currency: the buyer signed it, so it is a bid. */
+const bidOrder = (criteria: Record<string, unknown> | null) => ({
+  order_hash: "0xoffer",
+  criteria,
+  protocol_data: {
+    parameters: {
+      offerer: "0x1111111111111111111111111111111111111111",
+      offer: [
+        {
+          itemType: 1,
+          token: WETH,
+          identifierOrCriteria: "0",
+          startAmount: "1",
+          endAmount: "1",
+        },
+      ],
+    },
+  },
+});
+
 describe("cold start", () => {
   it("seeds the cursor from the newest event and posts nothing", async () => {
     const opensea = createOpenSea([[saleEvent({ event_timestamp: T0 })]]);
@@ -442,6 +473,42 @@ describe("grouping", () => {
     );
   });
 
+  it("titles a sweep against one standing offer as one offer", async () => {
+    // Six fills of a single collection offer. The title must not read "6
+    // collection offers accepted": there was one offer.
+    const events = sweep(6, T0 + 10).map((event) => ({
+      ...event,
+      payment: wethPayment,
+      order_hash: "0xoffer",
+      protocol_address: SEAPORT,
+    }));
+    const opensea = createOpenSea([events], {
+      order: bidOrder({ collection: { slug: "glyphbots" } }),
+    });
+    const store = createMemorySalesStore(salesState(T0));
+    const firstTick = (T0 + 20) * 1000;
+
+    await pollSales(
+      salesPollDeps(opensea, createMemoryPoster(), store, () => firstTick)
+    );
+
+    const poster = createMemoryPoster();
+    await pollSales(
+      salesPollDeps(
+        opensea,
+        poster,
+        store,
+        () => firstTick + SALES_SETTLE_MS + 1000
+      )
+    );
+
+    expect(firstEmbed(poster.sends[0]).title).toBe(
+      "6 items bought via collection offer"
+    );
+    // One order lookup for all six, since they share an order hash.
+    expect(opensea.fetchOrder).toHaveBeenCalledTimes(1);
+  });
+
   it("survives a restart mid-window through DO storage", async () => {
     const events = sweep(4, T0 + 10);
     const store = createMemorySalesStore(salesState(T0));
@@ -476,6 +543,118 @@ describe("grouping", () => {
     expect(poster.sends).toHaveLength(1);
     expect(firstEmbed(poster.sends[0]).title).toBe("4 items purchased");
     expect(store.current?.grouping.actorGroups).toEqual({});
+  });
+
+  it("says an offer was accepted rather than that something was purchased", async () => {
+    // The complaint this whole path exists for: the holder accepted a standing
+    // bid and #trading-floor announced it as a purchase.
+    const event = saleEvent({
+      event_timestamp: T0 + 10,
+      payment: wethPayment,
+      order_hash: "0xoffer",
+      protocol_address: SEAPORT,
+    });
+    const poster = createMemoryPoster();
+
+    await pollSales(
+      salesPollDeps(
+        createOpenSea([[event]], {
+          order: bidOrder({ collection: { slug: "glyphbots" } }),
+        }),
+        poster,
+        createMemorySalesStore(salesState(T0)),
+        () => LATER
+      )
+    );
+
+    expect(firstEmbed(poster.sends[0]).title).toBe(
+      "Collection offer accepted: GlyphBot #1"
+    );
+  });
+
+  it("still says Purchased when the order was a listing", async () => {
+    // A WETH-denominated listing, which the payment heuristic alone would call
+    // an accepted offer. The order says otherwise and the order wins.
+    const event = saleEvent({
+      event_timestamp: T0 + 10,
+      payment: wethPayment,
+      order_hash: "0xlisting",
+      protocol_address: SEAPORT,
+    });
+    const poster = createMemoryPoster();
+
+    await pollSales(
+      salesPollDeps(
+        createOpenSea([[event]], {
+          order: {
+            order_hash: "0xlisting",
+            criteria: null,
+            protocol_data: {
+              parameters: {
+                offerer: "0x2222222222222222222222222222222222222222",
+                offer: [
+                  {
+                    itemType: 2,
+                    token: "0xb6c2",
+                    identifierOrCriteria: "1",
+                    startAmount: "1",
+                    endAmount: "1",
+                  },
+                ],
+              },
+            },
+          },
+        }),
+        poster,
+        createMemorySalesStore(salesState(T0)),
+        () => LATER
+      )
+    );
+
+    expect(firstEmbed(poster.sends[0]).title).toBe("Purchased: GlyphBot #1");
+  });
+
+  it("names the buyer rather than printing an address", async () => {
+    const poster = createMemoryPoster();
+
+    await pollSales(
+      salesPollDeps(
+        createOpenSea([[saleEvent({ event_timestamp: T0 + 10 })]], {
+          account: {
+            address: "0x1111111111111111111111111111111111111111",
+            username: null,
+            ens_name: "someone.eth",
+          },
+        }),
+        poster,
+        createMemorySalesStore(salesState(T0)),
+        () => LATER
+      )
+    );
+
+    const buyer = firstEmbed(poster.sends[0]).fields?.find(
+      (field) => field.name === "Buyer"
+    );
+    expect(buyer?.value).toBe("someone.eth");
+  });
+
+  it("falls back to the short address when OpenSea knows no name", async () => {
+    const poster = createMemoryPoster();
+
+    await pollSales(
+      salesPollDeps(
+        createOpenSea([[saleEvent({ event_timestamp: T0 + 10 })]]),
+        poster,
+        createMemorySalesStore(salesState(T0)),
+        () => LATER
+      )
+    );
+
+    expect(
+      firstEmbed(poster.sends[0]).fields?.find(
+        (field) => field.name === "Buyer"
+      )?.value
+    ).toBe("`0x11111…11111`");
   });
 
   it("posts a lone sale immediately rather than waiting for a group", async () => {

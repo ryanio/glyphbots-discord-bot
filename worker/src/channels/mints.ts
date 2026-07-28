@@ -33,8 +33,9 @@
 
 import { EmbedBuilder } from "@discordjs/builders";
 import type { RESTPostAPIChannelMessageJSONBody } from "discord-api-types/v10";
+import type { ResolvedName } from "../api/display-name";
+import { addressOnly } from "../api/display-name";
 import type { GlyphBotsClient } from "../api/glyphbots";
-import { shortAddress } from "../api/glyphbots";
 import { getOpenSeaArtifactUrl } from "../api/opensea";
 import type { Artifact } from "../api/types";
 import {
@@ -45,6 +46,7 @@ import {
   MINTS_POSTED_ID_HISTORY,
 } from "../config";
 import type { ChannelPoster } from "../discord/channel-poster";
+import { formatActor } from "../discord/embeds";
 import type { MintCursorStore } from "../durable-objects/feed-stores";
 import { createLogger, getErrorMessage } from "../utils/logger";
 import { MS_PER_SECOND } from "../utils/time";
@@ -101,6 +103,13 @@ export type MintPollDeps = {
   store: MintCursorStore;
   /** Pause between individual posts. Overridden to a no-op under test. */
   delay?: (ms: number) => Promise<void>;
+  /**
+   * Minter address to a name, for the Minter field. Optional because this is
+   * the one feed that otherwise touches no OpenSea endpoint at all, and a mint
+   * post that falls back to the short address is not a degraded post. Supplied
+   * from `src/index.ts`; see `../api/display-name.ts`.
+   */
+  resolveName?: (address: string) => Promise<ResolvedName>;
 };
 
 const sleep = (ms: number): Promise<void> =>
@@ -236,10 +245,18 @@ export const applyMintCursorUpdate = (
   }
 };
 
-/** Build the embed for a single minted artifact. */
+/**
+ * Build the embed for a single minted artifact.
+ *
+ * `minter` arrives already resolved rather than being looked up in here, which
+ * keeps this function synchronous and pure: the caller owns the one network
+ * call and the caching that goes with it. Omitted, the Minter field falls back
+ * to the shortened address it has always shown.
+ */
 export const buildMintEmbed = (
   artifact: MintedArtifact,
-  api: Pick<MintPollDeps["api"], "getArtifactUrl" | "getBotUrl">
+  api: Pick<MintPollDeps["api"], "getArtifactUrl" | "getBotUrl">,
+  minter: ResolvedName | null = null
 ): EmbedBuilder => {
   const embed = new EmbedBuilder()
     .setColor(GLYPHBOTS_COLOR)
@@ -272,7 +289,7 @@ export const buildMintEmbed = (
   if (artifact.minter) {
     fields.push({
       name: "◈ Minter",
-      value: shortAddress(artifact.minter),
+      value: formatActor(minter ?? addressOnly(artifact.minter)),
       inline: true,
     });
   }
@@ -321,8 +338,17 @@ const postMint = async (
   artifact: MintedArtifact
 ): Promise<boolean> => {
   try {
+    // Inside the try with the build, and for the same reason: this is the one
+    // network call on the post path that is not the post itself, and a name
+    // lookup must never be what stops a mint from being announced. The resolver
+    // swallows its own failures, so this only guards a missing implementation.
+    const minter =
+      artifact.minter && deps.resolveName
+        ? await deps.resolveName(artifact.minter)
+        : null;
+
     const body: RESTPostAPIChannelMessageJSONBody = {
-      embeds: [buildMintEmbed(artifact, deps.api).toJSON()],
+      embeds: [buildMintEmbed(artifact, deps.api, minter).toJSON()],
     };
 
     await deps.poster.send(body);

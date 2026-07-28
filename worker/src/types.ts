@@ -41,8 +41,14 @@ export type WorkerEnv = {
   /**
    * OpenSea API key. Optional: the public tier works at a lower rate limit,
    * which is what the Node bot fell back to whenever the variable was unset.
+   *
+   * `OPENSEA_API_KEY` is the same secret under the name OpenSea's own docs and
+   * dashboard use, accepted so a key copied from anywhere else works without
+   * being renamed first. `OPENSEA_API_TOKEN` wins if both are set, and it is
+   * the one set on the deployed script. See `createOpenSeaClient`.
    */
   OPENSEA_API_TOKEN?: string;
+  OPENSEA_API_KEY?: string;
   /** Override for the GlyphBots API origin. Defaults to production. */
   GLYPHBOTS_API_URL?: string;
   /**
