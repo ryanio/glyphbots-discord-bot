@@ -53,6 +53,17 @@ export const createLookupClients = (options: FakeClientOptions = {}) => {
       options.bots ? (options.bots[tokenId] ?? null) : createBot(tokenId)
     )
   );
+  // Answers out of the same map `fetchBot` reads, so a fixture cannot describe
+  // a bot one way to the single lookup and another way to the batch.
+  const fetchBots = vi.fn((tokenIds: number[]) =>
+    Promise.resolve(
+      tokenIds
+        .map((tokenId) =>
+          options.bots ? (options.bots[tokenId] ?? null) : createBot(tokenId)
+        )
+        .filter((bot): bot is Bot => bot !== null)
+    )
+  );
   const fetchArtifact = vi.fn((tokenId: number) =>
     Promise.resolve(
       options.artifacts
@@ -90,6 +101,7 @@ export const createLookupClients = (options: FakeClientOptions = {}) => {
     fetchArtifact,
     fetchArtifactSummary,
     fetchBot,
+    fetchBots,
     fetchBotStory: vi.fn(() => Promise.resolve(null)),
     fetchRecentArtifacts,
     getArtifactUrl: (id: number) => `${TEST_ORIGIN}/artifact/${id}`,

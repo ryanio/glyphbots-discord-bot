@@ -25,6 +25,7 @@ import {
   saleEvent,
   salesPollDeps,
   salesState,
+  stubRanks,
   sweep,
 } from "./sales-fixtures";
 
@@ -190,6 +191,43 @@ describe("a new sale", () => {
 
     const fields = firstEmbed(poster.sends[0]).fields ?? [];
     expect(fields.find((f) => f.name === "Price")?.value).toBe("1.5 ETH");
+  });
+
+  it("carries the bot's rarity rank next to the price", async () => {
+    const poster = createMemoryPoster();
+
+    await pollSales(
+      salesPollDeps(
+        createOpenSea([[saleEvent({ event_timestamp: T0 + 10 })]]),
+        poster,
+        createMemorySalesStore(salesState(T0)),
+        () => LATER,
+        // Token 1 is what `saleEvent` sells by default. 800 of 11,111 is Rare.
+        stubRanks({ 1: 800 })
+      )
+    );
+
+    const fields = firstEmbed(poster.sends[0]).fields ?? [];
+    expect(fields.find((f) => f.name === "Rarity")?.value).toBe(
+      "🥇 Rank #800 (Rare)"
+    );
+  });
+
+  it("posts the sale without a rank when the API has none", async () => {
+    const poster = createMemoryPoster();
+
+    await pollSales(
+      salesPollDeps(
+        createOpenSea([[saleEvent({ event_timestamp: T0 + 10 })]]),
+        poster,
+        createMemorySalesStore(salesState(T0)),
+        () => LATER
+      )
+    );
+
+    const fields = firstEmbed(poster.sends[0]).fields ?? [];
+    expect(fields.map((f) => f.name)).not.toContain("Rarity");
+    expect(fields.find((f) => f.name === "Price")).toBeDefined();
   });
 
   it("does not repost on a repeat tick with the same payload", async () => {
@@ -471,6 +509,50 @@ describe("grouping", () => {
     expect(embed.fields?.find((f) => f.name === "Total Spent")?.value).toBe(
       "6 ETH"
     );
+  });
+
+  it("ranks each item in a sweep, and asks for all of them at once", async () => {
+    const events = sweep(6, T0 + 10);
+    const opensea = createOpenSea([events, []]);
+    const store = createMemorySalesStore(salesState(T0));
+    const firstTick = (T0 + 20) * 1000;
+    // `sweep` sells tokens 100 to 105. Two of them are ranked, so the field
+    // has to carry badges and bare lines side by side.
+    const glyphbots = stubRanks({ 100: 42, 101: 9000 });
+
+    await pollSales(
+      salesPollDeps(
+        opensea,
+        createMemoryPoster(),
+        store,
+        () => firstTick,
+        glyphbots
+      )
+    );
+
+    const poster = createMemoryPoster();
+    await pollSales(
+      salesPollDeps(
+        opensea,
+        poster,
+        store,
+        () => firstTick + SALES_SETTLE_MS + 1000,
+        glyphbots
+      )
+    );
+
+    const items = firstEmbed(poster.sends[0]).fields?.find(
+      (f) => f.name === "Top Items"
+    )?.value;
+    expect(items).toContain("🏆 Rank #42 (Legendary)");
+    expect(items).toContain("⭐ Rank #9,000 (Standard)");
+
+    // Six items, one request. The first tick ingested the sweep without
+    // building anything, so the only call is the one the flush made.
+    expect(glyphbots.fetchBots).toHaveBeenCalledTimes(1);
+    expect(glyphbots.fetchBots).toHaveBeenCalledWith([
+      100, 101, 102, 103, 104, 105,
+    ]);
   });
 
   it("titles a sweep against one standing offer as one offer", async () => {

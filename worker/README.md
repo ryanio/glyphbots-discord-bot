@@ -40,6 +40,7 @@ src/
   types.ts                        WorkerEnv bindings
   api/glyphbots.ts                GlyphBots client, built per invocation
   api/opensea.ts                  OpenSea client, built per invocation
+  api/rarity-ranks.ts             ranks for a list of bots, one request
   api/types.ts                    Artifact, Bot and OpenSea shapes
   channels/gallery.ts             the #gallery post, gated on quiet
   channels/idle.ts                the idle clock and both post decisions (pure)
@@ -75,6 +76,7 @@ test/mints.test.ts                cursor, burst guard, retry on a failed send
 test/sales.test.ts                seeding, exactly-once, hold-back, deferral
 test/sales-grouping.test.ts       the flush predicate and the processed set
 test/opensea.test.ts              the events sweep: pagination and truncation
+test/rarity-ranks.test.ts         the rank resolver: batching and caching
 test/interactions.test.ts         signature, PING/PONG, defer inversion, wiring
 test/commands.test.ts             per-command response shaping
 test/lookups.test.ts              matcher, allowlist, rate limiter, one message
@@ -245,6 +247,12 @@ Nothing is dropped, it arrives five minutes later. An undelivered message holds
 the cursor back to at or below its oldest event, exactly like a failed mint
 send, and its key is what stops the rewind causing a repost.
 
+**Every price has a rank next to it.** A sale embed carries the bot's rarity
+rank beside the price, and a sweep carries one per item in its top-items list,
+because 0.42 ETH says nothing on its own about whether that was a good buy.
+`/sales` and `/activity` print the same badges. See "Where the rank comes from"
+below.
+
 A truncated sweep is the case worth knowing about. OpenSea serves newest first,
 so a sweep that runs out of its ten page budget is missing the *oldest* events
 in the window, and advancing to the newest one it saw would step over every one
@@ -289,6 +297,32 @@ This is enforced by the type rather than by review: the OpenSea shapes in
 `src/api/types.ts` deliberately omit `image_url` and `display_image_url`, so
 carrying one into an embed does not compile. `/artifact` does set an image, but
 from `artifact.imageUrl` on the GlyphBots API, which is JPEG or PNG.
+
+### Where the rank comes from
+
+Two ranks exist for every bot and they are not the same number. OpenSea
+computes one with OpenRarity and hands it back on `nft.rarity.rank`; the
+GlyphBots API stores its own on the bot record, and that is the one
+glyphbots.com shows.
+
+`/rarity`, `/bot` and the inline `b#123` lookup read OpenSea's, because those
+are one token per reply and the NFT read is already being made. `/sales`,
+`/activity` and the sales feed read the GlyphBots one through
+`POST /api/bots`, which takes the whole list: eight sale lines cost one
+subrequest instead of eight, against no rate limit this Worker has to plan
+around. `src/api/rarity-ranks.ts` is that resolver, one per invocation or per
+tick, caching misses as well as hits.
+
+The gap between the two sources is small but visible. Sampled live on
+2026-08-02, they sat within one to three percent of supply of each other (token
+42: 791 against 845; token 2500: 4,917 against 5,131) and landed in the same
+tier every time. So a rank on a sale line can read a couple of hundred places
+off the same bot's `/rarity` reply. That is known, and the alternative was
+eight OpenSea calls per list.
+
+A bot with no rank prints no badge. There is no placeholder, and a rank of zero
+is treated as no rank everywhere it is read, because `percentileOf(0)` clears
+every threshold in the tier table and would label an unranked bot Legendary.
 
 ### Wallet linking is not built
 

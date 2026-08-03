@@ -33,6 +33,12 @@ export type GlyphBotsClient = {
   /** Mint counts for the idle nudge's fun facts. `null` when unavailable. */
   fetchArtifactSummary: () => Promise<ArtifactSummary | null>;
   fetchBot: (tokenId: number) => Promise<Bot | null>;
+  /**
+   * Several bots in one request. The only endpoint here that takes a list,
+   * which is the whole reason the rarity ranks on a `/sales` reply or a sweep
+   * cost one subrequest rather than one per token. See `./rarity-ranks.ts`.
+   */
+  fetchBots: (tokenIds: number[]) => Promise<Bot[]>;
   fetchBotStory: (tokenId: number) => Promise<BotStory | null>;
   fetchRecentArtifacts: (limit?: number) => Promise<Artifact[]>;
   getArtifactUrl: (contractTokenId: number) => string;
@@ -172,6 +178,43 @@ export const createGlyphBotsClient = (
     }
   };
 
+  /**
+   * `POST /api/bots`, which answers `{ bots: [...] }` holding the ids that
+   * exist, in the order they were asked for. Ids it has never heard of are
+   * absent rather than null, so the caller matches on `tokenId` rather than on
+   * position.
+   *
+   * A failure is an empty array, not a throw. Every caller treats a missing
+   * bot and a missing response the same way: the rank is simply not printed.
+   */
+  const fetchBots = async (tokenIds: number[]): Promise<Bot[]> => {
+    if (tokenIds.length === 0) {
+      return [];
+    }
+
+    const url = `${baseUrl}/api/bots`;
+    log.debug(`Fetching ${tokenIds.length} bot(s) from ${url}`);
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ ids: tokenIds }),
+      });
+
+      if (!response.ok) {
+        log.error(`Failed to fetch bots: ${response.status}`);
+        return [];
+      }
+
+      const data = (await response.json()) as { bots?: Bot[] };
+      return Array.isArray(data.bots) ? data.bots : [];
+    } catch (error) {
+      log.error(`Error fetching bots: ${getErrorMessage(error)}`);
+      return [];
+    }
+  };
+
   const fetchBotStory = async (tokenId: number): Promise<BotStory | null> => {
     const url = `${baseUrl}/api/bot/${tokenId}/story`;
     log.debug(`Fetching story for bot ${tokenId} from ${url}`);
@@ -206,6 +249,7 @@ export const createGlyphBotsClient = (
     fetchArtifact,
     fetchArtifactSummary,
     fetchBot,
+    fetchBots,
     fetchBotStory,
     fetchRecentArtifacts,
     getArtifactUrl: (contractTokenId) =>

@@ -62,6 +62,7 @@ import type { RESTPostAPIChannelMessageJSONBody } from "discord-api-types/v10";
 import { createDisplayNameResolver } from "../api/display-name";
 import type { GlyphBotsClient } from "../api/glyphbots";
 import type { OpenSeaClient } from "../api/opensea";
+import { createRarityRanks } from "../api/rarity-ranks";
 import type { OpenSeaEvent } from "../api/types";
 import {
   SALES_DEFERRED_QUEUE_MAX,
@@ -151,7 +152,7 @@ export type SalesPollDeps = {
     OpenSeaClient,
     "fetchCollectionEventsSince" | "fetchAccount" | "fetchOrder"
   >;
-  glyphbots: Pick<GlyphBotsClient, "getBotPngUrl" | "getBotUrl">;
+  glyphbots: Pick<GlyphBotsClient, "fetchBots" | "getBotPngUrl" | "getBotUrl">;
   poster: ChannelPoster;
   store: SalesStateStore;
   /** Injected in tests. */
@@ -298,10 +299,10 @@ const seedState = async (
  * keys off would only re-throw the same event each tick for as long as the lag
  * window keeps re-serving it. One sale is dropped, loudly, and the feed lives.
  *
- * The name resolver and the sale classifier are both built once for the whole
- * batch rather than per message, which is where the caching lives: a sweep is
- * one buyer and usually one standing order, so N events cost one account
- * lookup and one order lookup between them.
+ * The name resolver, the rank resolver and the sale classifier are all built
+ * once for the whole batch rather than per message, which is where the caching
+ * lives: a sweep is one buyer and usually one standing order, so N events cost
+ * one account lookup, one order lookup and one rank lookup between them.
  */
 const buildMessages = async (
   deps: SalesPollDeps,
@@ -310,9 +311,22 @@ const buildMessages = async (
   individuals: OpenSeaEvent[]
 ): Promise<PendingMessage[]> => {
   const names = createDisplayNameResolver(deps.opensea);
+  const ranks = createRarityRanks(deps.glyphbots);
+
+  // Every token this tick will render, asked for once, before any embed is
+  // built. Without this each embed would fetch its own and a sweep of ten
+  // would be ten requests. A failure here is silent by design: the ranks come
+  // back empty and the embeds go out without them.
+  await ranks.ranks(
+    [...groups.flatMap((group) => group.events), ...individuals].map((event) =>
+      Number(event.nft?.identifier)
+    )
+  );
+
   const clients: SalesEmbedClients = {
     glyphbots: deps.glyphbots,
     displayName: names.resolve,
+    rarityRank: ranks.rank,
   };
   const classify = createSaleClassifier(deps.opensea);
 

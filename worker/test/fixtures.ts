@@ -116,6 +116,9 @@ export const stubGlyphBots = (
   fetchArtifact: vi.fn(() => Promise.resolve(null)),
   fetchArtifactSummary: vi.fn(() => Promise.resolve(null)),
   fetchBot: vi.fn(() => Promise.resolve(null)),
+  // Empty by default, so a suite that does not care about rarity renders the
+  // same replies it did before ranks were on them.
+  fetchBots: vi.fn(() => Promise.resolve([] as Bot[])),
   fetchBotStory: vi.fn(() => Promise.resolve(null)),
   fetchRecentArtifacts: vi.fn(() => Promise.resolve([])),
   getArtifactUrl: (id: number) => `${TEST_ORIGIN}/artifact/${id}`,

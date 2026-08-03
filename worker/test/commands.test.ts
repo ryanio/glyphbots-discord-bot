@@ -601,6 +601,62 @@ describe("the remaining four", () => {
     expect(fetchAccount).toHaveBeenCalledTimes(1);
   });
 
+  it("/sales carries the rarity rank next to the price", async () => {
+    // Rank 800 of 11,111 is 7.2%, which is Rare. The point of the badge is
+    // that 0.5 ETH for a top-10% bot reads differently to 0.5 ETH for a
+    // middling one, and the line has to say which it was.
+    const fetchBots = vi.fn(() =>
+      Promise.resolve([createBot(7, { rarityRank: 800 })])
+    );
+    const ctx = commandContext({
+      glyphbots: stubGlyphBots({ fetchBots }),
+      opensea: stubOpenSea({
+        fetchCollectionEvents: vi.fn(() =>
+          Promise.resolve([createSaleEvent()])
+        ),
+      }),
+    });
+
+    const embed = firstEmbed(await handleSales(ctx));
+    expect(embed.description).toContain("🥇 Rank #800 (Rare)");
+  });
+
+  it("/sales asks for every rank on the reply in one request", async () => {
+    // Eight lines used to mean eight `fetchNFT` calls if the rank came from
+    // OpenSea. The batch endpoint is why it is one.
+    const fetchBots = vi.fn(() => Promise.resolve([]));
+    const ctx = commandContext({
+      glyphbots: stubGlyphBots({ fetchBots }),
+      opensea: stubOpenSea({
+        fetchCollectionEvents: vi.fn(() =>
+          Promise.resolve([
+            createSaleEvent({ nft: { identifier: "7" } }),
+            createSaleEvent({ nft: { identifier: "8" } }),
+            createSaleEvent({ nft: { identifier: "7" } }),
+          ])
+        ),
+      }),
+    });
+
+    await handleSales(ctx);
+    expect(fetchBots).toHaveBeenCalledTimes(1);
+    expect(fetchBots).toHaveBeenCalledWith([7, 8]);
+  });
+
+  it("/sales prints the line without a badge when there is no rank", async () => {
+    const ctx = commandContext({
+      opensea: stubOpenSea({
+        fetchCollectionEvents: vi.fn(() =>
+          Promise.resolve([createSaleEvent()])
+        ),
+      }),
+    });
+
+    const embed = firstEmbed(await handleSales(ctx));
+    expect(embed.description).toContain("0.5000 ETH");
+    expect(embed.description).not.toContain("Rank #");
+  });
+
   it("/sales reports an empty feed", async () => {
     expect(firstEmbed(await handleSales(commandContext())).title).toBe(
       "📉 No Recent Sales"
@@ -1037,6 +1093,39 @@ describe("the remaining four", () => {
     expect(firstEmbed(await handleListings(ctx)).description).toContain(
       "└ Seller: lister"
     );
+  });
+
+  it("/activity leads with the bot's rank, above the prices", async () => {
+    const ctx = commandContext({
+      glyphbots: stubGlyphBots({
+        fetchBots: vi.fn(() =>
+          Promise.resolve([createBot(7, { rarityRank: 800 })])
+        ),
+      }),
+      opensea: stubOpenSea({
+        fetchNFTEvents: vi.fn(() => Promise.resolve([createSaleEvent()])),
+      }),
+      options: readOptions([intOption("bot", 7)]),
+    });
+
+    const embed = firstEmbed(await handleActivity(ctx));
+    expect(embed.description).toContain(
+      "🥇 Rank #800 / 11,111 · Rare (Top 10%)"
+    );
+    // Above the history, not appended to it.
+    expect(embed.description?.startsWith("🥇 Rank #800")).toBe(true);
+  });
+
+  it("/activity shows the history alone when there is no rank", async () => {
+    const ctx = commandContext({
+      opensea: stubOpenSea({
+        fetchNFTEvents: vi.fn(() => Promise.resolve([createSaleEvent()])),
+      }),
+      options: readOptions([intOption("bot", 7)]),
+    });
+
+    const embed = firstEmbed(await handleActivity(ctx));
+    expect(embed.description?.startsWith("💰 **Sold**")).toBe(true);
   });
 
   it("/activity reports an empty history", async () => {

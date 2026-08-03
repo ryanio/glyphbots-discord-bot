@@ -24,12 +24,13 @@ import type { ResolvedName } from "../api/display-name";
 import type { GlyphBotsClient } from "../api/glyphbots";
 import { getOpenSeaCollectionUrl, getOpenSeaUrl } from "../api/opensea";
 import type { OpenSeaEvent, OpenSeaPayment } from "../api/types";
+import { rarityBadge } from "../commands/rarity";
 import { COLORS, SALES_TOP_ITEMS } from "../config";
 import { formatActor } from "../discord/embeds";
 import type { SaleKind } from "./sale-kind";
 import { groupTitle, SALE_KIND_TITLES } from "./sale-kind";
 
-/** Clients the embeds need. Narrowed so tests can hand over two functions. */
+/** Clients the embeds need. Narrowed so tests can hand over three functions. */
 export type SalesEmbedClients = {
   glyphbots: Pick<GlyphBotsClient, "getBotPngUrl" | "getBotUrl">;
   /**
@@ -38,6 +39,12 @@ export type SalesEmbedClients = {
    * `../api/display-name.ts`.
    */
   displayName: (address: string) => Promise<ResolvedName>;
+  /**
+   * Rarity rank for one bot, or null when there is none. The caller primes
+   * every token in the tick first, so this costs one request however many
+   * items the sweep held. See `../api/rarity-ranks.ts`.
+   */
+  rarityRank: (tokenId: number) => Promise<number | null>;
 };
 
 const MAX_DECIMALS = 4;
@@ -204,6 +211,13 @@ export const buildSaleEmbed = async (
     embed.addFields({ name: "Price", value: price, inline: true });
   }
 
+  // Next to the price on purpose: the two are read together, and the rank is
+  // the only thing on this embed that says whether the price was a good one.
+  const rank = tokenId === null ? null : await clients.rarityRank(tokenId);
+  if (rank !== null) {
+    embed.addFields({ name: "Rarity", value: rarityBadge(rank), inline: true });
+  }
+
   if (event.buyer) {
     embed.addFields({
       name: "Buyer",
@@ -252,17 +266,22 @@ export const buildGroupEmbed = async (
 
   const top = sorted.slice(0, SALES_TOP_ITEMS);
   if (top.length > 0) {
-    let list = top
-      .map((event, index) => {
-        const price = priceOf(event.payment);
-        const suffix = price ? ` - ${price}` : "";
-        const url = itemUrl(event);
-        const label = itemLabel(event);
-        return url
-          ? `${index + 1}. [${label}](${url})${suffix}`
-          : `${index + 1}. ${label}${suffix}`;
-      })
-      .join("\n");
+    // A for loop rather than `map`, because the rank lookup is async. It is
+    // also cached by the caller, so this is four map reads in the usual case.
+    const rows: string[] = [];
+    for (const [index, event] of top.entries()) {
+      const price = priceOf(event.payment);
+      const suffix = price ? ` - ${price}` : "";
+      const url = itemUrl(event);
+      const label = itemLabel(event);
+      const item = url ? `[${label}](${url})` : label;
+      const tokenId = tokenIdOf(event);
+      const rank = tokenId === null ? null : await clients.rarityRank(tokenId);
+      const rarity = rank === null ? "" : ` · ${rarityBadge(rank)}`;
+      rows.push(`${index + 1}. ${item}${suffix}${rarity}`);
+    }
+
+    let list = rows.join("\n");
     if (count > SALES_TOP_ITEMS) {
       list += "\n…";
     }

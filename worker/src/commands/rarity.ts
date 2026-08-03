@@ -20,49 +20,66 @@ export const percentileOf = (rank: number): number =>
   (rank / MAX_BOT_TOKEN_ID) * PERCENT;
 
 /**
- * Exported alongside `getRarityTier`, because the idle nudge's "notable bot"
- * post labels its pick with the same two functions rather than a second table
- * that could drift from this one.
+ * The tier table, rarest first. The first row a rank's percentile clears wins,
+ * and anything past the last row is Standard.
+ *
+ * One table rather than three parallel `if` ladders, because five callers now
+ * read tiers out of this file (`/rarity`, `/sales`, `/activity`, the sales
+ * feed's embeds and the idle nudge's "notable bot" post) and a threshold that
+ * moved in the emoji ladder but not the name ladder would be invisible until
+ * somebody noticed a 🏆 labelled Epic.
  */
-export const getRarityEmoji = (rank: number): string => {
+const TIERS = [
+  { maxPercentile: 1, name: "Legendary", emoji: "🏆" },
+  { maxPercentile: 5, name: "Epic", emoji: "💎" },
+  { maxPercentile: 10, name: "Rare", emoji: "🥇" },
+  { maxPercentile: 25, name: "Uncommon", emoji: "🥈" },
+  { maxPercentile: 50, name: "Common", emoji: "🥉" },
+] as const;
+
+const STANDARD = { name: "Standard", emoji: "⭐" } as const;
+
+type Tier = (typeof TIERS)[number] | typeof STANDARD;
+
+const tierOf = (rank: number): Tier => {
   const percentile = percentileOf(rank);
-  if (percentile <= 1) {
-    return "🏆";
-  }
-  if (percentile <= 5) {
-    return "💎";
-  }
-  if (percentile <= 10) {
-    return "🥇";
-  }
-  if (percentile <= 25) {
-    return "🥈";
-  }
-  if (percentile <= 50) {
-    return "🥉";
-  }
-  return "⭐";
+  return TIERS.find((tier) => percentile <= tier.maxPercentile) ?? STANDARD;
 };
 
+/**
+ * Exported alongside the tier helpers, because the idle nudge's "notable bot"
+ * post labels its pick with the same table rather than a second one that could
+ * drift from this.
+ */
+export const getRarityEmoji = (rank: number): string => tierOf(rank).emoji;
+
+/** Just the word: `Epic`. What the compact one-line forms below carry. */
+export const getRarityTierName = (rank: number): string => tierOf(rank).name;
+
+/** The full label: `Epic (Top 5%)`, or a bare `Standard` past the halfway mark. */
 export const getRarityTier = (rank: number): string => {
-  const percentile = percentileOf(rank);
-  if (percentile <= 1) {
-    return "Legendary (Top 1%)";
-  }
-  if (percentile <= 5) {
-    return "Epic (Top 5%)";
-  }
-  if (percentile <= 10) {
-    return "Rare (Top 10%)";
-  }
-  if (percentile <= 25) {
-    return "Uncommon (Top 25%)";
-  }
-  if (percentile <= 50) {
-    return "Common (Top 50%)";
-  }
-  return "Standard";
+  const tier = tierOf(rank);
+  return "maxPercentile" in tier
+    ? `${tier.name} (Top ${tier.maxPercentile}%)`
+    : tier.name;
 };
+
+/**
+ * `💎 Rank #421 (Epic)`. The form that rides a list: one sale line, one item in
+ * a sweep, one embed field.
+ *
+ * "Rank" is spelled out because these all sit next to a token id, and a bare
+ * `#421` two words away from `GlyphBot #4210` reads as a second token.
+ */
+export const rarityBadge = (rank: number): string =>
+  `${getRarityEmoji(rank)} Rank #${rank.toLocaleString()} (${getRarityTierName(rank)})`;
+
+/**
+ * `💎 Rank #421 / 11,111 · Epic (Top 5%)`. The form for a reply about one bot,
+ * where there is room for the denominator and the percentile.
+ */
+export const rarityLine = (rank: number): string =>
+  `${getRarityEmoji(rank)} Rank #${rank.toLocaleString()} / ${MAX_BOT_TOKEN_ID.toLocaleString()} · ${getRarityTier(rank)}`;
 
 export const handleRarity: CommandHandler = async (ctx) => {
   const tokenId = ctx.options.getInteger("bot");

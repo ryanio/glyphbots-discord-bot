@@ -3,16 +3,22 @@
  *
  * Bot links point at glyphbots.com rather than OpenSea's asset page, exactly
  * as the original did. Nothing here sets an image, so there is no SVG hazard.
+ *
+ * Each line carries the bot's rarity rank, because a price on its own does not
+ * say whether it was a good one. Every rank on the reply comes from a single
+ * request; see `../api/rarity-ranks.ts` for why that source and not OpenSea's.
  */
 
 import { EmbedBuilder } from "@discordjs/builders";
 import { createDisplayNameResolver } from "../api/display-name";
 import { getOpenSeaCollectionUrl } from "../api/opensea";
+import { createRarityRanks } from "../api/rarity-ranks";
 import { COLORS } from "../config";
 import { linkButtonRow } from "../discord/buttons";
 import { embedReply, errorReply, formatActor } from "../discord/embeds";
 import type { CommandHandler } from "./context";
 import { formatEthAmount, formatTimeAgo } from "./format";
+import { rarityBadge } from "./rarity";
 
 const FETCH_LIMIT = 10;
 const DISPLAY_LIMIT = 8;
@@ -30,9 +36,18 @@ export const handleSales: CommandHandler = async (ctx) => {
   // One resolver for the whole reply. Recent sales are often one sweeper
   // buying eight times, which is then one account lookup rather than eight.
   const names = createDisplayNameResolver(ctx.opensea);
+  const shown = events.slice(0, DISPLAY_LIMIT);
+
+  // One request for every rank on the reply, before the loop rather than
+  // inside it. An event with no readable token id contributes NaN, which is
+  // filtered out rather than asked about.
+  const ranks = await createRarityRanks(ctx.glyphbots).ranks(
+    shown.map((event) => Number(event.nft?.identifier))
+  );
+
   const saleLines: string[] = [];
 
-  for (const [i, event] of events.slice(0, DISPLAY_LIMIT).entries()) {
+  for (const [i, event] of shown.entries()) {
     const rawTokenId = event.nft?.identifier;
     // `getBotUrl(Number(undefined))` and `getBotUrl(Number("?"))` both produce
     // `/bot/NaN`, a link to a 404. Without a usable id the item is named but
@@ -54,8 +69,13 @@ export const handleSales: CommandHandler = async (ctx) => {
       ? `[${name}](${ctx.glyphbots.getBotUrl(Number(rawTokenId))})`
       : name;
 
+    // Unranked, unknown or burned tokens print no badge at all rather than a
+    // placeholder. The rank is context for the price, not a field to fill.
+    const rank = linkable ? ranks.get(Number(rawTokenId)) : undefined;
+    const rarity = rank === undefined ? "" : ` · ${rarityBadge(rank)}`;
+
     saleLines.push(
-      `**${i + 1}.** ${item} → ${price} (${time})\n└ Buyer: ${buyer}`
+      `**${i + 1}.** ${item} → ${price} (${time})\n└ Buyer: ${buyer}${rarity}`
     );
   }
 

@@ -4,18 +4,24 @@
  * The event list is OpenSea data, but the thumbnail is the first-party PNG,
  * which is what it must be: the `image_url` OpenSea returns for this contract
  * is SVG and Discord renders nothing for it.
+ *
+ * The rank sits above the history because that is what the prices underneath
+ * it are worth judging against. It comes from the GlyphBots API rather than
+ * from OpenSea, and `../api/rarity-ranks.ts` says why.
  */
 
 import { EmbedBuilder } from "@discordjs/builders";
 import type { DisplayNameResolver } from "../api/display-name";
 import { createDisplayNameResolver } from "../api/display-name";
 import { getOpenSeaUrl } from "../api/opensea";
+import { createRarityRanks } from "../api/rarity-ranks";
 import type { OpenSeaEvent } from "../api/types";
 import { COLORS } from "../config";
 import { linkButtonRow } from "../discord/buttons";
 import { embedReply, errorReply, formatActor } from "../discord/embeds";
 import type { CommandHandler } from "./context";
 import { formatEthAmount, formatTimeAgo } from "./format";
+import { rarityLine } from "./rarity";
 
 const FETCH_LIMIT = 10;
 const DISPLAY_LIMIT = 8;
@@ -71,7 +77,11 @@ export const handleActivity: CommandHandler = async (ctx) => {
     return errorReply("❌ Missing Bot ID", "Please provide a bot token id.");
   }
 
-  const events = await ctx.opensea.fetchNFTEvents(tokenId, FETCH_LIMIT);
+  // In parallel: the two answer different APIs and neither needs the other.
+  const [events, rank] = await Promise.all([
+    ctx.opensea.fetchNFTEvents(tokenId, FETCH_LIMIT),
+    createRarityRanks(ctx.glyphbots).rank(tokenId),
+  ]);
 
   if (events.length === 0) {
     return errorReply(
@@ -90,10 +100,16 @@ export const handleActivity: CommandHandler = async (ctx) => {
     lines.push(await formatEventLine(event, names));
   }
 
+  // The rank leads, then a blank line, then the history. A bot with no rank
+  // gets the history alone rather than an empty first line.
+  const description = (rank === null ? lines : [rarityLine(rank), "", ...lines])
+    .join("\n")
+    .trim();
+
   const embed = new EmbedBuilder()
     .setColor(COLORS.activity)
     .setTitle(`📊 Activity: ${nftName}`)
-    .setDescription(lines.join("\n"))
+    .setDescription(description)
     .setThumbnail(ctx.glyphbots.getBotPngUrl(tokenId))
     .setFooter({ text: "Data from OpenSea" })
     .setTimestamp();

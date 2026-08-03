@@ -12,7 +12,7 @@ import type {
 } from "../src/channels/sales";
 import { applySalesUpdate } from "../src/channels/sales";
 import { emptyGroupingState } from "../src/channels/sales-grouping";
-import { stubGlyphBots } from "./fixtures";
+import { createBot, stubGlyphBots } from "./fixtures";
 
 /** One sale event. Timestamps are unix seconds, as OpenSea reports them. */
 export const saleEvent = (
@@ -152,14 +152,34 @@ export const createSweepStub = (
   ),
 });
 
+/**
+ * A GlyphBots stub whose batch endpoint answers out of a rank table. Ids that
+ * are not in it come back absent, which is what the real endpoint does for a
+ * token it has never heard of.
+ */
+export const stubRanks = (ranks: Record<number, number>) =>
+  stubGlyphBots({
+    fetchBots: vi.fn((tokenIds: number[]) =>
+      Promise.resolve(
+        tokenIds
+          .filter((tokenId) => tokenId in ranks)
+          .map((tokenId) =>
+            createBot(tokenId, { rarityRank: ranks[tokenId] as number })
+          )
+      )
+    ),
+  });
+
 export const salesPollDeps = (
   opensea: SalesPollDeps["opensea"],
   poster: SalesPollDeps["poster"],
   store: SalesPollDeps["store"],
-  now?: () => number
+  now?: () => number,
+  /** Defaults to a client that knows no ranks, so no embed carries one. */
+  glyphbots: SalesPollDeps["glyphbots"] = stubGlyphBots()
 ): SalesPollDeps => ({
   opensea,
-  glyphbots: stubGlyphBots(),
+  glyphbots,
   poster,
   store,
   now,

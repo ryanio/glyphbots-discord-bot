@@ -31,11 +31,11 @@ Eight, registered to the guild.
 | `/bot id:<n>` or `/bot random` or `/bot user:<name>` | A GlyphBot with its traits and OpenSea data |
 | `/artifact id:<n>` or `/artifact random` | An artifact with its details |
 | `/floor` | Collection stats and floor price |
-| `/sales` | Recent GlyphBots sales on OpenSea |
+| `/sales` | Recent GlyphBots sales on OpenSea, each with the bot's rarity rank |
 | `/listings` | The cheapest GlyphBots currently listed |
 | `/owner id:<n>` | Who owns a given bot |
 | `/rarity id:<n>` | A bot's rarity rank and traits |
-| `/activity id:<n>` | Recent activity for one bot |
+| `/activity id:<n>` | Recent activity for one bot, under its rarity rank |
 
 They arrive over HTTP at `POST /discord/interactions`, which verifies Discord's
 Ed25519 signature, defers, and sends the real reply as a follow-up. The follow-up
