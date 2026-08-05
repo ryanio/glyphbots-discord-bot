@@ -3,10 +3,16 @@
  *
  * One deliberate omission: the OpenSea types below drop `image_url` and
  * `display_image_url`, which the Node types carried. OpenSea serves
- * `image/svg+xml` for this contract (verified live on token 1) and Discord
+ * `image/svg+xml` for the bots contract (verified live on token 1) and Discord
  * renders nothing for SVG, so an OpenSea image URL must never reach an embed.
  * Leaving the fields off the type makes that a compile error rather than a
  * code-review rule. Bot imagery comes from `GlyphBotsClient.getBotPngUrl`.
+ *
+ * The artifacts contract is not the same hazard and the fields stay off it
+ * anyway. OpenSea serves a JPEG there (an `i2c.seadn.io` URL, verified
+ * 2026-08-04) which would render fine, but it is a re-host of a picture the
+ * GlyphBots API hands out first-party. Artifact art comes from
+ * `GlyphBotsClient.fetchArtifact`, everywhere, so there is one source for it.
  */
 
 export type Artifact = {
@@ -229,6 +235,14 @@ export type OpenSeaEvent = {
   expiration_date?: number;
   nft?: {
     identifier: string;
+    /**
+     * OpenSea slug, and the first thing `../api/collections.ts` reads to decide
+     * whether this is a bot or an artifact. Live payloads carry it alongside
+     * `contract` (verified 2026-08-04); both are optional here because the
+     * sweep's own filters, not this field, are what guarantee the event is in
+     * scope.
+     */
+    collection?: string;
     contract?: string;
     name?: string;
     opensea_url?: string;

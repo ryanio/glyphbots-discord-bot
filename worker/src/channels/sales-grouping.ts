@@ -35,9 +35,9 @@
  *   fed are not ported at all.
  */
 
+import { collectionOf } from "../api/collections";
 import type { OpenSeaEvent } from "../api/types";
 import {
-  GLYPHBOTS_CONTRACT,
   OPENSEA_CHAIN,
   SALES_GROUP_STALE_MULTIPLIER,
   SALES_MIN_GROUP_SIZE,
@@ -92,10 +92,16 @@ export type ReadyGroup = {
  * Sales carry a transaction hash. Orders do not, and fall back to the order
  * hash plus token and quantity, exactly as the source does, so a listing and
  * its relist an hour later are different keys.
+ *
+ * The contract is in the key, which is what keeps bot #180 and artifact #180
+ * apart in the processed set: two collections number their tokens from one, and
+ * the identifier alone is not an identity.
  */
 export const eventKeyFor = (event: OpenSeaEvent): string => {
   const tokenId = event.nft?.identifier ?? "";
-  const contract = (event.nft?.contract ?? GLYPHBOTS_CONTRACT).toLowerCase();
+  const contract = (
+    event.nft?.contract ?? collectionOf(event).contract
+  ).toLowerCase();
   const identity =
     event.transaction ??
     `nohash:${event.order_hash ?? ""}:${tokenId}:${event.quantity ?? ""}`;
@@ -129,18 +135,25 @@ export const effectiveEventType = (event: OpenSeaEvent): string => {
  * separate transactions is still one sweep. Transfers, mints and burns are
  * dropped rather than keyed, because nothing in scope posts them and the mint
  * watcher already owns mints.
+ *
+ * The collection is part of the key, so a buyer who takes two bots and two
+ * artifacts inside one settle window gets two messages rather than one. A
+ * message covers a single collection, and that is what lets it have a title
+ * that names what was bought, one collection link, and a thumbnail drawn from
+ * the right place.
  */
 export const actorKeyFor = (event: OpenSeaEvent): string | undefined => {
   const type = effectiveEventType(event);
+  const collection = collectionOf(event).key;
 
   if (type === "sale") {
     const buyer = (event.buyer ?? "").toLowerCase();
-    return buyer ? `purchase:${buyer}` : undefined;
+    return buyer ? `purchase:${collection}:${buyer}` : undefined;
   }
 
   if (type === "listing") {
     const maker = (event.maker ?? "").toLowerCase();
-    return maker ? `listing:${maker}` : undefined;
+    return maker ? `listing:${collection}:${maker}` : undefined;
   }
 
   return undefined;

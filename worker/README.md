@@ -17,9 +17,9 @@ plus the idle work, which is not in that plan.
 - A second cron posts one random collection item into `#gallery`, but only when
   `#general` has been quiet for a day, and at most once a day.
 
-- A third cron posts OpenSea sales into `#trading-floor`, grouped when several
-  land together. Sales only: listings run around 176 a day off one relister,
-  which would post every eight minutes.
+- A third cron posts OpenSea sales into `#trading-floor`, from both collections,
+  grouped when several land together. Sales only: listings run around 176 a day
+  off one relister, which would post every eight minutes.
 
 - A fourth cron checks hourly whether `#general` has gone 48 hours without a
   human message and, only then, posts one item into it: a random bot, a random
@@ -42,6 +42,8 @@ src/
   api/opensea.ts                  OpenSea client, built per invocation
   api/rarity-ranks.ts             ranks for a list of bots, one request
   api/types.ts                    Artifact, Bot and OpenSea shapes
+  api/collections.ts              the two collections, and which one an event is
+  api/artifact-details.ts         one artifact's title, art and source bot
   channels/gallery.ts             the #gallery post, gated on quiet
   channels/idle.ts                the idle clock and both post decisions (pure)
   channels/nudge.ts               one idle check on #general
@@ -74,6 +76,7 @@ src/
 scripts/register-commands.ts      operator-run guild registration (see below)
 test/mints.test.ts                cursor, burst guard, retry on a failed send
 test/sales.test.ts                seeding, exactly-once, hold-back, deferral
+test/sales-artifacts.test.ts      both slugs swept, artifacts rendered as such
 test/sales-grouping.test.ts       the flush predicate and the processed set
 test/opensea.test.ts              the events sweep: pagination and truncation
 test/rarity-ranks.test.ts         the rank resolver: batching and caching
@@ -226,12 +229,33 @@ exactly at the cursor misses anything that landed late with an older timestamp.
 That overlap re-serves recent events on every tick; `grouping.processedKeys` is
 what makes it harmless, doing the job `postedArtifactIds` does for mints.
 
-**Sales only.** Listings run about 176 a day against this collection, almost
-all of it one operator's relister, which would put a message in the channel
-every eight minutes forever. Sales run 1.24 a day. Turning listings back on is
-more than adding a string to `SALES_EVENT_TYPES`: the embeds hard-code purchase
-copy and read `buyer`, which a listing has no value for. The comment on that
-constant says what it would actually take.
+**Both collections.** The bots and the artifacts are two OpenSea collections
+with two slugs and two contracts, and the events endpoint is scoped by
+collection, so a tick sweeps `glyphbots` and `glyphbots-artifacts` and merges
+the two into one timeline. One cursor covers both: a failed or truncated sweep
+of either holds or limits it for both, since there is no way to say "caught up
+on bots, behind on artifacts" in a single number, and re-reading a window the
+processed keys already reject costs nothing.
+
+`api/collections.ts` holds the descriptors and is the only thing that decides
+which collection an event came from. Downstream that decides four things: what
+an unnamed item is called, where its picture comes from, which marketplace link
+is right, and whether there is a rarity rank at all. Artifacts are ERC-1155 and
+unranked, so they carry a quantity when a sale is more than one copy, and they
+link the bot they were generated from instead of a rank. A third collection is a
+third entry in that file.
+
+Groups are keyed by buyer *and* collection, so one buyer taking two bots and two
+artifacts inside a settle window gets two messages. That is what lets a group
+title name what was bought ("2 artifacts purchased"), link the right collection
+and draw its thumbnail from the right place.
+
+**Sales only.** Listings run about 176 a day against the bots, almost all of it
+one operator's relister, which would put a message in the channel every eight
+minutes forever. Sales run 1.24 a day. Turning listings back on is more than
+adding a string to `SALES_EVENT_TYPES`: the embeds hard-code purchase copy and
+read `buyer`, which a listing has no value for. The comment on that constant
+says what it would actually take.
 
 **A sweep is one message.** A buyer taking ten items produces one grouped embed
 rather than ten posts. The batcher has no timers anywhere in it: a group flushes
@@ -247,11 +271,13 @@ Nothing is dropped, it arrives five minutes later. An undelivered message holds
 the cursor back to at or below its oldest event, exactly like a failed mint
 send, and its key is what stops the rewind causing a repost.
 
-**Every price has a rank next to it.** A sale embed carries the bot's rarity
+**Every bot price has a rank next to it.** A bot sale embed carries the rarity
 rank beside the price, and a sweep carries one per item in its top-items list,
 because 0.42 ETH says nothing on its own about whether that was a good buy.
 `/sales` and `/activity` print the same badges. See "Where the rank comes from"
-below.
+below. Artifacts are not ranked and are never looked up in that table, which
+matters because it answers by token id alone: asking it about artifact #180
+would come back with bot #180's rank.
 
 A truncated sweep is the case worth knowing about. OpenSea serves newest first,
 so a sweep that runs out of its ten page budget is missing the *oldest* events

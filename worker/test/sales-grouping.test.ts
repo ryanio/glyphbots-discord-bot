@@ -46,7 +46,7 @@ describe("actor keys", () => {
       maker: "0xAAAA",
     });
 
-    expect(actorKeyFor(listing)).toBe("listing:0xaaaa");
+    expect(actorKeyFor(listing)).toBe("listing:bots:0xaaaa");
   });
 
   it("has no key for an event with no actor", () => {

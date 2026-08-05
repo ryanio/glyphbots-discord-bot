@@ -505,7 +505,7 @@ describe("grouping", () => {
 
     expect(poster.sends).toHaveLength(1);
     const embed = firstEmbed(poster.sends[0]);
-    expect(embed.title).toBe("6 items purchased");
+    expect(embed.title).toBe("6 GlyphBots purchased");
     expect(embed.fields?.find((f) => f.name === "Total Spent")?.value).toBe(
       "6 ETH"
     );
@@ -585,7 +585,7 @@ describe("grouping", () => {
     );
 
     expect(firstEmbed(poster.sends[0]).title).toBe(
-      "6 items bought via collection offer"
+      "6 GlyphBots bought via collection offer"
     );
     // One order lookup for all six, since they share an order hash.
     expect(opensea.fetchOrder).toHaveBeenCalledTimes(1);
@@ -623,7 +623,7 @@ describe("grouping", () => {
     );
 
     expect(poster.sends).toHaveLength(1);
-    expect(firstEmbed(poster.sends[0]).title).toBe("4 items purchased");
+    expect(firstEmbed(poster.sends[0]).title).toBe("4 GlyphBots purchased");
     expect(store.current?.grouping.actorGroups).toEqual({});
   });
 

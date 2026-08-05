@@ -1,38 +1,46 @@
 /**
- * Embeds for the sales feed, ported from
- * `opensea-activity-bot/src/platforms/discord/utils.ts`.
+ * Embeds for the sales feed, covering both watched collections.
  *
- * **No image bytes are fetched, ever.** The Node bot ran every embed image
- * through `fetchImageBuffer`
- * (`opensea-activity-bot/src/utils/utils.ts:228-266`), which rasterized
- * SVG to PNG with `sharp` (`:198-221`) and attached the result as an
- * `AttachmentBuilder` referenced by `attachment://`. That existed because
- * OpenSea serves `image/svg+xml` for these contracts and Discord renders
- * nothing for SVG, so a plain URL showed an empty embed.
+ * **No image bytes are fetched, ever.** Every picture on these embeds is a URL
+ * Discord fetches for itself: `getBotPngUrl` for a bot, the artifact's own
+ * `imageUrl` off the GlyphBots API for an artifact. Neither is an OpenSea URL,
+ * and `image_url` is not on the OpenSea types in `../api/types.ts` at all, so
+ * reaching for one is a compile error rather than a review comment. The bots'
+ * OpenSea art is SVG and Discord renders nothing for it.
  *
- * GlyphBots removes the problem rather than solving it: the site serves
- * first-party PNGs by token id (`getBotPngUrl`, verified 200 `image/png`), so
- * the embed carries a URL and the Worker never touches the pixels. `sharp`,
- * `AttachmentBuilder`, `fetchImageBuffer` and `convertSvgToPng` are all gone.
- * `image_url` is not on the OpenSea types in `../api/types.ts` at all, which
- * makes reaching for it a compile error rather than a review comment.
+ * Which collection an event belongs to decides four things here, and
+ * `collectionOf` is the only thing that decides it: what an unnamed item is
+ * called, where its picture comes from, which marketplace link is right, and
+ * whether there is a rarity rank to print. A bot token id pointed at the
+ * artifacts contract, or the reverse, produces a working link to the wrong
+ * item, so all four go through `resolveItem` rather than being decided
+ * separately.
  */
 
 import { EmbedBuilder } from "@discordjs/builders";
 import type { APIEmbed } from "discord-api-types/v10";
+import type { Collection } from "../api/collections";
+import { collectionOf } from "../api/collections";
 import type { ResolvedName } from "../api/display-name";
 import type { GlyphBotsClient } from "../api/glyphbots";
-import { getOpenSeaCollectionUrl, getOpenSeaUrl } from "../api/opensea";
-import type { OpenSeaEvent, OpenSeaPayment } from "../api/types";
+import {
+  getOpenSeaArtifactUrl,
+  getOpenSeaCollectionUrl,
+  getOpenSeaUrl,
+} from "../api/opensea";
+import type { Artifact, OpenSeaEvent, OpenSeaPayment } from "../api/types";
 import { rarityBadge } from "../commands/rarity";
 import { COLORS, SALES_TOP_ITEMS } from "../config";
 import { formatActor } from "../discord/embeds";
 import type { SaleKind } from "./sale-kind";
 import { groupTitle, SALE_KIND_TITLES } from "./sale-kind";
 
-/** Clients the embeds need. Narrowed so tests can hand over three functions. */
+/** Clients the embeds need. Narrowed so tests can hand over four functions. */
 export type SalesEmbedClients = {
-  glyphbots: Pick<GlyphBotsClient, "getBotPngUrl" | "getBotUrl">;
+  glyphbots: Pick<
+    GlyphBotsClient,
+    "getArtifactUrl" | "getBotPngUrl" | "getBotUrl"
+  >;
   /**
    * Address to name. Resolved once per address per tick by the caller, and
    * answering the OpenSea username or ENS name where there is one. See
@@ -43,8 +51,16 @@ export type SalesEmbedClients = {
    * Rarity rank for one bot, or null when there is none. The caller primes
    * every token in the tick first, so this costs one request however many
    * items the sweep held. See `../api/rarity-ranks.ts`.
+   *
+   * Bots only. Artifacts are not ranked and asking about one would answer with
+   * the rank of the bot that happens to share its number.
    */
   rarityRank: (tokenId: number) => Promise<number | null>;
+  /**
+   * One artifact's title, picture and source bot, memoized for the tick. See
+   * `../api/artifact-details.ts`. Never called for a bot sale.
+   */
+  artifact: (tokenId: number) => Promise<Artifact | null>;
 };
 
 const MAX_DECIMALS = 4;
@@ -157,23 +173,118 @@ const tokenIdOf = (event: OpenSeaEvent): number | null => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
-const itemLabel = (event: OpenSeaEvent): string => {
-  const tokenId = tokenIdOf(event);
-  const name = event.nft?.name;
-  if (tokenId === null) {
-    // Truthy, not nullish: OpenSea sends `name: ""` for an unindexed token,
-    // and an empty title makes `setTitle` throw on "Purchased: ".
-    return name || "Unknown item";
+/** Every `#123` in a name, so the number can be compared rather than matched. */
+const TOKEN_MARKER = /#(\d+)/g;
+
+/**
+ * One item's name, as a title reads it.
+ *
+ * The token id is appended only when the name does not already carry it.
+ * OpenSea names a bot `GlyphBot #3101 - Jumpynexus`, and pinning the id on the
+ * end of that gives `GlyphBot #3101 - Jumpynexus #3101`. Artifacts are named
+ * without a number, so they get one.
+ *
+ * The comparison is on the parsed number rather than on the substring: `#31`
+ * appears inside `#3101` and would otherwise read as a match.
+ */
+const itemLabel = (
+  name: string | null,
+  collection: Collection,
+  tokenId: number
+): string => {
+  if (!name) {
+    return `${collection.noun} #${tokenId}`;
   }
-  return name ? `${name} #${tokenId}` : `GlyphBot #${tokenId}`;
+
+  for (const match of name.matchAll(TOKEN_MARKER)) {
+    if (match[1] === String(tokenId)) {
+      return name;
+    }
+  }
+
+  return `${name} #${tokenId}`;
 };
 
-const itemUrl = (event: OpenSeaEvent): string | null => {
-  const tokenId = tokenIdOf(event);
-  return tokenId === null
-    ? (event.nft?.opensea_url ?? null)
-    : getOpenSeaUrl(tokenId);
+/**
+ * Everything an embed says about one item, resolved once.
+ *
+ * Both builders go through this, so a sale and the same sale inside a sweep
+ * cannot disagree about what the thing is called or where it links.
+ */
+type Item = {
+  collection: Collection;
+  tokenId: number | null;
+  label: string;
+  /** Marketplace link. Null only when the event carries no usable token id. */
+  url: string | null;
+  /** Artwork, or null when there is none to show. */
+  image: string | null;
+  /** Where the item lives on glyphbots.com. */
+  siteUrl: string | null;
+  /**
+   * The bot an artifact was generated from. Null for a bot, which is its own
+   * source, and null for an artifact the API had nothing for.
+   */
+  sourceBotTokenId: number | null;
 };
+
+const resolveItem = async (
+  event: OpenSeaEvent,
+  clients: SalesEmbedClients
+): Promise<Item> => {
+  const collection = collectionOf(event);
+  const tokenId = tokenIdOf(event);
+  // Truthy, not nullish: OpenSea sends `name: ""` for a token it has not
+  // finished indexing, which is routine for artifacts, and an empty title makes
+  // `setTitle` throw on "Purchased: ".
+  const eventName = event.nft?.name || null;
+
+  if (tokenId === null) {
+    return {
+      collection,
+      tokenId: null,
+      label: eventName ?? "Unknown item",
+      url: event.nft?.opensea_url ?? null,
+      image: null,
+      siteUrl: null,
+      sourceBotTokenId: null,
+    };
+  }
+
+  if (collection.key === "artifacts") {
+    // The one network call on this path, and it is what the API knows that the
+    // event does not: the title, the picture and the bot behind it.
+    const artifact = await clients.artifact(tokenId);
+    return {
+      collection,
+      tokenId,
+      label: itemLabel(artifact?.title || eventName, collection, tokenId),
+      url: getOpenSeaArtifactUrl(tokenId),
+      image: artifact?.imageUrl ?? null,
+      siteUrl: clients.glyphbots.getArtifactUrl(tokenId),
+      sourceBotTokenId: artifact?.botTokenId ?? null,
+    };
+  }
+
+  return {
+    collection,
+    tokenId,
+    label: itemLabel(eventName, collection, tokenId),
+    url: getOpenSeaUrl(tokenId),
+    image: clients.glyphbots.getBotPngUrl(tokenId),
+    siteUrl: clients.glyphbots.getBotUrl(tokenId),
+    sourceBotTokenId: null,
+  };
+};
+
+/** The rank, or null for anything that is not a ranked bot. */
+const rankOf = async (
+  item: Item,
+  clients: SalesEmbedClients
+): Promise<number | null> =>
+  item.collection.key === "bots" && item.tokenId !== null
+    ? await clients.rarityRank(item.tokenId)
+    : null;
 
 /**
  * One sale, `buildSaleEmbed` + `buildEmbed` (`discord/utils.ts:122-135,347-382`).
@@ -192,18 +303,17 @@ export const buildSaleEmbed = async (
   clients: SalesEmbedClients,
   kind: SaleKind = "purchase"
 ): Promise<APIEmbed> => {
-  const tokenId = tokenIdOf(event);
+  const item = await resolveItem(event, clients);
   const embed = new EmbedBuilder()
     .setColor(COLORS.sale)
-    .setTitle(`${SALE_KIND_TITLES[kind]}: ${itemLabel(event)}`);
+    .setTitle(`${SALE_KIND_TITLES[kind]}: ${item.label}`);
 
-  const url = itemUrl(event);
-  if (url) {
-    embed.setURL(url);
+  if (item.url) {
+    embed.setURL(item.url);
   }
 
-  if (tokenId !== null) {
-    embed.setImage(clients.glyphbots.getBotPngUrl(tokenId));
+  if (item.image) {
+    embed.setImage(item.image);
   }
 
   const price = priceOf(event.payment);
@@ -211,9 +321,19 @@ export const buildSaleEmbed = async (
     embed.addFields({ name: "Price", value: price, inline: true });
   }
 
+  // Artifacts are ERC-1155, so a sale can be several copies of one token and
+  // the price above is what the whole lot went for. A bot sale is always one.
+  if (event.quantity > 1) {
+    embed.addFields({
+      name: "Quantity",
+      value: `×${event.quantity}`,
+      inline: true,
+    });
+  }
+
   // Next to the price on purpose: the two are read together, and the rank is
   // the only thing on this embed that says whether the price was a good one.
-  const rank = tokenId === null ? null : await clients.rarityRank(tokenId);
+  const rank = await rankOf(item, clients);
   if (rank !== null) {
     embed.addFields({ name: "Rarity", value: rarityBadge(rank), inline: true });
   }
@@ -226,10 +346,20 @@ export const buildSaleEmbed = async (
     });
   }
 
-  if (tokenId !== null) {
+  // Named for what it links to rather than "View", so an artifact post carries
+  // both its own page and the bot it came from without the two reading alike.
+  if (item.siteUrl) {
+    embed.addFields({
+      name: item.collection.noun,
+      value: `[View](${item.siteUrl})`,
+      inline: true,
+    });
+  }
+
+  if (item.sourceBotTokenId !== null) {
     embed.addFields({
       name: "Bot",
-      value: `[View](${clients.glyphbots.getBotUrl(tokenId)})`,
+      value: `[#${item.sourceBotTokenId}](${clients.glyphbots.getBotUrl(item.sourceBotTokenId)})`,
       inline: true,
     });
   }
@@ -237,7 +367,13 @@ export const buildSaleEmbed = async (
   return embed.toJSON() as APIEmbed;
 };
 
-/** One sweep, `buildGroupEmbed` (`discord/utils.ts:484-536`). */
+/**
+ * One sweep, `buildGroupEmbed` (`discord/utils.ts:484-536`).
+ *
+ * Every event in a group shares a collection, because `actorKeyFor` puts it in
+ * the key. That is what lets the title name what was bought, the header link
+ * point at the right collection, and the thumbnail come from the right place.
+ */
 export const buildGroupEmbed = async (
   events: OpenSeaEvent[],
   clients: SalesEmbedClients,
@@ -245,10 +381,11 @@ export const buildGroupEmbed = async (
 ): Promise<APIEmbed> => {
   const sorted = sortByPriceDesc(events);
   const count = events.length;
+  const collection = collectionOf(sorted[0] ?? ({} as OpenSeaEvent));
   const embed = new EmbedBuilder()
     .setColor(COLORS.sale)
-    .setTitle(groupTitle(count, kinds))
-    .setURL(getOpenSeaCollectionUrl());
+    .setTitle(groupTitle(count, kinds, collection.plural))
+    .setURL(getOpenSeaCollectionUrl(collection.slug));
 
   const spent = totalSpent(events);
   if (spent) {
@@ -264,21 +401,24 @@ export const buildGroupEmbed = async (
     });
   }
 
-  const top = sorted.slice(0, SALES_TOP_ITEMS);
+  // The priciest few, resolved before the rows are written because the
+  // thumbnail comes out of the same list and must not be a second lookup.
+  const top: Item[] = [];
+  for (const event of sorted.slice(0, SALES_TOP_ITEMS)) {
+    top.push(await resolveItem(event, clients));
+  }
+
   if (top.length > 0) {
     // A for loop rather than `map`, because the rank lookup is async. It is
     // also cached by the caller, so this is four map reads in the usual case.
     const rows: string[] = [];
-    for (const [index, event] of top.entries()) {
-      const price = priceOf(event.payment);
+    for (const [index, item] of top.entries()) {
+      const price = priceOf(sorted[index]?.payment);
       const suffix = price ? ` - ${price}` : "";
-      const url = itemUrl(event);
-      const label = itemLabel(event);
-      const item = url ? `[${label}](${url})` : label;
-      const tokenId = tokenIdOf(event);
-      const rank = tokenId === null ? null : await clients.rarityRank(tokenId);
+      const link = item.url ? `[${item.label}](${item.url})` : item.label;
+      const rank = await rankOf(item, clients);
       const rarity = rank === null ? "" : ` · ${rarityBadge(rank)}`;
-      rows.push(`${index + 1}. ${item}${suffix}${rarity}`);
+      rows.push(`${index + 1}. ${link}${suffix}${rarity}`);
     }
 
     let list = rows.join("\n");
@@ -288,11 +428,11 @@ export const buildGroupEmbed = async (
     embed.addFields({ name: "Top Items", value: list });
   }
 
-  // The thumbnail is the priciest item, and it is a first-party PNG URL rather
-  // than an attachment. See the note at the top of this file.
-  const headline = tokenIdOf(sorted[0] ?? events[0] ?? ({} as OpenSeaEvent));
-  if (headline !== null) {
-    embed.setThumbnail(clients.glyphbots.getBotPngUrl(headline));
+  // The thumbnail is the priciest item, and it is a URL rather than an
+  // attachment. See the note at the top of this file.
+  const headline = top[0]?.image;
+  if (headline) {
+    embed.setThumbnail(headline);
   }
 
   return embed.toJSON() as APIEmbed;

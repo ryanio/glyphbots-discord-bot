@@ -61,6 +61,12 @@ export type EventsSinceOptions = {
   limit?: number;
   /** Pages to follow at most, counting the first. */
   maxPages?: number;
+  /**
+   * Which collection to sweep, defaulting to the bots. One slug per call: the
+   * endpoint is scoped by collection, so covering both means two sweeps merged
+   * by the caller. See `sweepWatchedCollections` in `../channels/sales.ts`.
+   */
+  slug?: string;
 };
 
 export type EventsSincePage = {
@@ -176,8 +182,8 @@ export const createOpenSeaClient = (
     return result?.nfts ?? [];
   };
 
-  const eventsUrl = (params: URLSearchParams): string =>
-    `${OPENSEA_API_BASE}/events/collection/${GLYPHBOTS_COLLECTION_SLUG}?${params}`;
+  const eventsUrl = (params: URLSearchParams, slug: string): string =>
+    `${OPENSEA_API_BASE}/events/collection/${slug}?${params}`;
 
   /**
    * Follow `next` until the collection runs out, a page comes back short, or
@@ -203,6 +209,7 @@ export const createOpenSeaClient = (
   ): Promise<EventsSincePage> => {
     const limit = options.limit ?? SALES_FETCH_LIMIT;
     const maxPages = options.maxPages ?? SALES_MAX_PAGES;
+    const slug = options.slug ?? GLYPHBOTS_COLLECTION_SLUG;
 
     const baseParams = (): URLSearchParams => {
       const params = new URLSearchParams({
@@ -226,11 +233,11 @@ export const createOpenSeaClient = (
         params.set("next", cursor);
       }
 
-      const page = await get<OpenSeaEventsResponse>(eventsUrl(params));
+      const page = await get<OpenSeaEventsResponse>(eventsUrl(params, slug));
       pages += 1;
 
       if (!page) {
-        log.warn(`Events page ${pages} failed, stopping the sweep here`);
+        log.warn(`Events page ${pages} of ${slug} failed, stopping the sweep`);
         return {
           events: collected.reverse(),
           pages,
@@ -255,14 +262,14 @@ export const createOpenSeaClient = (
       if (pages >= maxPages) {
         truncated = true;
         log.warn(
-          `Events sweep stopped at the ${maxPages} page ceiling with more behind it; the oldest events in this window were not fetched`
+          `Events sweep of ${slug} stopped at the ${maxPages} page ceiling with more behind it; the oldest events in this window were not fetched`
         );
       }
     }
 
     if (pages > 1) {
       log.debug(
-        `Events sweep followed ${pages} pages, ${collected.length} events`
+        `Events sweep of ${slug} followed ${pages} pages, ${collected.length} events`
       );
     }
 
@@ -327,14 +334,26 @@ export const createOpenSeaClient = (
   };
 };
 
-/** Marketplace URL for one bot (`src/api/opensea.ts:139` at `c75d6a8`). */
+/**
+ * Marketplace URL for one token on any contract.
+ *
+ * The two helpers below are the only callers, and they exist so nothing has to
+ * pair a contract with a token id at the call site: a bot id against the
+ * artifacts contract is a live link to the wrong thing, which is worse than a
+ * dead one.
+ */
+const assetUrl = (contract: string, tokenId: number): string =>
+  `https://opensea.io/assets/${OPENSEA_CHAIN}/${contract}/${tokenId}`;
+
+/** Marketplace URL for one bot. */
 export const getOpenSeaUrl = (tokenId: number): string =>
-  `https://opensea.io/assets/ethereum/${GLYPHBOTS_CONTRACT}/${tokenId}`;
+  assetUrl(GLYPHBOTS_CONTRACT, tokenId);
 
-/** Marketplace URL for one artifact (`src/commands/artifact.ts:83` at `c75d6a8`). */
+/** Marketplace URL for one artifact, by its contract token id. */
 export const getOpenSeaArtifactUrl = (tokenId: number): string =>
-  `https://opensea.io/assets/ethereum/${ARTIFACTS_CONTRACT}/${tokenId}`;
+  assetUrl(ARTIFACTS_CONTRACT, tokenId);
 
-/** Marketplace URL for the collection (`src/api/opensea.ts:142` at `c75d6a8`). */
-export const getOpenSeaCollectionUrl = (): string =>
-  `https://opensea.io/collection/${GLYPHBOTS_COLLECTION_SLUG}`;
+/** Marketplace URL for a collection, the bots unless told otherwise. */
+export const getOpenSeaCollectionUrl = (
+  slug: string = GLYPHBOTS_COLLECTION_SLUG
+): string => `https://opensea.io/collection/${slug}`;

@@ -196,29 +196,39 @@ export const SALE_KIND_TITLES: Record<SaleKind, string> = {
 /**
  * The title for a settled sweep.
  *
- * A group is one actor's events (`actorKeyFor` in `./sales-grouping.ts` keys
- * sales by buyer), so the framing is the buyer's throughout. Note the wording
- * for an offer sweep is "bought via" rather than "N offers accepted": six fills
- * against one standing collection offer is one offer, not six, and pluralising
- * it would be a straight lie about what happened.
+ * A group is one actor's events in one collection (`actorKeyFor` in
+ * `./sales-grouping.ts` keys sales by buyer and collection), so the framing is
+ * the buyer's throughout and `plural` can name what they bought: "GlyphBots",
+ * "artifacts". It defaults to "items" for a caller that has not said.
  *
- * A mixed group keeps the original wording. It is the honest general term for
- * "this buyer ended up with N of them", and mixing a sweep with a floor
- * purchase is rare enough not to deserve a sentence of its own.
+ * Note the wording for an offer sweep is "bought via" rather than "N offers
+ * accepted": six fills against one standing collection offer is one offer, not
+ * six, and pluralising it would be a straight lie about what happened. The
+ * plain `offer` case is the exception and stays counted, because there really
+ * were N separate bids, and it names the offers rather than the items for the
+ * same reason.
+ *
+ * A mixed group keeps the general wording. It is the honest term for "this
+ * buyer ended up with N of them", and mixing a sweep with a floor purchase is
+ * rare enough not to deserve a sentence of its own.
  */
-export const groupTitle = (count: number, kinds: SaleKind[]): string => {
+export const groupTitle = (
+  count: number,
+  kinds: SaleKind[],
+  plural = "items"
+): string => {
   const first = kinds[0];
   const uniform =
     first !== undefined && kinds.every((kind) => kind === first) ? first : null;
 
   switch (uniform) {
     case "collection-offer":
-      return `${count} items bought via collection offer`;
+      return `${count} ${plural} bought via collection offer`;
     case "trait-offer":
-      return `${count} items bought via trait offer`;
+      return `${count} ${plural} bought via trait offer`;
     case "offer":
       return `${count} offers accepted`;
     default:
-      return `${count} items purchased`;
+      return `${count} ${plural} purchased`;
   }
 };

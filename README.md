@@ -70,6 +70,22 @@ handled plus the last 100 posted ids, so a redeploy or a slow poll does not skip
 or repeat. On a cold start it seeds from the current newest mint and posts
 nothing, which is why the first tick after a fresh deploy looks quiet.
 
+### Sales feed
+
+Every five minutes the Worker sweeps OpenSea for sales and posts them into
+`#trading-floor`. It covers both collections: GlyphBots and artifacts are two
+OpenSea collections with two contracts, so a tick asks for each by slug and
+merges them into one timeline.
+
+A bot sale shows its rarity rank next to the price. An artifact shows its title
+and art from the GlyphBots API, a link to the bot it came from, and a quantity
+when more than one copy changed hands. One buyer taking several items inside a
+60 second window is one grouped message rather than several, and bots and
+artifacts group separately so a message is always about one collection.
+
+Sales only, not listings: listings run around 176 a day off a single relister,
+which would post every eight minutes forever.
+
 ### The `#gallery` post
 
 Every six hours, one random item from the collection into `#gallery`. This is the
@@ -138,7 +154,6 @@ at `d668f57` if it is worth reading first.
   local state file that went away with the droplet. A KV namespace
   (`GLYPHBOTS_KV`) is reserved for `wallet:<userId>` keys and is read by nothing
   until these come back.
-- **An OpenSea sales feed into `#trading-floor`.** In progress.
 
 The four mechanical changes any of these need are the same ones the Worker port
 already made: raw REST instead of the `Client`/`Channel` object model, cron

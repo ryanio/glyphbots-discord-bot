@@ -232,11 +232,28 @@ export const OPENSEA_API_BASE = "https://api.opensea.io/api/v2";
 /** Bot contract (`src/api/opensea.ts:19` at `c75d6a8`). */
 export const GLYPHBOTS_CONTRACT = "0xb6c2c2d2999c1b532e089a7ad4cb7f8c91cf5075";
 
-/** Artifact contract (`src/commands/artifact.ts:23` at `c75d6a8`). */
-export const ARTIFACTS_CONTRACT = "0x3c64dc415de60ee9a25f67fb48e7c9a234a4b6d1";
+/**
+ * Artifact contract, ERC-1155 on mainnet.
+ *
+ * Verified against the chain rather than against a document: artifact #180's
+ * mint transaction (`0x58731d26…`, the GlyphBots API's own `mintTxHash`) has
+ * one `to` and one log address, and both are this. Anything claiming a
+ * different artifact address is wrong, and the way to settle it is another
+ * receipt, not another source file.
+ */
+export const ARTIFACTS_CONTRACT = "0x7136496abfbab3d17c34a3cfc4cfbc68bfbccbcc";
 
-/** OpenSea collection slug (`src/api/opensea.ts:20` at `c75d6a8`). */
+/** OpenSea collection slug for the bots. */
 export const GLYPHBOTS_COLLECTION_SLUG = "glyphbots";
+
+/**
+ * The artifacts' own OpenSea collection.
+ *
+ * Two slugs, not one: `/collections/glyphbots` lists a single contract and it
+ * is the bots', so an events sweep of that slug never returns an artifact sale.
+ * Anything that wants both has to ask for both. See `src/api/collections.ts`.
+ */
+export const ARTIFACTS_COLLECTION_SLUG = "glyphbots-artifacts";
 
 /** Chain every OpenSea path is scoped to. */
 export const OPENSEA_CHAIN = "ethereum";

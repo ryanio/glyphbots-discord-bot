@@ -1,6 +1,13 @@
 /**
  * The OpenSea sales feed, posting to #trading-floor.
  *
+ * It covers both collections. OpenSea scopes its events endpoint by collection
+ * and the bots and the artifacts are two of them, so a tick sweeps both slugs
+ * and merges the result: see `sweepWatchedCollections` below and
+ * `../api/collections.ts` for the descriptors. One cursor covers both, which is
+ * what keeps the merge honest, and everything downstream asks which collection
+ * an event came from rather than assuming.
+ *
  * This absorbs `opensea-activity-bot` (4,940 lines) into one cron tick. What
  * survives is the fetch, the cursor, the settle-window grouping and the Discord
  * embed. What does not: Twitter and its queue (~980 lines, out of scope),
@@ -59,9 +66,11 @@
  */
 
 import type { RESTPostAPIChannelMessageJSONBody } from "discord-api-types/v10";
+import { createArtifactDetails } from "../api/artifact-details";
+import { collectionOf, WATCHED_COLLECTIONS } from "../api/collections";
 import { createDisplayNameResolver } from "../api/display-name";
 import type { GlyphBotsClient } from "../api/glyphbots";
-import type { OpenSeaClient } from "../api/opensea";
+import type { EventsSincePage, OpenSeaClient } from "../api/opensea";
 import { createRarityRanks } from "../api/rarity-ranks";
 import type { OpenSeaEvent } from "../api/types";
 import {
@@ -152,11 +161,62 @@ export type SalesPollDeps = {
     OpenSeaClient,
     "fetchCollectionEventsSince" | "fetchAccount" | "fetchOrder"
   >;
-  glyphbots: Pick<GlyphBotsClient, "fetchBots" | "getBotPngUrl" | "getBotUrl">;
+  glyphbots: Pick<
+    GlyphBotsClient,
+    | "fetchArtifact"
+    | "fetchBots"
+    | "getArtifactUrl"
+    | "getBotPngUrl"
+    | "getBotUrl"
+  >;
   poster: ChannelPoster;
   store: SalesStateStore;
   /** Injected in tests. */
   now?: () => number;
+};
+
+/**
+ * One sweep across every watched collection, merged into a single page.
+ *
+ * The endpoint is scoped by collection, so this is one request per collection
+ * per page. They go out together: two concurrent sweeps of a handful of pages
+ * each is well inside the subrequest budget, and a tick that waited for the
+ * bots before starting the artifacts would double the latency of the slowest
+ * part of the tick for nothing.
+ *
+ * The two flags combine pessimistically, and deliberately. `failed` anywhere
+ * stops the cursor moving at all; `truncated` anywhere makes the whole sweep
+ * truncated. The cursor is one number covering both collections and there is no
+ * way to say "caught up on bots, behind on artifacts" in it, so the honest
+ * reading of a partial sweep is the more conservative one. The cost is
+ * re-reading a window that `processedKeys` already rejects, which is the cheap
+ * direction to be wrong in.
+ */
+export const sweepWatchedCollections = async (
+  opensea: Pick<OpenSeaClient, "fetchCollectionEventsSince">,
+  options: { after: number; limit?: number; maxPages?: number }
+): Promise<EventsSincePage> => {
+  const pages = await Promise.all(
+    WATCHED_COLLECTIONS.map((collection) =>
+      opensea.fetchCollectionEventsSince({
+        ...options,
+        eventTypes: SALES_EVENT_TYPES,
+        slug: collection.slug,
+      })
+    )
+  );
+
+  return {
+    // Oldest first across both, which is the order the feed posts in. Each
+    // sweep is already sorted; interleaving them is what makes a bot sale and
+    // an artifact sale from the same minute read in the order they happened.
+    events: pages
+      .flatMap((page) => page.events)
+      .sort((a, b) => a.event_timestamp - b.event_timestamp),
+    pages: pages.reduce((total, page) => total + page.pages, 0),
+    failed: pages.some((page) => page.failed),
+    truncated: pages.some((page) => page.truncated),
+  };
 };
 
 export const emptySalesState = (at: number): SalesFeedState => ({
@@ -250,9 +310,11 @@ const seedState = async (
   deps: SalesPollDeps,
   now: number
 ): Promise<SalesFeedState> => {
-  const probe = await deps.opensea.fetchCollectionEventsSince({
+  // Both collections, one event each, and the newer of the two wins. Seeding
+  // from a single collection would leave the cursor behind whatever the other
+  // one had already done, and the first real tick would post that as news.
+  const probe = await sweepWatchedCollections(deps.opensea, {
     after: 0,
-    eventTypes: SALES_EVENT_TYPES,
     limit: 1,
     maxPages: 1,
   });
@@ -312,21 +374,27 @@ const buildMessages = async (
 ): Promise<PendingMessage[]> => {
   const names = createDisplayNameResolver(deps.opensea);
   const ranks = createRarityRanks(deps.glyphbots);
+  const artifacts = createArtifactDetails(deps.glyphbots);
 
-  // Every token this tick will render, asked for once, before any embed is
+  // Every bot this tick will render, asked for once, before any embed is
   // built. Without this each embed would fetch its own and a sweep of ten
   // would be ten requests. A failure here is silent by design: the ranks come
   // back empty and the embeds go out without them.
+  //
+  // Bots only. `/api/bots` answers by token id with no idea which collection
+  // the number came from, so priming it with artifact ids would cache the rank
+  // of whichever bot shares each number.
   await ranks.ranks(
-    [...groups.flatMap((group) => group.events), ...individuals].map((event) =>
-      Number(event.nft?.identifier)
-    )
+    [...groups.flatMap((group) => group.events), ...individuals]
+      .filter((event) => collectionOf(event).key === "bots")
+      .map((event) => Number(event.nft?.identifier))
   );
 
   const clients: SalesEmbedClients = {
     glyphbots: deps.glyphbots,
     displayName: names.resolve,
     rarityRank: ranks.rank,
+    artifact: artifacts.get,
   };
   const classify = createSaleClassifier(deps.opensea);
 
@@ -340,10 +408,11 @@ const buildMessages = async (
       for (const event of group.events) {
         kinds.push(await classify(event));
       }
+      const collection = collectionOf(group.events[0] ?? ({} as OpenSeaEvent));
       messages.push({
         body: { embeds: [await buildGroupEmbed(group.events, clients, kinds)] },
         oldestTimestamp: oldestTimestampOf(group.events),
-        label: `group of ${group.events.length}`,
+        label: `group of ${group.events.length} ${collection.plural}`,
       });
     } catch (error) {
       log.error(
@@ -362,11 +431,11 @@ const buildMessages = async (
       messages.push({
         body: { embeds: [await buildSaleEmbed(event, clients, kind)] },
         oldestTimestamp: event.event_timestamp,
-        label: `sale #${event.nft?.identifier ?? "?"} (${kind})`,
+        label: `${collectionOf(event).noun} #${event.nft?.identifier ?? "?"} (${kind})`,
       });
     } catch (error) {
       log.error(
-        `Failed to build the embed for sale #${event.nft?.identifier ?? "?"}, dropping it: ${getErrorMessage(error)}`
+        `Failed to build the embed for ${collectionOf(event).noun} #${event.nft?.identifier ?? "?"}, dropping it: ${getErrorMessage(error)}`
       );
     }
     markProcessed(state.grouping, event);
@@ -493,15 +562,16 @@ export const pollSales = async (deps: SalesPollDeps): Promise<number> => {
     `Sales cursor: source=stored at=${stored.lastEventTimestamp} (${new Date(stored.lastEventTimestamp * MS_PER_SECOND).toISOString()}) fetching after=${after} deferred=${stored.deferred.length}`
   );
 
-  const page = await deps.opensea.fetchCollectionEventsSince({
-    after,
-    eventTypes: SALES_EVENT_TYPES,
-  });
+  const page = await sweepWatchedCollections(deps.opensea, { after });
 
   const fetched = page.events.filter(isWanted);
   if (fetched.length > 0) {
+    const byCollection = WATCHED_COLLECTIONS.map(
+      (collection) =>
+        `${collection.key}=${fetched.filter((event) => collectionOf(event) === collection).length}`
+    ).join(" ");
     log.info(
-      `Fetched ${fetched.length} in-scope event(s) across ${page.pages} page(s)`
+      `Fetched ${fetched.length} in-scope event(s) across ${page.pages} page(s): ${byCollection}`
     );
   }
 

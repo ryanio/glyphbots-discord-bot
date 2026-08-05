@@ -1,4 +1,5 @@
 import { vi } from "vitest";
+import { ARTIFACTS, BOTS } from "../src/api/collections";
 import type { EventsSincePage } from "../src/api/opensea";
 import type {
   OpenSeaAccount,
@@ -14,7 +15,13 @@ import { applySalesUpdate } from "../src/channels/sales";
 import { emptyGroupingState } from "../src/channels/sales-grouping";
 import { createBot, stubGlyphBots } from "./fixtures";
 
-/** One sale event. Timestamps are unix seconds, as OpenSea reports them. */
+/**
+ * One bot sale event. Timestamps are unix seconds, as OpenSea reports them.
+ *
+ * The `nft` block names its collection, which is what `collectionOf` reads to
+ * decide how the event renders. An override that replaces `nft` has to say so
+ * too, or the event classifies as a bot by fallback.
+ */
 export const saleEvent = (
   overrides: Partial<OpenSeaEvent> & { event_timestamp: number }
 ): OpenSeaEvent => ({
@@ -30,9 +37,34 @@ export const saleEvent = (
     decimals: 18,
     symbol: "ETH",
   },
-  nft: { identifier: "1", name: "GlyphBot" },
+  nft: {
+    identifier: "1",
+    name: "GlyphBot",
+    collection: BOTS.slug,
+    contract: BOTS.contract,
+  },
   ...overrides,
 });
+
+/**
+ * One artifact sale event.
+ *
+ * `name: ""` is what the live endpoint sends for these tokens, so the default
+ * exercises the path where the title has to come from the GlyphBots API rather
+ * than from the event.
+ */
+export const artifactSaleEvent = (
+  overrides: Partial<OpenSeaEvent> & { event_timestamp: number }
+): OpenSeaEvent =>
+  saleEvent({
+    nft: {
+      identifier: "180",
+      name: "",
+      collection: ARTIFACTS.slug,
+      contract: ARTIFACTS.contract,
+    },
+    ...overrides,
+  });
 
 /** A sweep: one buyer, several tokens, one transaction each. */
 export const sweep = (
@@ -93,6 +125,12 @@ export const createMemorySalesStore = (initial: SalesFeedState | null) => {
  * An OpenSea stub. `pages` is served in order, so a test can hand the seed
  * probe one payload and the first real tick another.
  *
+ * Each collection has its own list and its own position in it, because a tick
+ * sweeps both slugs and a single shared counter would let the artifacts sweep
+ * consume the page the next bots tick was meant to see. `pages` is the bots;
+ * `extras.artifactPages` is the artifacts and defaults to nothing at all, so
+ * every suite that predates the second collection reads as it did.
+ *
  * The served page is filtered by the `after` the caller asked for, because the
  * real endpoint returns events strictly after it. A stub that hands back
  * everything regardless makes the cursor untestable: a test asserting the feed
@@ -106,28 +144,40 @@ export const createOpenSea = (
     order?: OpenSeaOrder | null;
     /** What the account lookup answers, for the buyer's name. */
     account?: OpenSeaAccount | null;
+    /** Pages served for the artifacts slug, in the same shape as `pages`. */
+    artifactPages?: OpenSeaEvent[][];
   } = {}
 ) => {
-  let call = 0;
+  const served: Record<string, { pages: OpenSeaEvent[][]; call: number }> = {
+    [BOTS.slug]: { pages, call: 0 },
+    [ARTIFACTS.slug]: { pages: extras.artifactPages ?? [], call: 0 },
+  };
+
   const fetchCollectionEventsSince = vi.fn(
-    (options?: { after?: number }): Promise<EventsSincePage> => {
-      const served = pages[call] ?? pages.at(-1) ?? [];
-      call += 1;
+    (options?: { after?: number; slug?: string }): Promise<EventsSincePage> => {
+      const source = served[options?.slug ?? BOTS.slug] ?? {
+        pages: [],
+        call: 0,
+      };
+      const page = source.pages[source.call] ?? source.pages.at(-1) ?? [];
+      source.call += 1;
       const after = options?.after ?? 0;
       return Promise.resolve({
-        events: served.filter((event) => event.event_timestamp > after),
+        events: page.filter((event) => event.event_timestamp > after),
         pages: 1,
         failed: false,
         truncated: false,
       });
     }
   );
+
   return {
     fetchCollectionEventsSince,
     fetchAccount: vi.fn(() => Promise.resolve(extras.account ?? null)),
     fetchOrder: vi.fn(() => Promise.resolve(extras.order ?? null)),
+    /** Sweeps of the bots slug, which is one per tick. */
     get calls() {
-      return call;
+      return served[BOTS.slug]?.call ?? 0;
     },
   };
 };
@@ -135,6 +185,10 @@ export const createOpenSea = (
 /**
  * An OpenSea stub for one sweep with a fixed outcome, so a test can say
  * "truncated" or "failed" without also constructing a pager.
+ *
+ * The outcome is the bots'. The artifacts sweep answers empty and successful,
+ * so a test about a truncated sweep is testing one truncated sweep rather than
+ * two, and the events in `page` are not served twice.
  */
 export const createSweepStub = (
   page: Partial<EventsSincePage> & { events: OpenSeaEvent[] }
@@ -142,13 +196,12 @@ export const createSweepStub = (
   fetchAccount: vi.fn(() => Promise.resolve(null)),
   fetchOrder: vi.fn(() => Promise.resolve(null)),
   fetchCollectionEventsSince: vi.fn(
-    (): Promise<EventsSincePage> =>
-      Promise.resolve({
-        pages: 1,
-        failed: false,
-        truncated: false,
-        ...page,
-      })
+    (options?: { slug?: string }): Promise<EventsSincePage> =>
+      Promise.resolve(
+        options?.slug === ARTIFACTS.slug
+          ? { events: [], pages: 1, failed: false, truncated: false }
+          : { pages: 1, failed: false, truncated: false, ...page }
+      )
   ),
 });
 
